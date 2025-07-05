@@ -7,9 +7,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/bwmarrin/discordgo"
-
 	"discord-bot/model"
+	"discord-bot/utils"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 type Bot struct {
@@ -72,6 +73,12 @@ func NewBot(cfg *model.Config) (*Bot, error) {
 func (b *Bot) addHandlers() {
 	b.Session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
 		log.Printf("Logged in as: %v#%v", s.State.User.Username, s.State.User.Discriminator)
+		if b.Config.LogWebhookURL != "" {
+			err := utils.LogInfo(b.Config.LogWebhookURL, "System", "Startup", "Bot has started successfully.")
+			if err != nil {
+				log.Printf("Failed to send startup log: %v", err)
+			}
+		}
 	})
 	b.Session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if h, ok := b.CommandHandlers[i.ApplicationCommandData().Name]; ok {
@@ -91,7 +98,6 @@ func (b *Bot) Run() {
 	for _, serverCfg := range b.Config.ServerConfigs {
 		b.RefreshCommands(serverCfg.GuildID)
 	}
-
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
