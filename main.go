@@ -5,7 +5,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
+	"time"
 
 	"discord-bot/model"
 	"discord-bot/utils"
@@ -18,10 +20,20 @@ type Bot struct {
 	registeredCommands []*discordgo.ApplicationCommand
 	Config             *model.Config
 	CommandHandlers    map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)
+	PresetCooldowns    map[string]time.Time
+	cooldownMutex      sync.Mutex
 }
 
 func (b *Bot) GetConfig() *model.Config {
 	return b.Config
+}
+
+func (b *Bot) GetPresetCooldowns() map[string]time.Time {
+	return b.PresetCooldowns
+}
+
+func (b *Bot) GetCooldownMutex() *sync.Mutex {
+	return &b.cooldownMutex
 }
 
 func (b *Bot) RefreshCommands(guildID string) {
@@ -34,7 +46,8 @@ func (b *Bot) RefreshCommands(guildID string) {
 	log.Printf("Fetching commands for guild %s", serverCfg.GuildID)
 	existingCommands, err := b.Session.ApplicationCommands(b.Session.State.User.ID, serverCfg.GuildID)
 	if err != nil {
-		log.Panicf("cannot get commands for guild '%s': %v", serverCfg.GuildID, err)
+		log.Printf("cannot get commands for guild '%s': %v", serverCfg.GuildID, err)
+		return
 	}
 
 	if len(existingCommands) > 0 {
@@ -42,18 +55,20 @@ func (b *Bot) RefreshCommands(guildID string) {
 		for _, cmd := range existingCommands {
 			err := b.Session.ApplicationCommandDelete(b.Session.State.User.ID, serverCfg.GuildID, cmd.ID)
 			if err != nil {
-				log.Panicf("cannot delete '%v' command for guild '%s': %v", cmd.Name, serverCfg.GuildID, err)
+				log.Printf("cannot delete '%v' command for guild '%s': %v", cmd.Name, serverCfg.GuildID, err)
 			}
 		}
 	}
 
 	commands := GenerateCommands(&serverCfg)
+	log.Printf("Adding %d new commands for guild %s...", len(commands), serverCfg.GuildID)
 	for _, v := range commands {
 		cmd, err := b.Session.ApplicationCommandCreate(b.Session.State.User.ID, serverCfg.GuildID, v)
 		if err != nil {
-			log.Panicf("Cannot create '%v' command for guild '%s': %v", v.Name, serverCfg.GuildID, err)
+			log.Printf("Cannot create '%v' command for guild '%s': %v", v.Name, serverCfg.GuildID, err)
+		} else {
+			b.registeredCommands = append(b.registeredCommands, cmd)
 		}
-		b.registeredCommands = append(b.registeredCommands, cmd)
 	}
 }
 
@@ -63,7 +78,11 @@ func NewBot(cfg *model.Config) (*Bot, error) {
 		return nil, err
 	}
 
-	bot := &Bot{Session: dg, Config: cfg}
+	bot := &Bot{
+		Session:         dg,
+		Config:          cfg,
+		PresetCooldowns: make(map[string]time.Time),
+	}
 	bot.CommandHandlers = GetCommandHandlers(bot)
 	bot.addHandlers()
 
@@ -95,6 +114,21 @@ func (b *Bot) Run() {
 
 	log.Println("Adding commands...")
 	b.registeredCommands = make([]*discordgo.ApplicationCommand, 0)
+
+	log.Println("Removing old global commands...")
+	existingGlobalCommands, err := b.Session.ApplicationCommands(b.Session.State.User.ID, "")
+	if err != nil {
+		log.Printf("Could not fetch global commands: %v", err)
+	} else if len(existingGlobalCommands) > 0 {
+		log.Printf("Removing %d old global commands...", len(existingGlobalCommands))
+		for _, cmd := range existingGlobalCommands {
+			err := b.Session.ApplicationCommandDelete(b.Session.State.User.ID, "", cmd.ID)
+			if err != nil {
+				log.Printf("Could not delete global command %s: %v", cmd.Name, err)
+			}
+		}
+	}
+
 	for _, serverCfg := range b.Config.ServerConfigs {
 		b.RefreshCommands(serverCfg.GuildID)
 	}
@@ -111,7 +145,7 @@ func (b *Bot) Close() {
 	for _, v := range b.registeredCommands {
 		err := b.Session.ApplicationCommandDelete(b.Session.State.User.ID, v.GuildID, v.ID)
 		if err != nil {
-			log.Panicf("Cannot delete '%v' command: %v", v.Name, err)
+			log.Printf("Cannot delete '%v' command: %v", v.Name, err)
 		}
 	}
 

@@ -1,8 +1,11 @@
 package model
 
 import (
+	"discord-bot/utils"
 	"fmt"
 	"log"
+	"sync"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -41,7 +44,7 @@ func FormatPresetMessageSend(preset *PresetMessage, user string) *discordgo.Mess
 	} else {
 		content := preset.Value
 		if user != "" {
-			content = fmt.Sprintf("%s %s", user, content)
+			content = fmt.Sprintf("%s \n %s", user, content)
 		}
 		messageSend.Content = content
 	}
@@ -52,9 +55,14 @@ func FormatPresetMessageSend(preset *PresetMessage, user string) *discordgo.Mess
 func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, b interface{}) {
 	type bot interface {
 		GetConfig() *Config
+		GetPresetCooldowns() map[string]time.Time
+		GetCooldownMutex() *sync.Mutex
 	}
 
 	appBot := b.(bot)
+	cooldowns := appBot.GetPresetCooldowns()
+	mutex := appBot.GetCooldownMutex()
+
 	serverConfig, ok := appBot.GetConfig().ServerConfigs[i.GuildID]
 	if !ok {
 		log.Printf("Could not find server config for guild: %s", i.GuildID)
@@ -103,8 +111,38 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 		return
 	}
 
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	log.Printf("Checking cooldown for preset: %s", selectedPreset.Name)
+	if lastUsed, ok := cooldowns[selectedPreset.Name]; ok {
+		log.Printf("Preset '%s' was last used at %v", selectedPreset.Name, lastUsed)
+		if time.Since(lastUsed) < 30*time.Second {
+			log.Printf("Preset '%s' is on cooldown.", selectedPreset.Name)
+			_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+				Content: fmt.Sprintf("Preset '%s' is on cooldown. Please wait.", selectedPreset.Name),
+			})
+			if err != nil {
+				log.Printf("Failed to send cooldown message: %v", err)
+			}
+			return
+		}
+	}
+
+	log.Printf("Updating cooldown for preset: %s", selectedPreset.Name)
+	cooldowns[selectedPreset.Name] = time.Now()
+
 	messageSend := FormatPresetMessageSend(selectedPreset, user)
-	_, err = s.ChannelMessageSendComplex(i.ChannelID, messageSend)
+	message, err := s.ChannelMessageSendComplex(i.ChannelID, messageSend)
+	if err == nil {
+		// Log the successful preset usage
+		messageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, message.ID)
+		logInfo := fmt.Sprintf("用户 `%s` 使用了预设 `%s`\n[点击查看消息](%s)", i.Member.User.Username, selectedPreset.Name, messageLink)
+		err = utils.LogInfo(appBot.GetConfig().LogWebhookURL, "预设", "使用", logInfo)
+		if err != nil {
+			log.Printf("Failed to send log: %v", err)
+		}
+	}
 
 	if err != nil {
 		log.Printf("Failed to send channel message: %v", err)

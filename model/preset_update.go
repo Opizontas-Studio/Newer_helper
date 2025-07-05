@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 
+	"discord-bot/utils"
+
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -88,11 +90,19 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 			log.Printf("Error writing to messages.json: %v", err)
 			return
 		}
+
+		// Log the successful preset update
+		channelLink := fmt.Sprintf("https://discord.com/channels/%s/%s", i.GuildID, i.ChannelID)
+		logInfo := fmt.Sprintf("用户 `%s` 创建/更新了预设 `%s`\n[在频道中查看](%s)", i.Member.User.Username, presetName, channelLink)
+		err = utils.LogInfo(appBot.GetConfig().LogWebhookURL, "预设", "创建/更新", logInfo)
+		if err != nil {
+			log.Printf("Failed to send log: %v", err)
+		}
 	}
 
 	appBot.RefreshCommands(i.GuildID)
 
-	response := "Parsed and saved messages:\n" + strings.Join(messages, "\n---\n")
+	response := "这是保存的预设和文件:\n" + strings.Join(messages, "\n---\n")
 
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
