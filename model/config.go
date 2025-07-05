@@ -1,5 +1,10 @@
 package model
 
+import (
+	"encoding/json"
+	"os"
+)
+
 // PresetMessage 定义了预设消息的结构
 type PresetMessage struct {
 	Name        string `json:"name"`
@@ -22,4 +27,17 @@ type Config struct {
 	BotToken      string
 	LogWebhookURL string
 	ServerConfigs map[string]ServerConfig
+}
+
+// SaveConfig saves the configuration to a file.
+func SaveConfig(config *Config) error {
+	file, err := os.Create("data/task_config.json")
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(config)
 }

@@ -13,6 +13,25 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+func ParseMessageLinks(s *discordgo.Session, messageLinks string) ([]string, error) {
+	re := regexp.MustCompile(`https://discord.com/channels/(\d+)/(\d+)/(\d+)`)
+	matches := re.FindAllStringSubmatch(messageLinks, -1)
+
+	var messages []string
+	for _, match := range matches {
+		if len(match) == 4 {
+			channelID := match[2]
+			messageID := match[3]
+			msg, err := s.ChannelMessage(channelID, messageID)
+			if err != nil {
+				return nil, fmt.Errorf("error fetching message %s: %w", match[0], err)
+			}
+			messages = append(messages, msg.Content)
+		}
+	}
+	return messages, nil
+}
+
 func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, b interface{}) {
 	type bot interface {
 		GetConfig() *model.Config
@@ -42,28 +61,16 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 		customName = option.StringValue()
 	}
 
-	// Regex to find discord message links
-	re := regexp.MustCompile(`https://discord.com/channels/(\d+)/(\d+)/(\d+)`)
-	matches := re.FindAllStringSubmatch(messageLinks, -1)
-
-	var messages []string
-	for _, match := range matches {
-		if len(match) == 4 {
-			channelID := match[2]
-			messageID := match[3]
-			msg, err := s.ChannelMessage(channelID, messageID)
-			if err != nil {
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: fmt.Sprintf("Error fetching message %s: %s", match[0], err.Error()),
-						Flags:   discordgo.MessageFlagsEphemeral,
-					},
-				})
-				return
-			}
-			messages = append(messages, msg.Content)
-		}
+	messages, err := ParseMessageLinks(s, messageLinks)
+	if err != nil {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: err.Error(),
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
 	}
 
 	if len(messages) > 0 {
