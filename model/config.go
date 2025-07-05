@@ -1,5 +1,13 @@
 package model
 
+// PresetMessage 定义了预设消息的结构
+type PresetMessage struct {
+	Name        string `json:"name"`
+	Value       string `json:"value"`
+	Description string `json:"description,omitempty"`
+	Type        string `json:"type"`
+}
+
 // ServerConfig 定义了每个服务器的配置
 type ServerConfig struct {
 	Name           string          `json:"name"`

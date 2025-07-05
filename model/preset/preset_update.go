@@ -1,6 +1,8 @@
-package model
+package preset
 
 import (
+	"discord-bot/model"
+	"discord-bot/utils"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -8,14 +10,12 @@ import (
 	"regexp"
 	"strings"
 
-	"discord-bot/utils"
-
 	"github.com/bwmarrin/discordgo"
 )
 
 func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, b interface{}) {
 	type bot interface {
-		GetConfig() *Config
+		GetConfig() *model.Config
 		RefreshCommands(guildID string)
 	}
 
@@ -71,7 +71,7 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 		if presetName == "" {
 			presetName = fmt.Sprintf("New Preset %d", len(serverConfig.PresetMessages)+1)
 		}
-		newPreset := PresetMessage{
+		newPreset := model.PresetMessage{
 			Name:  presetName,
 			Value: strings.Join(messages, "\n"),
 			Type:  "text",

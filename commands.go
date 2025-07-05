@@ -2,6 +2,7 @@ package main
 
 import (
 	"discord-bot/model"
+	"discord-bot/model/preset"
 	"discord-bot/utils"
 	"log"
 
@@ -27,7 +28,7 @@ func GetCommandHandlers(b *Bot) map[string]func(s *discordgo.Session, i *discord
 				})
 				return
 			}
-			model.HandlePresetMessageInteraction(s, i, b)
+			preset.HandlePresetMessageInteraction(s, i, b)
 		},
 		"preset-message_upd": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			serverConfig, ok := b.Config.ServerConfigs[i.GuildID]
@@ -46,7 +47,7 @@ func GetCommandHandlers(b *Bot) map[string]func(s *discordgo.Session, i *discord
 				})
 				return
 			}
-			model.HandlePresetMessageUpdateInteraction(s, i, b)
+			preset.HandlePresetMessageUpdateInteraction(s, i, b)
 		},
 	}
 }
@@ -94,7 +95,7 @@ func GenerateCommands(serverCfg *model.ServerConfig) []*discordgo.ApplicationCom
 					Type:        discordgo.ApplicationCommandOptionString,
 					Name:        "name",
 					Description: "为预设指定一个自定义名称。",
-					Required:    false,
+					Required:    true,
 				},
 			},
 		},

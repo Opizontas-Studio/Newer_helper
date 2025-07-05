@@ -1,6 +1,7 @@
-package model
+package preset
 
 import (
+	"discord-bot/model"
 	"discord-bot/utils"
 	"fmt"
 	"log"
@@ -10,16 +11,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// PresetMessage 定义了预设消息的结构
-type PresetMessage struct {
-	Name        string `json:"name"`
-	Value       string `json:"value"`
-	Description string `json:"description,omitempty"`
-	Type        string `json:"type"`
-}
-
 // FindPreset 在给定的服务器配置中查找预设消息
-func FindPreset(serverConfig *ServerConfig, presetValue string) *PresetMessage {
+func FindPreset(serverConfig *model.ServerConfig, presetValue string) *model.PresetMessage {
 	for _, p := range serverConfig.PresetMessages {
 		if p.Name == presetValue {
 			return &p
@@ -29,7 +22,7 @@ func FindPreset(serverConfig *ServerConfig, presetValue string) *PresetMessage {
 }
 
 // FormatPresetMessageSend formats a preset message into a MessageSend struct.
-func FormatPresetMessageSend(preset *PresetMessage, user string) *discordgo.MessageSend {
+func FormatPresetMessageSend(preset *model.PresetMessage, user string) *discordgo.MessageSend {
 	messageSend := &discordgo.MessageSend{}
 	if preset.Type == "embed" {
 		description := preset.Description
@@ -44,7 +37,7 @@ func FormatPresetMessageSend(preset *PresetMessage, user string) *discordgo.Mess
 	} else {
 		content := preset.Value
 		if user != "" {
-			content = fmt.Sprintf("%s \n %s", user, content)
+			content = fmt.Sprintf("%s \n%s", user, content)
 		}
 		messageSend.Content = content
 	}
@@ -54,7 +47,7 @@ func FormatPresetMessageSend(preset *PresetMessage, user string) *discordgo.Mess
 // HandlePresetMessageInteraction 处理预设消息交互
 func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, b interface{}) {
 	type bot interface {
-		GetConfig() *Config
+		GetConfig() *model.Config
 		GetPresetCooldowns() map[string]time.Time
 		GetCooldownMutex() *sync.Mutex
 	}
@@ -136,11 +129,13 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 	message, err := s.ChannelMessageSendComplex(i.ChannelID, messageSend)
 	if err == nil {
 		// Log the successful preset usage
-		messageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, message.ID)
-		logInfo := fmt.Sprintf("用户 `%s` 使用了预设 `%s`\n[点击查看消息](%s)", i.Member.User.Username, selectedPreset.Name, messageLink)
-		err = utils.LogInfo(appBot.GetConfig().LogWebhookURL, "预设", "使用", logInfo)
-		if err != nil {
-			log.Printf("Failed to send log: %v", err)
+		if appBot.GetConfig().LogWebhookURL != "" {
+			messageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, message.ID)
+			logInfo := fmt.Sprintf("用户: `%s`\n预设名: `%s`\n[点击查看消息](%s)", i.Member.User.Username, selectedPreset.Name, messageLink)
+			err = utils.LogInfo(appBot.GetConfig().LogWebhookURL, "预设", "使用", logInfo)
+			if err != nil {
+				log.Printf("Failed to send log: %v", err)
+			}
 		}
 	}
 
