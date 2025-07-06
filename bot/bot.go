@@ -19,6 +19,8 @@ type Bot struct {
 	CooldownMutex      sync.Mutex
 	FullScanTicker     *time.Ticker
 	ActiveScanTicker   *time.Ticker
+	CooldownTicker     *time.Ticker
+	PostCleanupTicker  *time.Ticker
 	DB                 *sql.DB
 }
 
@@ -61,6 +63,23 @@ func (b *Bot) Close() {
 	if b.ActiveScanTicker != nil {
 		b.ActiveScanTicker.Stop()
 	}
+	if b.CooldownTicker != nil {
+		b.CooldownTicker.Stop()
+	}
+	if b.PostCleanupTicker != nil {
+		b.PostCleanupTicker.Stop()
+	}
 	b.Session.Close()
 	b.DB.Close()
+}
+
+func (b *Bot) cleanupCooldowns() {
+	b.CooldownMutex.Lock()
+	defer b.CooldownMutex.Unlock()
+
+	for id, t := range b.PresetCooldowns {
+		if time.Since(t) > 1*time.Hour {
+			delete(b.PresetCooldowns, id)
+		}
+	}
 }

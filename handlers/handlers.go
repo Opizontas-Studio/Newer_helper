@@ -101,7 +101,7 @@ func addHandlers(b *bot.Bot) {
 		}
 	})
 	b.Session.AddHandler(func(s *discordgo.Session, t *discordgo.ThreadCreate) {
-		// Pass the log channel ID from the config to the handler
-		commands.HandleThreadCreate(s, t, b.Config.LogChannelID)
+		// Pass the bot's config to the handler
+		commands.HandleThreadCreate(s, t, b.Config)
 	})
 }
