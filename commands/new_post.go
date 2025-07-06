@@ -4,6 +4,7 @@ import (
 	"discord-bot/model"
 	"discord-bot/utils"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -40,14 +41,23 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, logChan
 
 	// Check if the thread was created in one of the monitored channels
 	if _, ok := allowedChannels[t.ParentID]; !ok {
-		return // Not a monitored channel, so we do nothing.
+		return
 	}
 
 	// Get the first message of the thread
 	firstMessage, err := s.ChannelMessage(t.ID, t.ID)
 	if err != nil {
-		utils.LogError(s, logChannelID, "NewPost", "GetMessage", fmt.Sprintf("Error getting first message for thread %s: %v", t.ID, err))
-		return
+		var restErr *discordgo.RESTError
+		if errors.As(err, &restErr) && restErr.Response != nil && restErr.Response.StatusCode == 404 {
+			utils.LogInfo(s, logChannelID, "NewPost", "GetMessage", fmt.Sprintf("Got 404 for thread %s, waiting 30s to retry...", t.ID))
+			time.Sleep(30 * time.Second)
+			firstMessage, err = s.ChannelMessage(t.ID, t.ID)
+		}
+
+		if err != nil {
+			utils.LogError(s, logChannelID, "NewPost", "GetMessage", fmt.Sprintf("Error getting first message for thread %s: %v", t.ID, err))
+			return
+		}
 	}
 
 	// Extract tags
@@ -86,7 +96,6 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, logChan
 	filePath := fmt.Sprintf("data/new_post/%s.json", guildID)
 	var channelPosts map[string][]model.Post
 
-	// Create the directory if it doesn't exist
 	if err := os.MkdirAll("data/new_post", 0755); err != nil {
 		utils.LogError(s, logChannelID, "NewPost", "MkdirAll", fmt.Sprintf("Error creating directory: %v", err))
 		return
@@ -135,7 +144,6 @@ func CleanOldPosts(s *discordgo.Session, logChannelID string) {
 	files, err := os.ReadDir(postDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Directory doesn't exist, nothing to clean.
 			return
 		}
 		utils.LogError(s, logChannelID, "CleanPosts", "ReadDir", fmt.Sprintf("Error reading post directory %s: %v", postDir, err))

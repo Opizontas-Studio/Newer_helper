@@ -170,7 +170,7 @@ func Scan(s *discordgo.Session, logChannelID string, scanMode string) {
 			if i+1 < len(keys) {
 				nextGroup = keys[i+1]
 			}
-			logMessage := fmt.Sprintf("【%s】组【%s】扫描完成，总计【%d】个条目，耗时：%v。", scanType, key, len(threads.Threads), time.Since(startTime))
+			logMessage := fmt.Sprintf("配置文件：%s，在 %s 模式下的分区：%s 扫描完成，总计 %d 个条目\n耗时：%v。", guildConfig.Name, scanType, key, len(threads.Threads), time.Since(startTime))
 			log.Printf("%s接下来扫描：%s", logMessage, nextGroup)
 			if logChannelID != "" {
 				err := utils.LogInfo(s, logChannelID, "扫描模块", "扫描完成", logMessage)
