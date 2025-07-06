@@ -134,8 +134,12 @@ func LoadConfigFromDB(db *sql.DB, cfg *model.Config) error {
 	for presetRows.Next() {
 		var p model.PresetMessage
 		var guildID string
-		if err := presetRows.Scan(&p.ID, &guildID, &p.Name, &p.Value, &p.Description, &p.Type); err != nil {
+		var description sql.NullString
+		if err := presetRows.Scan(&p.ID, &guildID, &p.Name, &p.Value, &description, &p.Type); err != nil {
 			return err
+		}
+		if description.Valid {
+			p.Description = description.String
 		}
 		if sc, ok := cfg.ServerConfigs[guildID]; ok {
 			sc.PresetMessages = append(sc.PresetMessages, p)
