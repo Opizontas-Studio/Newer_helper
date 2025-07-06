@@ -15,17 +15,6 @@ const (
 	Error LogLevel = "ERROR"
 )
 
-type DiscordEmbedField struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
-
-type DiscordEmbed struct {
-	Title  string              `json:"title"`
-	Color  int                 `json:"color"`
-	Fields []DiscordEmbedField `json:"fields"`
-}
-
 func getColor(level LogLevel) int {
 	switch level {
 	case Info:

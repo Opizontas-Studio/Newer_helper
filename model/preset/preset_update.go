@@ -2,6 +2,7 @@ package preset
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"discord-bot/model"
 	"discord-bot/utils"
 	"encoding/hex"
@@ -57,6 +58,7 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 		type bot interface {
 			GetConfig() *model.Config
 			RefreshCommands(guildID string)
+			GetDB() *sql.DB
 		}
 
 		appBot := b.(bot)
@@ -106,9 +108,10 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 			serverConfig.PresetMessages = append(serverConfig.PresetMessages, newPreset)
 			appBot.GetConfig().ServerConfigs[i.GuildID] = serverConfig
 
-			if err := model.SaveConfig(appBot.GetConfig()); err != nil {
-				log.Printf("Error saving config: %v", err)
-				errorContent := "Error processing preset: could not save config."
+			db := appBot.GetDB()
+			if err := utils.AddPreset(db, i.GuildID, newPreset); err != nil {
+				log.Printf("Error saving preset: %v", err)
+				errorContent := "Error processing preset: could not save to database."
 				s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 					Content: &errorContent,
 				})

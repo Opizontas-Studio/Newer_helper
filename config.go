@@ -2,14 +2,14 @@ package main
 
 import (
 	"discord-bot/model"
-	"encoding/json"
+	"discord-bot/utils"
 	"log"
 	"os"
 
 	"github.com/joho/godotenv"
 )
 
-// LoadConfig 从环境变量和JSON文件加载配置
+// LoadConfig 从环境变量和数据库加载配置
 func LoadConfig() *model.Config {
 	// 加载.env文件
 	err := godotenv.Load()
@@ -27,23 +27,25 @@ func LoadConfig() *model.Config {
 		log.Println("警告: 未设置LOG_CHANNEL_ID环境变量，日志功能将不可用")
 	}
 
-	// 从JSON文件加载预设消息
-	file, err := os.ReadFile("messages.json")
-	if err != nil {
-		log.Fatalf("读取messages.json文件错误: %v", err)
-	}
-
-	var serverConfigs map[string]model.ServerConfig
-	if err := json.Unmarshal(file, &serverConfigs); err != nil {
-		log.Fatalf("解析messages.json文件错误: %v", err)
-	}
-
 	disableInitialScan := os.Getenv("DISABLE_INITIAL_SCAN") == "true"
 
-	return &model.Config{
+	cfg := &model.Config{
 		BotToken:           token,
 		LogChannelID:       logChannelID,
-		ServerConfigs:      serverConfigs,
 		DisableInitialScan: disableInitialScan,
+		ServerConfigs:      make(map[string]model.ServerConfig),
 	}
+
+	// 初始化数据库
+	db, err := utils.InitGuildDB("./data/guilds.db")
+	if err != nil {
+		log.Fatalf("初始化数据库失败: %v", err)
+	}
+
+	// 从数据库加载配置
+	if err := utils.LoadConfigFromDB(db, cfg); err != nil {
+		log.Fatalf("从数据库加载配置失败: %v", err)
+	}
+
+	return cfg
 }

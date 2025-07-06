@@ -1,10 +1,5 @@
 package model
 
-import (
-	"encoding/json"
-	"os"
-)
-
 // PresetMessage 定义了预设消息的结构
 type PresetMessage struct {
 	ID          string `json:"id"`
@@ -29,17 +24,4 @@ type Config struct {
 	LogChannelID       string
 	DisableInitialScan bool
 	ServerConfigs      map[string]ServerConfig
-}
-
-// SaveConfig saves the configuration to a file.
-func SaveConfig(config *Config) error {
-	file, err := os.Create("messages.json")
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(config.ServerConfigs)
 }
