@@ -22,9 +22,9 @@ func LoadConfig() *model.Config {
 		log.Fatal("错误: 未设置BOT_TOKEN环境变量")
 	}
 
-	logWebhookURL := os.Getenv("LOG_WEBHOOK_URL")
-	if logWebhookURL == "" {
-		log.Println("警告: 未设置LOG_WEBHOOK_URL环境变量，日志功能将不可用")
+	logChannelID := os.Getenv("LOG_CHANNEL_ID")
+	if logChannelID == "" {
+		log.Println("警告: 未设置LOG_CHANNEL_ID环境变量，日志功能将不可用")
 	}
 
 	// 从JSON文件加载预设消息
@@ -40,7 +40,7 @@ func LoadConfig() *model.Config {
 
 	return &model.Config{
 		BotToken:      token,
-		LogWebhookURL: logWebhookURL,
+		LogChannelID:  logChannelID,
 		ServerConfigs: serverConfigs,
 	}
 }

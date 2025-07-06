@@ -101,9 +101,11 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 		// Log the successful preset update
 		channelLink := fmt.Sprintf("https://discord.com/channels/%s/%s", i.GuildID, i.ChannelID)
 		logInfo := fmt.Sprintf("用户 `%s` 创建/更新了预设 `%s`\n[在频道中查看](%s)", i.Member.User.Username, presetName, channelLink)
-		err = utils.LogInfo(appBot.GetConfig().LogWebhookURL, "预设", "创建/更新", logInfo)
-		if err != nil {
-			log.Printf("Failed to send log: %v", err)
+		if appBot.GetConfig().LogChannelID != "" {
+			err = utils.LogInfo(s, appBot.GetConfig().LogChannelID, "预设", "创建/更新", logInfo)
+			if err != nil {
+				log.Printf("Failed to send log: %v", err)
+			}
 		}
 	}
 

@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"discord-bot/commands"
 	"discord-bot/model"
 	"discord-bot/utils"
 
@@ -22,6 +23,7 @@ type Bot struct {
 	CommandHandlers    map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)
 	PresetCooldowns    map[string]time.Time
 	cooldownMutex      sync.Mutex
+	scanTicker         *time.Ticker
 }
 
 func (b *Bot) GetConfig() *model.Config {
@@ -92,8 +94,8 @@ func NewBot(cfg *model.Config) (*Bot, error) {
 func (b *Bot) addHandlers() {
 	b.Session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
 		log.Printf("Logged in as: %v#%v", s.State.User.Username, s.State.User.Discriminator)
-		if b.Config.LogWebhookURL != "" {
-			err := utils.LogInfo(b.Config.LogWebhookURL, "System", "Startup", "Bot has started successfully.")
+		if b.Config.LogChannelID != "" {
+			err := utils.LogInfo(s, b.Config.LogChannelID, "System", "启动", "Bot has started successfully.")
 			if err != nil {
 				log.Printf("Failed to send startup log: %v", err)
 			}
@@ -104,6 +106,7 @@ func (b *Bot) addHandlers() {
 			h(s, i)
 		}
 	})
+	b.Session.AddHandler(commands.HandleThreadCreate)
 }
 
 func (b *Bot) Run() {
@@ -132,6 +135,12 @@ func (b *Bot) Run() {
 	for _, serverCfg := range b.Config.ServerConfigs {
 		b.RefreshCommands(serverCfg.GuildID)
 	}
+
+	// Perform initial scan
+	go commands.ScanForums(b.Session)
+
+	b.startScanScheduler()
+
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
@@ -150,7 +159,20 @@ func (b *Bot) Close() {
 	}
 
 	log.Println("Gracefully shutting down.")
+	if b.scanTicker != nil {
+		b.scanTicker.Stop()
+	}
 	b.Session.Close()
+}
+
+func (b *Bot) startScanScheduler() {
+	b.scanTicker = time.NewTicker(72 * time.Hour)
+	go func() {
+		for range b.scanTicker.C {
+			log.Println("Starting scheduled forum scan...")
+			commands.ScanForums(b.Session)
+		}
+	}()
 }
 
 func main() {

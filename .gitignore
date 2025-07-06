@@ -12,6 +12,7 @@
 *.test
 
 # Code coverage profiles and other test artifacts
+output/
 *.out
 coverage.*
 *.coverprofile
@@ -27,7 +28,9 @@ go.work.sum
 # env file
 .env
 # data
+data/
 *.json
+*.db
 
 # Editor/IDE
 # .idea/

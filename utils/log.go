@@ -1,11 +1,10 @@
 package utils
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
+	"time"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 type LogLevel string
@@ -27,10 +26,6 @@ type DiscordEmbed struct {
 	Fields []DiscordEmbedField `json:"fields"`
 }
 
-type DiscordWebhookPayload struct {
-	Embeds []DiscordEmbed `json:"embeds"`
-}
-
 func getColor(level LogLevel) int {
 	switch level {
 	case Info:
@@ -44,55 +39,43 @@ func getColor(level LogLevel) int {
 	}
 }
 
-func sendLog(webhookURL string, level LogLevel, module, operation, extraInfo string) error {
-	embed := DiscordEmbed{
-		Title: string(level) + " Log",
-		Color: getColor(level),
-		Fields: []DiscordEmbedField{
-			{Name: "模块", Value: module},
-			{Name: "操作", Value: operation},
-			{Name: "附加信息", Value: extraInfo},
+func sendLog(s *discordgo.Session, channelID string, level LogLevel, module, operation, extraInfo string) error {
+	embedFields := []*discordgo.MessageEmbedField{}
+	if module != "" {
+		embedFields = append(embedFields, &discordgo.MessageEmbedField{Name: "模块", Value: module})
+	}
+	if operation != "" {
+		embedFields = append(embedFields, &discordgo.MessageEmbedField{Name: "操作", Value: operation})
+	}
+	if extraInfo != "" {
+		embedFields = append(embedFields, &discordgo.MessageEmbedField{Name: "附加信息", Value: extraInfo})
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:  string(level) + " Log",
+		Color:  getColor(level),
+		Fields: embedFields,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: time.Now().Format(time.RFC1123),
 		},
 	}
 
-	payload := DiscordWebhookPayload{
-		Embeds: []DiscordEmbed{embed},
-	}
-
-	jsonPayload, err := json.Marshal(payload)
+	_, err := s.ChannelMessageSendEmbed(channelID, embed)
 	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to send log to discord, status: %s, body: %s", resp.Status, string(body))
+		return fmt.Errorf("failed to send log to discord: %w", err)
 	}
 
 	return nil
 }
 
-func LogInfo(webhookURL, module, operation, extraInfo string) error {
-	return sendLog(webhookURL, Info, module, operation, extraInfo)
+func LogInfo(s *discordgo.Session, channelID, module, operation, extraInfo string) error {
+	return sendLog(s, channelID, Info, module, operation, extraInfo)
 }
 
-func LogWarn(webhookURL, module, operation, extraInfo string) error {
-	return sendLog(webhookURL, Warn, module, operation, extraInfo)
+func LogWarn(s *discordgo.Session, channelID, module, operation, extraInfo string) error {
+	return sendLog(s, channelID, Warn, module, operation, extraInfo)
 }
 
-func LogError(webhookURL, module, operation, extraInfo string) error {
-	return sendLog(webhookURL, Error, module, operation, extraInfo)
+func LogError(s *discordgo.Session, channelID, module, operation, extraInfo string) error {
+	return sendLog(s, channelID, Error, module, operation, extraInfo)
 }

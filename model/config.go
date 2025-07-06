@@ -25,13 +25,13 @@ type ServerConfig struct {
 // Config 存储应用程序的配置
 type Config struct {
 	BotToken      string
-	LogWebhookURL string
+	LogChannelID  string
 	ServerConfigs map[string]ServerConfig
 }
 
 // SaveConfig saves the configuration to a file.
 func SaveConfig(config *Config) error {
-	file, err := os.Create("data/task_config.json")
+	file, err := os.Create("messages.json")
 	if err != nil {
 		return err
 	}
@@ -39,5 +39,5 @@ func SaveConfig(config *Config) error {
 
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
-	return encoder.Encode(config)
+	return encoder.Encode(config.ServerConfigs)
 }
