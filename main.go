@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -23,7 +24,8 @@ type Bot struct {
 	CommandHandlers    map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)
 	PresetCooldowns    map[string]time.Time
 	cooldownMutex      sync.Mutex
-	scanTicker         *time.Ticker
+	fullScanTicker     *time.Ticker
+	activeScanTicker   *time.Ticker
 }
 
 func (b *Bot) GetConfig() *model.Config {
@@ -141,7 +143,22 @@ func (b *Bot) Run() {
 	}
 
 	// Perform initial scan
-	go commands.ScanForums(b.Session)
+	scanMode := "full"
+	lockFile, err := os.ReadFile("data/scan_lock.json")
+	if err == nil {
+		var lockData map[string]interface{}
+		if json.Unmarshal(lockFile, &lockData) == nil {
+			if mode, ok := lockData["scan_mode"].(string); ok && mode == "full" {
+				if timestamp, ok := lockData["timestamp"].(float64); ok {
+					if time.Since(time.Unix(int64(timestamp), 0)) < 24*time.Hour {
+						scanMode = "active"
+						log.Println("Last full scan was less than 24 hours ago. Starting with active scan.")
+					}
+				}
+			}
+		}
+	}
+	go commands.Scan(b.Session, b.Config.LogChannelID, scanMode)
 
 	b.startScanScheduler()
 
@@ -163,18 +180,31 @@ func (b *Bot) Close() {
 	}
 
 	log.Println("Gracefully shutting down.")
-	if b.scanTicker != nil {
-		b.scanTicker.Stop()
+	if b.fullScanTicker != nil {
+		b.fullScanTicker.Stop()
+	}
+	if b.activeScanTicker != nil {
+		b.activeScanTicker.Stop()
 	}
 	b.Session.Close()
 }
 
 func (b *Bot) startScanScheduler() {
-	b.scanTicker = time.NewTicker(72 * time.Hour)
+	// Schedule a full scan every 7 days (168 hours)
+	b.fullScanTicker = time.NewTicker(168 * time.Hour)
 	go func() {
-		for range b.scanTicker.C {
-			log.Println("Starting scheduled forum scan...")
-			commands.ScanForums(b.Session)
+		for range b.fullScanTicker.C {
+			log.Println("Starting scheduled full forum scan...")
+			commands.Scan(b.Session, b.Config.LogChannelID, "full")
+		}
+	}()
+
+	// Schedule an active scan every 24 hours
+	b.activeScanTicker = time.NewTicker(24 * time.Hour)
+	go func() {
+		for range b.activeScanTicker.C {
+			log.Println("Starting scheduled active forum scan...")
+			commands.Scan(b.Session, b.Config.LogChannelID, "active")
 		}
 	}()
 }

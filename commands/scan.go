@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,7 +23,13 @@ type GuildConfig struct {
 	} `json:"data"`
 }
 
-func ScanForums(s *discordgo.Session) {
+func Scan(s *discordgo.Session, logChannelID string, scanMode string) {
+	isFullScan := scanMode == "full"
+	scanType := "活跃帖"
+	if isFullScan {
+		scanType = "全区"
+	}
+
 	// Read the configuration file
 	file, err := os.ReadFile("data/task_config.json")
 	if err != nil {
@@ -44,7 +51,16 @@ func ScanForums(s *discordgo.Session) {
 		}
 		defer db.Close()
 
-		for key, channelConfig := range guildConfig.Data {
+		// Get and sort the keys to have a predictable order
+		keys := make([]string, 0, len(guildConfig.Data))
+		for k := range guildConfig.Data {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		for i, key := range keys {
+			startTime := time.Now()
+			channelConfig := guildConfig.Data[key]
 			channelID := channelConfig.ChannelID
 			tableName := fmt.Sprintf("%s_%s", key, channelID[len(channelID)-4:])
 			// Get the threads (forum posts) from the channel
@@ -53,39 +69,53 @@ func ScanForums(s *discordgo.Session) {
 				log.Printf("Error getting threads for channel %s: %v", channelConfig.ChannelID, err)
 				continue
 			}
-			// Also get archived (closed) threads
-			var before *time.Time
-			for {
-				// Limit is 100, the max allowed by the API
-				archivedThreads, err := s.ThreadsArchived(channelConfig.ChannelID, before, 100)
-				if err != nil {
-					log.Printf("Error getting archived threads for channel %s: %v", channelConfig.ChannelID, err)
-					break
-				}
 
-				if len(archivedThreads.Threads) == 0 {
-					break
-				}
+			if isFullScan {
+				var before *time.Time
+				for {
+					// Limit is 100, the max allowed by the API
+					archivedThreads, err := s.ThreadsArchived(channelConfig.ChannelID, before, 100)
+					if err != nil {
+						log.Printf("Error getting archived threads for channel %s: %v", channelConfig.ChannelID, err)
+						break
+					}
 
-				threads.Threads = append(threads.Threads, archivedThreads.Threads...)
+					if len(archivedThreads.Threads) == 0 {
+						break
+					}
 
-				if !archivedThreads.HasMore {
-					break
-				}
+					threads.Threads = append(threads.Threads, archivedThreads.Threads...)
 
-				// Set 'before' to the timestamp of the last thread we received to paginate.
-				lastThread := archivedThreads.Threads[len(archivedThreads.Threads)-1]
-				if lastThread.ThreadMetadata == nil {
-					log.Printf("Archived thread %s has no metadata, stopping pagination.", lastThread.ID)
-					break
+					if !archivedThreads.HasMore {
+						break
+					}
+
+					// Set 'before' to the timestamp of the last thread we received to paginate.
+					lastThread := archivedThreads.Threads[len(archivedThreads.Threads)-1]
+					if lastThread.ThreadMetadata == nil {
+						log.Printf("Archived thread %s has no metadata, stopping pagination.", lastThread.ID)
+						break
+					}
+					before = &lastThread.ThreadMetadata.ArchiveTimestamp
 				}
-				before = &lastThread.ThreadMetadata.ArchiveTimestamp
 			}
 
 			// Create a map for quick lookup of existing thread IDs
 			existingThreads := make(map[string]bool)
-			for _, id := range channelConfig.ThreadIDs {
-				existingThreads[id] = true
+			if !isFullScan {
+				// For active scans, we still need to know what's already in the DB
+				allPosts, err := utils.GetAllPosts(db, tableName)
+				if err != nil {
+					log.Printf("Error getting all posts for active scan from table %s: %v", tableName, err)
+				} else {
+					for _, post := range allPosts {
+						existingThreads[post.ID] = true
+					}
+				}
+			} else {
+				for _, id := range channelConfig.ThreadIDs {
+					existingThreads[id] = true
+				}
 			}
 
 			for _, thread := range threads.Threads {
@@ -109,7 +139,6 @@ func ScanForums(s *discordgo.Session) {
 					}
 				}
 
-				// Truncate content to 300 characters
 				content := firstMessage.Content
 				if len(content) > 300 {
 					content = content[:300]
@@ -137,6 +166,34 @@ func ScanForums(s *discordgo.Session) {
 					fmt.Printf("Successfully saved post: %s to table %s\n", post.ID, tableName)
 				}
 			}
+			nextGroup := "无"
+			if i+1 < len(keys) {
+				nextGroup = keys[i+1]
+			}
+			logMessage := fmt.Sprintf("【%s】组【%s】扫描完成，总计【%d】个条目，耗时：%v。", scanType, key, len(threads.Threads), time.Since(startTime))
+			log.Printf("%s接下来扫描：%s", logMessage, nextGroup)
+			if logChannelID != "" {
+				err := utils.LogInfo(s, logChannelID, "扫描模块", "扫描完成", logMessage)
+				if err != nil {
+					log.Printf("Failed to send scan completion log: %v", err)
+				}
+			}
+		}
+
+		// After all guilds are scanned, write the lock file
+		lockData := map[string]interface{}{
+			"scan_mode": scanMode,
+			"timestamp": time.Now().Unix(),
+		}
+		lockFile, err := json.MarshalIndent(lockData, "", "  ")
+		if err != nil {
+			log.Printf("Error marshalling lock file data: %v", err)
+			return
+		}
+
+		err = os.WriteFile("data/scan_lock.json", lockFile, 0644)
+		if err != nil {
+			log.Printf("Error writing lock file: %v", err)
 		}
 	}
 }
