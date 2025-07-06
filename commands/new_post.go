@@ -13,27 +13,11 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, logChannelID string) {
-	// Load and parse task_config.json to get the list of monitored channels
-	configFile, err := os.ReadFile("data/task_config.json")
-	if err != nil {
-		utils.LogError(s, logChannelID, "NewPost", "ReadFile", fmt.Sprintf("Error reading task_config.json: %v", err))
-		return
-	}
-
-	var tasks map[string]struct {
-		Data map[string]struct {
-			ChannelID string `json:"channel_id"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(configFile, &tasks); err != nil {
-		utils.LogError(s, logChannelID, "NewPost", "Unmarshal", fmt.Sprintf("Error unmarshalling task_config.json: %v", err))
-		return
-	}
-
+func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *model.Config) {
+	logChannelID := cfg.LogChannelID
 	// Collect all allowed channel IDs into a map for quick lookup
 	allowedChannels := make(map[string]bool)
-	for _, guildConfig := range tasks {
+	for _, guildConfig := range cfg.TaskConfig {
 		for _, channelConfig := range guildConfig.Data {
 			allowedChannels[channelConfig.ChannelID] = true
 		}

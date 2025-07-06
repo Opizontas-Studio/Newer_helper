@@ -126,4 +126,22 @@ func (b *Bot) startScanScheduler() {
 			commands.Scan(b.Session, b.Config.LogChannelID, "active")
 		}
 	}()
+
+	// Schedule a cooldown cleanup every hour
+	b.CooldownTicker = time.NewTicker(1 * time.Hour)
+	go func() {
+		for range b.CooldownTicker.C {
+			log.Println("Cleaning up preset cooldowns...")
+			b.cleanupCooldowns()
+		}
+	}()
+
+	// Schedule a post cleanup every 24 hours
+	b.PostCleanupTicker = time.NewTicker(24 * time.Hour)
+	go func() {
+		for range b.PostCleanupTicker.C {
+			log.Println("Cleaning up old posts...")
+			commands.CleanOldPosts(b.Session, b.Config.LogChannelID)
+		}
+	}()
 }

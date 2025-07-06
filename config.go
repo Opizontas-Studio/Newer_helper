@@ -2,7 +2,6 @@ package main
 
 import (
 	"discord-bot/model"
-	"discord-bot/utils"
 	"log"
 	"os"
 
@@ -34,17 +33,6 @@ func LoadConfig() *model.Config {
 		LogChannelID:       logChannelID,
 		DisableInitialScan: disableInitialScan,
 		ServerConfigs:      make(map[string]model.ServerConfig),
-	}
-
-	// 初始化数据库
-	db, err := utils.InitGuildDB("./data/guilds.db")
-	if err != nil {
-		log.Fatalf("初始化数据库失败: %v", err)
-	}
-
-	// 从数据库加载配置
-	if err := utils.LoadConfigFromDB(db, cfg); err != nil {
-		log.Fatalf("从数据库加载配置失败: %v", err)
 	}
 
 	return cfg
