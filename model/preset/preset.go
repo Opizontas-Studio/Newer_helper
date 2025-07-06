@@ -13,11 +13,8 @@ import (
 
 // FindPreset 在给定的服务器配置中查找预设消息
 func FindPreset(serverConfig *model.ServerConfig, presetID string) *model.PresetMessage {
-	log.Printf("Searching for preset with ID: '%s'", presetID)
 	for _, p := range serverConfig.PresetMessages {
-		log.Printf("Checking against preset ID: '%s'", p.ID)
 		if p.ID == presetID {
-			log.Printf("Found matching preset: %s", p.Name)
 			return &p
 		}
 	}

@@ -8,7 +8,7 @@ type Post struct {
 	AuthorID      string `json:"author_id"`
 	Content       string `json:"content"`
 	Tags          string `json:"tags"`
-	MessageCount  int    `json:"message_count"`
+	MessageCount  int    `json:"message_count,omitempty"`
 	Timestamp     int64  `json:"timestamp"`
 	CoverImageURL string `json:"cover_image_url"`
 }
