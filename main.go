@@ -79,6 +79,7 @@ func NewBot(cfg *model.Config) (*Bot, error) {
 	if err != nil {
 		return nil, err
 	}
+	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
 
 	bot := &Bot{
 		Session:         dg,
@@ -106,7 +107,10 @@ func (b *Bot) addHandlers() {
 			h(s, i)
 		}
 	})
-	b.Session.AddHandler(commands.HandleThreadCreate)
+	b.Session.AddHandler(func(s *discordgo.Session, t *discordgo.ThreadCreate) {
+		// Pass the log channel ID from the config to the handler
+		commands.HandleThreadCreate(s, t, b.Config.LogChannelID)
+	})
 }
 
 func (b *Bot) Run() {
