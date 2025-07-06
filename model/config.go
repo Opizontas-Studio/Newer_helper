@@ -7,6 +7,7 @@ import (
 
 // PresetMessage 定义了预设消息的结构
 type PresetMessage struct {
+	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Value       string `json:"value"`
 	Description string `json:"description,omitempty"`
@@ -24,9 +25,10 @@ type ServerConfig struct {
 
 // Config 存储应用程序的配置
 type Config struct {
-	BotToken      string
-	LogChannelID  string
-	ServerConfigs map[string]ServerConfig
+	BotToken           string
+	LogChannelID       string
+	DisableInitialScan bool
+	ServerConfigs      map[string]ServerConfig
 }
 
 // SaveConfig saves the configuration to a file.

@@ -4,6 +4,7 @@ import (
 	"discord-bot/model"
 	"discord-bot/model/preset"
 	"discord-bot/utils"
+	"fmt"
 	"log"
 
 	"github.com/bwmarrin/discordgo"
@@ -74,9 +75,13 @@ func GetCommandHandlers(b *Bot) map[string]func(s *discordgo.Session, i *discord
 func GenerateCommands(serverCfg *model.ServerConfig) []*discordgo.ApplicationCommand {
 	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, len(serverCfg.PresetMessages))
 	for _, p := range serverCfg.PresetMessages {
+		name := p.Name
+		if len(name) > 80 {
+			name = name[:80]
+		}
 		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
-			Name:  p.Name,
-			Value: p.Name,
+			Name:  fmt.Sprintf("(%s) %s", p.ID[:4], name),
+			Value: p.ID,
 		})
 	}
 
@@ -87,8 +92,8 @@ func GenerateCommands(serverCfg *model.ServerConfig) []*discordgo.ApplicationCom
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "preset",
-					Description: "要发送的预设消息。",
+					Name:        "id",
+					Description: "要发送的预设消息 ID。",
 					Required:    true,
 					Choices:     choices,
 				},
@@ -124,8 +129,8 @@ func GenerateCommands(serverCfg *model.ServerConfig) []*discordgo.ApplicationCom
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "name",
-					Description: "要管理的预设名称",
+					Name:        "id",
+					Description: "要管理的预设 ID",
 					Required:    true,
 					Choices:     choices,
 				},

@@ -12,12 +12,16 @@ import (
 )
 
 // FindPreset 在给定的服务器配置中查找预设消息
-func FindPreset(serverConfig *model.ServerConfig, presetValue string) *model.PresetMessage {
+func FindPreset(serverConfig *model.ServerConfig, presetID string) *model.PresetMessage {
+	log.Printf("Searching for preset with ID: '%s'", presetID)
 	for _, p := range serverConfig.PresetMessages {
-		if p.Name == presetValue {
+		log.Printf("Checking against preset ID: '%s'", p.ID)
+		if p.ID == presetID {
+			log.Printf("Found matching preset: %s", p.Name)
 			return &p
 		}
 	}
+	log.Printf("No preset found with ID: '%s'", presetID)
 	return nil
 }
 
@@ -80,9 +84,9 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 		optionMap[opt.Name] = opt
 	}
 
-	var presetValue, user string
-	if option, ok := optionMap["preset"]; ok {
-		presetValue = option.StringValue()
+	var presetID, user string
+	if option, ok := optionMap["id"]; ok {
+		presetID = option.StringValue()
 	}
 
 	if option, ok := optionMap["user"]; ok {
@@ -92,9 +96,9 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 		}
 	}
 
-	selectedPreset := FindPreset(&serverConfig, presetValue)
+	selectedPreset := FindPreset(&serverConfig, presetID)
 	if selectedPreset == nil {
-		log.Printf("Could not find preset with value: %s", presetValue)
+		log.Printf("Could not find preset with ID: %s", presetID)
 		_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Content: "Could not find the selected preset.",
 		})
@@ -107,11 +111,11 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	log.Printf("Checking cooldown for preset: %s", selectedPreset.Name)
-	if lastUsed, ok := cooldowns[selectedPreset.Name]; ok {
-		log.Printf("Preset '%s' was last used at %v", selectedPreset.Name, lastUsed)
+	log.Printf("Checking cooldown for preset: %s", selectedPreset.ID)
+	if lastUsed, ok := cooldowns[selectedPreset.ID]; ok {
+		log.Printf("Preset '%s' was last used at %v", selectedPreset.ID, lastUsed)
 		if time.Since(lastUsed) < 30*time.Second {
-			log.Printf("Preset '%s' is on cooldown.", selectedPreset.Name)
+			log.Printf("Preset '%s' is on cooldown.", selectedPreset.ID)
 			_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 				Content: fmt.Sprintf("Preset '%s' is on cooldown. Please wait.", selectedPreset.Name),
 			})
@@ -122,8 +126,8 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 		}
 	}
 
-	log.Printf("Updating cooldown for preset: %s", selectedPreset.Name)
-	cooldowns[selectedPreset.Name] = time.Now()
+	log.Printf("Updating cooldown for preset: %s", selectedPreset.ID)
+	cooldowns[selectedPreset.ID] = time.Now()
 
 	messageSend := FormatPresetMessageSend(selectedPreset, user)
 	message, err := s.ChannelMessageSendComplex(i.ChannelID, messageSend)

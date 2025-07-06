@@ -2,6 +2,8 @@ package preset
 
 import (
 	"discord-bot/model"
+	"discord-bot/utils"
+	"fmt"
 	"log"
 	"strings"
 
@@ -12,6 +14,7 @@ import (
 func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, b interface{}) {
 	type bot interface {
 		GetConfig() *model.Config
+		RefreshCommands(guildID string)
 	}
 	appBot := b.(bot)
 	serverConfig, ok := appBot.GetConfig().ServerConfigs[i.GuildID]
@@ -26,7 +29,7 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 		optionMap[opt.Name] = opt
 	}
 
-	name := optionMap["name"].StringValue()
+	id := optionMap["id"].StringValue()
 	action := optionMap["action"].StringValue()
 	input := ""
 	if val, ok := optionMap["input"]; ok {
@@ -42,28 +45,32 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 		} else {
 			found := false
 			for i, p := range serverConfig.PresetMessages {
-				if p.Name == name {
+				if p.ID == id {
 					serverConfig.PresetMessages[i].Name = input
 					found = true
 					break
 				}
 			}
 			if found {
+				appBot.GetConfig().ServerConfigs[i.GuildID] = serverConfig
 				if err := model.SaveConfig(appBot.GetConfig()); err != nil {
 					responseContent = "无法保存配置。"
-					log.Printf("Failed to save config: %v", err)
+					utils.LogError(s, appBot.GetConfig().LogChannelID, "预设管理", "保存配置失败", err.Error())
 				} else {
-					responseContent = "预设 '" + name + "' 已重命名为 '" + input + "'。"
+					responseContent = "预设已重命名为 '" + input + "'。"
+					logMessage := fmt.Sprintf("ID: `%s`\n新名称: `%s`\n操作者: `%s`", id, input, i.Member.User.Username)
+					utils.LogInfo(s, appBot.GetConfig().LogChannelID, "预设管理", "重命名预设", logMessage)
+					go appBot.RefreshCommands(i.GuildID)
 				}
 			} else {
-				responseContent = "找不到名为 '" + name + "' 的预设。"
+				responseContent = "找不到具有该 ID 的预设。"
 			}
 		}
 	case "del":
 		found := false
 		var indexToRemove = -1
 		for i, p := range serverConfig.PresetMessages {
-			if p.Name == name {
+			if p.ID == id {
 				indexToRemove = i
 				found = true
 				break
@@ -71,14 +78,18 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 		}
 		if found {
 			serverConfig.PresetMessages = append(serverConfig.PresetMessages[:indexToRemove], serverConfig.PresetMessages[indexToRemove+1:]...)
+			appBot.GetConfig().ServerConfigs[i.GuildID] = serverConfig
 			if err := model.SaveConfig(appBot.GetConfig()); err != nil {
 				responseContent = "无法保存配置。"
-				log.Printf("Failed to save config: %v", err)
+				utils.LogError(s, appBot.GetConfig().LogChannelID, "预设管理", "保存配置失败", err.Error())
 			} else {
-				responseContent = "预设 '" + name + "' 已被删除。"
+				responseContent = "预设已被删除。"
+				logMessage := fmt.Sprintf("ID: `%s`\n操作者: `%s`", id, i.Member.User.Username)
+				utils.LogInfo(s, appBot.GetConfig().LogChannelID, "预设管理", "删除预设", logMessage)
+				go appBot.RefreshCommands(i.GuildID)
 			}
 		} else {
-			responseContent = "找不到名为 '" + name + "' 的预设。"
+			responseContent = "找不到具有该 ID 的预设。"
 		}
 	case "overwrite":
 		if input == "" {
@@ -92,7 +103,7 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 			} else {
 				found := false
 				for i, p := range serverConfig.PresetMessages {
-					if p.Name == name {
+					if p.ID == id {
 						serverConfig.PresetMessages[i].Value = strings.Join(messages, "\n")
 						serverConfig.PresetMessages[i].Type = "text" // Or parse from original message
 						found = true
@@ -100,14 +111,18 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 					}
 				}
 				if found {
+					appBot.GetConfig().ServerConfigs[i.GuildID] = serverConfig
 					if err := model.SaveConfig(appBot.GetConfig()); err != nil {
 						responseContent = "无法保存配置。"
-						log.Printf("Failed to save config: %v", err)
+						utils.LogError(s, appBot.GetConfig().LogChannelID, "预设管理", "保存配置失败", err.Error())
 					} else {
-						responseContent = "预设 '" + name + "' 已被覆盖。"
+						responseContent = "预设已被覆盖。"
+						logMessage := fmt.Sprintf("ID: `%s`\n操作者: `%s`", id, i.Member.User.Username)
+						utils.LogInfo(s, appBot.GetConfig().LogChannelID, "预设管理", "覆盖预设", logMessage)
+						go appBot.RefreshCommands(i.GuildID)
 					}
 				} else {
-					responseContent = "找不到名为 '" + name + "' 的预设。"
+					responseContent = "找不到具有该 ID 的预设。"
 				}
 			}
 		}

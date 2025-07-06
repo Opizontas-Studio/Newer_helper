@@ -49,13 +49,13 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, logChan
 	if err != nil {
 		var restErr *discordgo.RESTError
 		if errors.As(err, &restErr) && restErr.Response != nil && restErr.Response.StatusCode == 404 {
-			utils.LogInfo(s, logChannelID, "NewPost", "GetMessage", fmt.Sprintf("Got 404 for thread %s, waiting 30s to retry...", t.ID))
+			utils.LogWarn(s, logChannelID, "NewPost", "GetMessage", fmt.Sprintf("我们收到了来自 discord API 对应帖子 <#%s> 的 404 返回， waiting 30s to retry...", t.ID))
 			time.Sleep(30 * time.Second)
 			firstMessage, err = s.ChannelMessage(t.ID, t.ID)
 		}
 
 		if err != nil {
-			utils.LogError(s, logChannelID, "NewPost", "GetMessage", fmt.Sprintf("Error getting first message for thread %s: %v", t.ID, err))
+			utils.LogError(s, logChannelID, "NewPost", "GetMessage", fmt.Sprintf("Error getting first message for thread <#%s>: %v", t.ID, err))
 			return
 		}
 	}
@@ -68,10 +68,10 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, logChan
 		}
 	}
 
-	// Truncate content to 300 characters
+	// Truncate content to 512 characters
 	content := firstMessage.Content
-	if len(content) > 300 {
-		content = content[:300]
+	if len(content) > 512 {
+		content = content[:512]
 	}
 
 	var coverImageURL string
@@ -133,7 +133,7 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, logChan
 	if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
 		utils.LogError(s, logChannelID, "NewPost", "WriteFile", fmt.Sprintf("Error writing posts to file %s: %v", filePath, err))
 	} else {
-		utils.LogInfo(s, logChannelID, "NewPost", "Save", fmt.Sprintf("Successfully saved new post %s to channel %s in %s", post.ID, channelID, filePath))
+		utils.LogInfo(s, logChannelID, "NewPost", "Save", fmt.Sprintf("Successfully saved new post <#%s> to channel <#%s> in `%s`", post.ID, channelID, filePath))
 	}
 }
 

@@ -140,8 +140,8 @@ func Scan(s *discordgo.Session, logChannelID string, scanMode string) {
 				}
 
 				content := firstMessage.Content
-				if len(content) > 300 {
-					content = content[:300]
+				if len(content) > 512 {
+					content = content[:512]
 				}
 
 				var coverImageURL string

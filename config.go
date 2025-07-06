@@ -38,9 +38,12 @@ func LoadConfig() *model.Config {
 		log.Fatalf("解析messages.json文件错误: %v", err)
 	}
 
+	disableInitialScan := os.Getenv("DISABLE_INITIAL_SCAN") == "true"
+
 	return &model.Config{
-		BotToken:      token,
-		LogChannelID:  logChannelID,
-		ServerConfigs: serverConfigs,
+		BotToken:           token,
+		LogChannelID:       logChannelID,
+		ServerConfigs:      serverConfigs,
+		DisableInitialScan: disableInitialScan,
 	}
 }

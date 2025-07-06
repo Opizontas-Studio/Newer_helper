@@ -143,22 +143,26 @@ func (b *Bot) Run() {
 	}
 
 	// Perform initial scan
-	scanMode := "full"
-	lockFile, err := os.ReadFile("data/scan_lock.json")
-	if err == nil {
-		var lockData map[string]interface{}
-		if json.Unmarshal(lockFile, &lockData) == nil {
-			if mode, ok := lockData["scan_mode"].(string); ok && mode == "full" {
-				if timestamp, ok := lockData["timestamp"].(float64); ok {
-					if time.Since(time.Unix(int64(timestamp), 0)) < 24*time.Hour {
-						scanMode = "active"
-						log.Println("Last full scan was less than 24 hours ago. Starting with active scan.")
+	if !b.Config.DisableInitialScan {
+		scanMode := "full"
+		lockFile, err := os.ReadFile("data/scan_lock.json")
+		if err == nil {
+			var lockData map[string]interface{}
+			if json.Unmarshal(lockFile, &lockData) == nil {
+				if mode, ok := lockData["scan_mode"].(string); ok && mode == "full" {
+					if timestamp, ok := lockData["timestamp"].(float64); ok {
+						if time.Since(time.Unix(int64(timestamp), 0)) < 24*time.Hour {
+							scanMode = "active"
+							log.Println("Last full scan was less than 24 hours ago. Starting with active scan.")
+						}
 					}
 				}
 			}
 		}
+		go commands.Scan(b.Session, b.Config.LogChannelID, scanMode)
+	} else {
+		log.Println("Initial scan is disabled by environment variable.")
 	}
-	go commands.Scan(b.Session, b.Config.LogChannelID, scanMode)
 
 	b.startScanScheduler()
 
@@ -171,13 +175,17 @@ func (b *Bot) Run() {
 }
 
 func (b *Bot) Close() {
-	log.Println("Removing commands...")
-	for _, v := range b.registeredCommands {
-		err := b.Session.ApplicationCommandDelete(b.Session.State.User.ID, v.GuildID, v.ID)
-		if err != nil {
-			log.Printf("Cannot delete '%v' command: %v", v.Name, err)
-		}
-	}
+	// log.Println("Removing commands...")
+	// for _, v := range b.registeredCommands {
+	// 	err := b.Session.ApplicationCommandDelete(b.Session.State.User.ID, v.GuildID, v.ID)
+	// 	if err != nil {
+	// 		if restErr, ok := err.(*discordgo.RESTError); ok && restErr.Message != nil && restErr.Message.Code == discordgo.ErrCodeUnknownApplicationCommand {
+	// 			log.Printf("Command '%s' was already deleted, skipping.", v.Name)
+	// 		} else {
+	// 			log.Printf("Cannot delete '%v' command: %v", v.Name, err)
+	// 		}
+	// 	}
+	// }
 
 	log.Println("Gracefully shutting down.")
 	if b.fullScanTicker != nil {
