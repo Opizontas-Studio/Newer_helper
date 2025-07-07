@@ -20,6 +20,9 @@ func Register(b *bot.Bot) {
 
 func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	return map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
+		"rollcard": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			HandleRollCardInteraction(s, i, b)
+		},
 		"preset-message": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			serverConfig, ok := b.Config.ServerConfigs[i.GuildID]
 			if !ok {
@@ -112,22 +115,34 @@ func addHandlers(b *bot.Bot) {
 
 func handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, config *model.Config) {
 	data := i.ApplicationCommandData()
-	serverConfig, ok := config.ServerConfigs[i.GuildID]
-	if !ok {
-		return
-	}
-
 	var choices []*discordgo.ApplicationCommandOptionChoice
-	for _, p := range serverConfig.PresetMessages {
-		if strings.Contains(strings.ToLower(p.Name), strings.ToLower(data.Options[0].StringValue())) {
-			name := p.Name
-			if len(name) > 80 {
-				name = name[:80]
+
+	switch data.Name {
+	case "rollcard":
+		if rollCardGuildConfig, ok := config.RollCardConfigs[i.GuildID]; ok {
+			for _, poolName := range rollCardGuildConfig.DataBaseTableNameMapping {
+				if strings.Contains(strings.ToLower(poolName), strings.ToLower(data.Options[0].StringValue())) {
+					choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+						Name:  poolName,
+						Value: poolName, // Use the user-friendly name as the value
+					})
+				}
 			}
-			choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
-				Name:  fmt.Sprintf("(%s) %s", p.ID[:4], name),
-				Value: p.ID,
-			})
+		}
+	case "preset-message", "preset-message_admin":
+		if serverConfig, ok := config.ServerConfigs[i.GuildID]; ok {
+			for _, p := range serverConfig.PresetMessages {
+				if strings.Contains(strings.ToLower(p.Name), strings.ToLower(data.Options[0].StringValue())) {
+					name := p.Name
+					if len(name) > 80 {
+						name = name[:80]
+					}
+					choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+						Name:  fmt.Sprintf("(%s) %s", p.ID[:4], name),
+						Value: p.ID,
+					})
+				}
+			}
 		}
 	}
 

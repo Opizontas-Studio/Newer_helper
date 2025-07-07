@@ -68,6 +68,24 @@ func GetAllPosts(db *sql.DB, tableName string) ([]model.Post, error) {
 	return posts, nil
 }
 
+func GetRandomPosts(db *sql.DB, tableName string, count int) ([]model.Post, error) {
+	rows, err := db.Query(`SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM "`+tableName+`" ORDER BY RANDOM() LIMIT ?`, count)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []model.Post
+	for rows.Next() {
+		var post model.Post
+		if err := rows.Scan(&post.ID, &post.Title, &post.Author, &post.AuthorID, &post.Content, &post.Tags, &post.MessageCount, &post.Timestamp, &post.CoverImageURL); err != nil {
+			return nil, err
+		}
+		posts = append(posts, post)
+	}
+	return posts, nil
+}
+
 func InitGuildDB(filepath string) (*sql.DB, error) {
 	if err := os.MkdirAll("./data", os.ModePerm); err != nil {
 		return nil, err

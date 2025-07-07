@@ -19,9 +19,6 @@ func (b *Bot) Run() {
 		log.Fatalf("Error opening connection: %v", err)
 	}
 
-	log.Println("Adding commands...")
-	b.RegisteredCommands = make([]*discordgo.ApplicationCommand, 0)
-
 	log.Println("Removing old global commands...")
 	existingGlobalCommands, err := b.Session.ApplicationCommands(b.Session.State.User.ID, "")
 	if err != nil {
@@ -36,6 +33,8 @@ func (b *Bot) Run() {
 		}
 	}
 
+	log.Println("Adding commands...")
+	b.RegisteredCommands = make([]*discordgo.ApplicationCommand, 0)
 	for _, serverCfg := range b.Config.ServerConfigs {
 		b.RefreshCommands(serverCfg.GuildID)
 	}
@@ -94,8 +93,6 @@ func (b *Bot) RefreshCommands(guildID string) {
 		}
 	}
 
-	// This part needs to be adjusted. `GenerateCommands` is in the main package.
-	// We will move it to the commands package.
 	cmds := commands.GenerateCommands(&serverCfg)
 	log.Printf("Adding %d new commands for guild %s...", len(cmds), serverCfg.GuildID)
 	for _, v := range cmds {

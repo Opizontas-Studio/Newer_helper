@@ -24,6 +24,7 @@ type Config struct {
 	LogChannelID       string
 	DisableInitialScan bool
 	ServerConfigs      map[string]ServerConfig
+	RollCardConfigs    RollCardConfig
 	TaskConfig         map[string]struct {
 		Data map[string]struct {
 			ChannelID string `json:"channel_id"`

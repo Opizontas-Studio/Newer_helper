@@ -28,6 +28,15 @@ func main() {
 		log.Fatalf("Error unmarshalling task_config.json: %v", err)
 	}
 
+	// Load roll card config
+	rollCardConfigFile, err := os.ReadFile("data/roll_cardConfig.json")
+	if err != nil {
+		log.Fatalf("Error reading roll_cardConfig.json: %v", err)
+	}
+	if err := json.Unmarshal(rollCardConfigFile, &cfg.RollCardConfigs); err != nil {
+		log.Fatalf("Error unmarshalling roll_cardConfig.json: %v", err)
+	}
+
 	b, err := bot.New(cfg, db)
 	if err != nil {
 		log.Fatalf("Error creating bot: %v", err)

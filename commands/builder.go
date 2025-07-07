@@ -88,5 +88,28 @@ func GenerateCommands(serverCfg *model.ServerConfig) []*discordgo.ApplicationCom
 				},
 			},
 		},
+		{
+			Name:        "rollcard",
+			Description: "从指定卡池中抽取卡片",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:         discordgo.ApplicationCommandOptionString,
+					Name:         "pool",
+					Description:  "要抽卡的卡池",
+					Required:     true,
+					Autocomplete: true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "count",
+					Description: "要抽取的数量 (1-8，默认为 1)",
+					Required:    false,
+					MinValue:    &minCount,
+					MaxValue:    8,
+				},
+			},
+		},
 	}
 }
+
+var minCount = 1.0
