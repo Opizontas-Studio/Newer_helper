@@ -107,6 +107,13 @@ func GenerateCommands(serverCfg *model.ServerConfig) []*discordgo.ApplicationCom
 					MinValue:    &minCount,
 					MaxValue:    8,
 				},
+				{
+					Type:         discordgo.ApplicationCommandOptionString,
+					Name:         "tag",
+					Description:  "使用标签进行抽卡",
+					Required:     false,
+					Autocomplete: true,
+				},
 			},
 		},
 	}
