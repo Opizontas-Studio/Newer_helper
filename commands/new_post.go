@@ -54,8 +54,9 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 
 	// Truncate content to 512 characters
 	content := firstMessage.Content
-	if len(content) > 512 {
-		content = content[:512]
+	runes := []rune(content)
+	if len(runes) > 512 {
+		content = string(runes[:512])
 	}
 
 	var coverImageURL string

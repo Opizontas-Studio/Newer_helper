@@ -2,23 +2,11 @@ package commands
 
 import (
 	"discord-bot/model"
-	"fmt"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-func GenerateCommands(serverCfg *model.ServerConfig) []*discordgo.ApplicationCommand {
-	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, len(serverCfg.PresetMessages))
-	for _, p := range serverCfg.PresetMessages {
-		name := p.Name
-		if len(name) > 80 {
-			name = name[:80]
-		}
-		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
-			Name:  fmt.Sprintf("(%s) %s", p.ID[:4], name),
-			Value: p.ID,
-		})
-	}
+func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 
 	return []*discordgo.ApplicationCommand{
 		{

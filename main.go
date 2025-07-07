@@ -11,9 +11,15 @@ import (
 
 func main() {
 	cfg := LoadConfig()
-	db, err := utils.InitGuildDB("./data/guilds.db")
+	if err := os.MkdirAll("./data", os.ModePerm); err != nil {
+		log.Fatalf("Failed to create data directory: %v", err)
+	}
+	db, err := utils.InitDB("./data/guilds.db")
 	if err != nil {
 		log.Fatalf("Error initializing database: %v", err)
+	}
+	if err := utils.CreateGuildTables(db); err != nil {
+		log.Fatalf("Error creating guild tables: %v", err)
 	}
 	if err := utils.LoadConfigFromDB(db, cfg); err != nil {
 		log.Fatalf("Error loading config from database: %v", err)
