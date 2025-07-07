@@ -6,8 +6,10 @@ import (
 	"discord-bot/model"
 	"discord-bot/model/preset"
 	"discord-bot/utils"
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -29,7 +31,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 				log.Printf("Could not find server config for guild: %s", i.GuildID)
 				return
 			}
-			permissionLevel := utils.CheckPermission(i.Member.Roles, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs)
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.Config.DeveloperUserIDs, b.Config.SuperAdminRoleIDs)
 			if permissionLevel == utils.GuestPermission {
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -48,7 +50,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 				log.Printf("Could not find server config for guild: %s", i.GuildID)
 				return
 			}
-			permissionLevel := utils.CheckPermission(i.Member.Roles, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs)
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.Config.DeveloperUserIDs, b.Config.SuperAdminRoleIDs)
 			if permissionLevel != utils.AdminPermission {
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -67,7 +69,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 				log.Printf("Could not find server config for guild: %s", i.GuildID)
 				return
 			}
-			permissionLevel := utils.CheckPermission(i.Member.Roles, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs)
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.Config.DeveloperUserIDs, b.Config.SuperAdminRoleIDs)
 			if permissionLevel != utils.AdminPermission {
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -79,6 +81,45 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 				return
 			}
 			preset.HandlePresetMessageAdminInteraction(s, i, b)
+		},
+		"start_scan": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, nil, nil, b.Config.DeveloperUserIDs, nil)
+			if permissionLevel != utils.DeveloperPermission {
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "You do not have permission to use this command.",
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				})
+				return
+			}
+
+			options := i.ApplicationCommandData().Options
+			optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
+			for _, opt := range options {
+				optionMap[opt.Name] = opt
+			}
+
+			scanMode := "active"
+			if opt, ok := optionMap["mode"]; ok {
+				scanMode = opt.StringValue()
+			}
+
+			targetGuildID := ""
+			if opt, ok := optionMap["guild"]; ok {
+				targetGuildID = opt.StringValue()
+			}
+
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: fmt.Sprintf("Scan started with mode: %s. Target guild: %s", scanMode, targetGuildID),
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+
+			go commands.Scan(s, b.Config.LogChannelID, scanMode, targetGuildID)
 		},
 	}
 }
@@ -202,6 +243,37 @@ func handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, co
 					choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
 						Name:  fmt.Sprintf("(%s) %s", p.ID[:4], name),
 						Value: p.ID,
+					})
+				}
+			}
+		}
+	case "start_scan":
+		var focusedOption discordgo.ApplicationCommandInteractionDataOption
+		for _, opt := range data.Options {
+			if opt.Focused {
+				focusedOption = *opt
+				break
+			}
+		}
+
+		if focusedOption.Name == "guild" {
+			file, err := os.ReadFile("data/task_config.json")
+			if err != nil {
+				log.Printf("Error reading task_config.json for autocomplete: %v", err)
+				return
+			}
+			var configs map[string]commands.GuildConfig
+			if err := json.Unmarshal(file, &configs); err != nil {
+				log.Printf("Error unmarshalling task_config.json for autocomplete: %v", err)
+				return
+			}
+
+			for id, config := range configs {
+				// Match against both name and ID
+				if strings.Contains(strings.ToLower(config.Name), strings.ToLower(focusedOption.StringValue())) || strings.Contains(strings.ToLower(id), strings.ToLower(focusedOption.StringValue())) {
+					choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+						Name:  fmt.Sprintf("%s (%s)", config.Name, id),
+						Value: id,
 					})
 				}
 			}

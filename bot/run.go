@@ -56,7 +56,7 @@ func (b *Bot) Run() {
 				}
 			}
 		}
-		go commands.Scan(b.Session, b.Config.LogChannelID, scanMode)
+		go commands.Scan(b.Session, b.Config.LogChannelID, scanMode, "")
 	} else {
 		log.Println("Initial scan is disabled by environment variable.")
 	}
@@ -111,16 +111,7 @@ func (b *Bot) startScanScheduler() {
 	go func() {
 		for range b.FullScanTicker.C {
 			log.Println("Starting scheduled full forum scan...")
-			commands.Scan(b.Session, b.Config.LogChannelID, "full")
-		}
-	}()
-
-	// Schedule an active scan every 24 hours
-	b.ActiveScanTicker = time.NewTicker(24 * time.Hour)
-	go func() {
-		for range b.ActiveScanTicker.C {
-			log.Println("Starting scheduled active forum scan...")
-			commands.Scan(b.Session, b.Config.LogChannelID, "active")
+			commands.Scan(b.Session, b.Config.LogChannelID, "full", "")
 		}
 	}()
 
@@ -133,10 +124,24 @@ func (b *Bot) startScanScheduler() {
 		}
 	}()
 
-	// Schedule a post cleanup every 24 hours
-	b.PostCleanupTicker = time.NewTicker(24 * time.Hour)
+	// Schedule daily tasks at 5:00 AM
 	go func() {
-		for range b.PostCleanupTicker.C {
+		for {
+			now := time.Now()
+			// Calculate the next 5:00 AM
+			next := time.Date(now.Year(), now.Month(), now.Day(), 5, 0, 0, 0, now.Location())
+			if now.After(next) {
+				next = next.Add(24 * time.Hour)
+			}
+
+			log.Printf("Next daily task scheduled for: %v", next)
+			// Wait until the next 5:00 AM
+			time.Sleep(next.Sub(now))
+
+			// Run the tasks
+			log.Println("Starting scheduled active forum scan...")
+			commands.Scan(b.Session, b.Config.LogChannelID, "active", "")
+
 			log.Println("Cleaning up old posts...")
 			commands.CleanOldPosts(b.Session, b.Config.LogChannelID)
 		}

@@ -17,7 +17,7 @@ func GetCommandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *dis
 				log.Printf("Could not find server config for guild: %s", i.GuildID)
 				return
 			}
-			permissionLevel := utils.CheckPermission(i.Member.Roles, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs)
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.Config.DeveloperUserIDs, b.Config.SuperAdminRoleIDs)
 			if permissionLevel == utils.GuestPermission {
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -36,7 +36,7 @@ func GetCommandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *dis
 				log.Printf("Could not find server config for guild: %s", i.GuildID)
 				return
 			}
-			permissionLevel := utils.CheckPermission(i.Member.Roles, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs)
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.Config.DeveloperUserIDs, b.Config.SuperAdminRoleIDs)
 			if permissionLevel != utils.AdminPermission {
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -55,7 +55,7 @@ func GetCommandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *dis
 				log.Printf("Could not find server config for guild: %s", i.GuildID)
 				return
 			}
-			permissionLevel := utils.CheckPermission(i.Member.Roles, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs)
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.Config.DeveloperUserIDs, b.Config.SuperAdminRoleIDs)
 			if permissionLevel != utils.AdminPermission {
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,

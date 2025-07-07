@@ -22,6 +22,8 @@ type ServerConfig struct {
 type Config struct {
 	BotToken           string
 	LogChannelID       string
+	DeveloperUserIDs   []string
+	SuperAdminRoleIDs  []string
 	DisableInitialScan bool
 	ServerConfigs      map[string]ServerConfig
 	RollCardConfigs    RollCardConfig

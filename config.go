@@ -4,6 +4,7 @@ import (
 	"discord-bot/model"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -31,6 +32,8 @@ func LoadConfig() *model.Config {
 	cfg := &model.Config{
 		BotToken:           token,
 		LogChannelID:       logChannelID,
+		DeveloperUserIDs:   strings.Split(os.Getenv("DEVELOPER_USER_IDS"), ","),
+		SuperAdminRoleIDs:  strings.Split(os.Getenv("SUPER_ADMIN_ROLE_IDS"), ","),
 		DisableInitialScan: disableInitialScan,
 		ServerConfigs:      make(map[string]model.ServerConfig),
 	}

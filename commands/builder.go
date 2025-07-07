@@ -116,6 +116,29 @@ func GenerateCommands(serverCfg *model.ServerConfig) []*discordgo.ApplicationCom
 				},
 			},
 		},
+		{
+			Name:        "start_scan",
+			Description: "手动启动扫描",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "mode",
+					Description: "扫描模式 (默认为 active)",
+					Required:    false,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{Name: "活跃 (active)", Value: "active"},
+						{Name: "全区 (full)", Value: "full"},
+					},
+				},
+				{
+					Type:         discordgo.ApplicationCommandOptionString,
+					Name:         "guild",
+					Description:  "要扫描的特定服务器 (默认为全部)",
+					Required:     false,
+					Autocomplete: true,
+				},
+			},
+		},
 	}
 }
 

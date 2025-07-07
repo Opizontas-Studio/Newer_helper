@@ -23,7 +23,7 @@ type GuildConfig struct {
 	} `json:"data"`
 }
 
-func Scan(s *discordgo.Session, logChannelID string, scanMode string) {
+func Scan(s *discordgo.Session, logChannelID string, scanMode string, targetGuildID string) {
 	isFullScan := scanMode == "full"
 	scanType := "活跃帖"
 	if isFullScan {
@@ -37,13 +37,25 @@ func Scan(s *discordgo.Session, logChannelID string, scanMode string) {
 		return
 	}
 
-	var config map[string]GuildConfig
-	if err := json.Unmarshal(file, &config); err != nil {
+	var allConfigs map[string]GuildConfig
+	if err := json.Unmarshal(file, &allConfigs); err != nil {
 		log.Printf("Error unmarshalling config: %v", err)
 		return
 	}
 
-	for guildID, guildConfig := range config {
+	configsToScan := make(map[string]GuildConfig)
+	if targetGuildID != "" {
+		if config, ok := allConfigs[targetGuildID]; ok {
+			configsToScan[targetGuildID] = config
+		} else {
+			log.Printf("Target guild ID %s not found in config", targetGuildID)
+			return
+		}
+	} else {
+		configsToScan = allConfigs
+	}
+
+	for guildID, guildConfig := range configsToScan {
 		func(guildID string, guildConfig GuildConfig) {
 			db, err := utils.InitDB(fmt.Sprintf("./data/%s.db", guildID))
 			if err != nil {
@@ -152,6 +164,7 @@ func Scan(s *discordgo.Session, logChannelID string, scanMode string) {
 
 					post := model.Post{
 						ID:            thread.ID,
+						ChannelID:     thread.ParentID,
 						Title:         thread.Name,
 						Author:        firstMessage.Author.Username,
 						AuthorID:      firstMessage.Author.ID,

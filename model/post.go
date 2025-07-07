@@ -3,6 +3,7 @@ package model
 // Post represents a post from a Discord forum.
 type Post struct {
 	ID            string `json:"id"`
+	ChannelID     string `json:"channel_id"`
 	Title         string `json:"title"`
 	Author        string `json:"author"`
 	AuthorID      string `json:"author_id"`

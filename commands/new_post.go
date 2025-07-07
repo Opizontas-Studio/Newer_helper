@@ -65,6 +65,7 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 
 	post := model.Post{
 		ID:            t.ID,
+		ChannelID:     t.ParentID,
 		Title:         t.Name,
 		Author:        firstMessage.Author.Username,
 		AuthorID:      firstMessage.Author.ID,
@@ -76,9 +77,8 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 
 	// Define file path and data structure
 	guildID := t.GuildID
-	channelID := t.ParentID
 	filePath := fmt.Sprintf("data/new_post/%s.json", guildID)
-	var channelPosts map[string][]model.Post
+	var posts []model.Post
 
 	if err := os.MkdirAll("data/new_post", 0755); err != nil {
 		utils.LogError(s, logChannelID, "NewPost", "MkdirAll", fmt.Sprintf("Error creating directory: %v", err))
@@ -88,26 +88,24 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 	// Read existing data from the file
 	fileData, err := os.ReadFile(filePath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			// File doesn't exist, initialize a new map
-			channelPosts = make(map[string][]model.Post)
-		} else {
+		if !os.IsNotExist(err) {
 			utils.LogError(s, logChannelID, "NewPost", "ReadFile", fmt.Sprintf("Error reading post file %s: %v", filePath, err))
 			return
 		}
+		// File doesn't exist, posts will be an empty slice
 	} else {
 		// File exists, unmarshal the data
-		if err := json.Unmarshal(fileData, &channelPosts); err != nil {
-			utils.LogError(s, logChannelID, "NewPost", "Unmarshal", fmt.Sprintf("Error unmarshalling posts from %s: %v. Initializing new map.", filePath, err))
-			channelPosts = make(map[string][]model.Post)
+		if err := json.Unmarshal(fileData, &posts); err != nil {
+			utils.LogError(s, logChannelID, "NewPost", "Unmarshal", fmt.Sprintf("Error unmarshalling posts from %s: %v. Initializing new slice.", filePath, err))
+			// Keep posts as an empty slice
 		}
 	}
 
-	// Append the new post
-	channelPosts[channelID] = append(channelPosts[channelID], post)
+	// Append the new post and sort by timestamp
+	posts = append(posts, post)
 
 	// Marshal the updated data back to JSON
-	jsonData, err := json.MarshalIndent(channelPosts, "", "  ")
+	jsonData, err := json.MarshalIndent(posts, "", "  ")
 	if err != nil {
 		utils.LogError(s, logChannelID, "NewPost", "Marshal", fmt.Sprintf("Error marshalling posts to JSON: %v", err))
 		return
@@ -117,7 +115,7 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 	if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
 		utils.LogError(s, logChannelID, "NewPost", "WriteFile", fmt.Sprintf("Error writing posts to file %s: %v", filePath, err))
 	} else {
-		utils.LogInfo(s, logChannelID, "NewPost", "Save", fmt.Sprintf("Successfully saved new post <#%s> to channel <#%s> in `%s`", post.ID, channelID, filePath))
+		utils.LogInfo(s, logChannelID, "NewPost", "Save", fmt.Sprintf("Successfully saved new post <#%s> to channel <#%s> in `%s`", post.ID, post.ChannelID, filePath))
 	}
 }
 
@@ -135,7 +133,7 @@ func CleanOldPosts(s *discordgo.Session, logChannelID string) {
 	}
 
 	for _, file := range files {
-		if file.IsDir() {
+		if file.IsDir() || !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
 
@@ -146,47 +144,32 @@ func CleanOldPosts(s *discordgo.Session, logChannelID string) {
 			continue
 		}
 
-		var channelPosts map[string][]model.Post
-		if err := json.Unmarshal(fileData, &channelPosts); err != nil {
+		var posts []model.Post
+		if err := json.Unmarshal(fileData, &posts); err != nil {
 			utils.LogError(s, logChannelID, "CleanPosts", "Unmarshal", fmt.Sprintf("Error unmarshalling posts from %s: %v", filePath, err))
 			continue
 		}
 
-		dirty := false
-		for channelID, posts := range channelPosts {
-			var newPosts []model.Post
-			var removedPosts []string
-			for _, post := range posts {
-				if post.Timestamp >= sevenDaysAgo {
-					newPosts = append(newPosts, post)
-				} else {
-					dirty = true
-					removedPosts = append(removedPosts, post.ID)
-				}
-			}
-			if dirty {
-				channelPosts[channelID] = newPosts
-				utils.LogInfo(s, logChannelID, "CleanPosts", "Remove", fmt.Sprintf("Removing old posts %v from channel %s in %s", removedPosts, channelID, filePath))
+		var newPosts []model.Post
+		var removedPosts []string
+		for _, post := range posts {
+			if post.Timestamp >= sevenDaysAgo {
+				newPosts = append(newPosts, post)
+			} else {
+				removedPosts = append(removedPosts, post.ID)
 			}
 		}
 
-		if dirty {
-			allChannelsEmpty := true
-			for _, posts := range channelPosts {
-				if len(posts) > 0 {
-					allChannelsEmpty = false
-					break
-				}
-			}
-
-			if allChannelsEmpty {
+		if len(removedPosts) > 0 {
+			utils.LogInfo(s, logChannelID, "CleanPosts", "Remove", fmt.Sprintf("Removing %d old posts from %s", len(removedPosts), filePath))
+			if len(newPosts) == 0 {
 				if err := os.Remove(filePath); err != nil {
 					utils.LogError(s, logChannelID, "CleanPosts", "RemoveFile", fmt.Sprintf("Error removing empty post file %s: %v", filePath, err))
 				} else {
 					utils.LogInfo(s, logChannelID, "CleanPosts", "RemoveFile", fmt.Sprintf("Removed empty post file %s", filePath))
 				}
 			} else {
-				jsonData, err := json.MarshalIndent(channelPosts, "", "  ")
+				jsonData, err := json.MarshalIndent(newPosts, "", "  ")
 				if err != nil {
 					utils.LogError(s, logChannelID, "CleanPosts", "Marshal", fmt.Sprintf("Error marshalling cleaned posts to JSON for %s: %v", filePath, err))
 					continue
