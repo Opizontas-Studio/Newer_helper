@@ -46,6 +46,9 @@ func (b *Bot) Run() {
 		if err == nil {
 			var lockData map[string]interface{}
 			if json.Unmarshal(lockFile, &lockData) == nil {
+				if count, ok := lockData["active_scan_count"].(float64); ok {
+					b.ActiveScanCount = int(count)
+				}
 				if mode, ok := lockData["scan_mode"].(string); ok && mode == "full" {
 					if timestamp, ok := lockData["timestamp"].(float64); ok {
 						if time.Since(time.Unix(int64(timestamp), 0)) < 24*time.Hour {
@@ -106,15 +109,6 @@ func (b *Bot) RefreshCommands(guildID string) {
 }
 
 func (b *Bot) startScanScheduler() {
-	// Schedule a full scan every 7 days (168 hours)
-	b.FullScanTicker = time.NewTicker(168 * time.Hour)
-	go func() {
-		for range b.FullScanTicker.C {
-			log.Println("Starting scheduled full forum scan...")
-			commands.Scan(b.Session, b.Config.LogChannelID, "full", "")
-		}
-	}()
-
 	// Schedule a cooldown cleanup every hour
 	b.CooldownTicker = time.NewTicker(1 * time.Hour)
 	go func() {
@@ -141,6 +135,27 @@ func (b *Bot) startScanScheduler() {
 			// Run the tasks
 			log.Println("Starting scheduled active forum scan...")
 			commands.Scan(b.Session, b.Config.LogChannelID, "active", "")
+
+			b.ActiveScanCount++
+			log.Printf("Active scan count: %d", b.ActiveScanCount)
+
+			if b.ActiveScanCount >= 7 {
+				log.Println("Active scan count reached 7. Starting full scan...")
+				commands.Scan(b.Session, b.Config.LogChannelID, "full", "")
+				b.ActiveScanCount = 0
+			}
+
+			// Persist the scan count
+			lockData := make(map[string]interface{})
+			lockFile, err := os.ReadFile("data/scan_lock.json")
+			if err == nil {
+				json.Unmarshal(lockFile, &lockData)
+			}
+			lockData["active_scan_count"] = b.ActiveScanCount
+			lockFile, err = json.Marshal(lockData)
+			if err == nil {
+				os.WriteFile("data/scan_lock.json", lockFile, 0644)
+			}
 
 			log.Println("Cleaning up old posts...")
 			commands.CleanOldPosts(b.Session, b.Config.LogChannelID)

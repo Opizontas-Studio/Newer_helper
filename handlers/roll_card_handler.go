@@ -41,6 +41,7 @@ func HandleRollAgain(s *discordgo.Session, i *discordgo.InteractionCreate, b *bo
 
 // rollCard is the core logic for fetching posts and sending the response.
 func rollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, poolName, tagID string, count int) {
+	log.Printf("Executing rollCard for user %s in guild %s. Pool: %s, Tag: %s, Count: %d", i.Member.User.ID, i.GuildID, poolName, tagID, count)
 	guildID := i.GuildID
 	rollCardGuildConfig, ok := b.Config.RollCardConfigs[guildID]
 	if !ok {

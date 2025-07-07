@@ -196,11 +196,15 @@ func Scan(s *discordgo.Session, logChannelID string, scanMode string, targetGuil
 			}
 
 			// After all guilds are scanned, write the lock file
-			lockData := map[string]interface{}{
-				"scan_mode": scanMode,
-				"timestamp": time.Now().Unix(),
+			lockData := make(map[string]interface{})
+			lockFile, err := os.ReadFile("data/scan_lock.json")
+			if err == nil {
+				json.Unmarshal(lockFile, &lockData)
 			}
-			lockFile, err := json.MarshalIndent(lockData, "", "  ")
+			lockData["scan_mode"] = scanMode
+			lockData["timestamp"] = time.Now().Unix()
+
+			lockFile, err = json.MarshalIndent(lockData, "", "  ")
 			if err != nil {
 				log.Printf("Error marshalling lock file data: %v", err)
 				return

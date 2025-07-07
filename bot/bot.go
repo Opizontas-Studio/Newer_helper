@@ -22,6 +22,7 @@ type Bot struct {
 	CooldownTicker     *time.Ticker
 	PostCleanupTicker  *time.Ticker
 	DB                 *sql.DB
+	ActiveScanCount    int
 }
 
 func (b *Bot) GetConfig() *model.Config {
@@ -52,6 +53,7 @@ func New(cfg *model.Config, db *sql.DB) (*Bot, error) {
 		Config:          cfg,
 		PresetCooldowns: make(map[string]time.Time),
 		DB:              db,
+		ActiveScanCount: 0,
 	}, nil
 }
 
