@@ -3,8 +3,10 @@ package handlers
 import (
 	"discord-bot/bot"
 	"discord-bot/commands"
+	"discord-bot/model"
 	"discord-bot/model/preset"
 	"discord-bot/utils"
+	"fmt"
 	"log"
 	"strings"
 
@@ -98,10 +100,45 @@ func addHandlers(b *bot.Bot) {
 			if strings.HasPrefix(i.MessageComponentData().CustomID, "confirm_delete_") || strings.HasPrefix(i.MessageComponentData().CustomID, "cancel_delete_") {
 				commands.HandlePresetDeleteInteraction(s, i, b)
 			}
+		case discordgo.InteractionApplicationCommandAutocomplete:
+			handleAutocomplete(s, i, b.Config)
 		}
 	})
 	b.Session.AddHandler(func(s *discordgo.Session, t *discordgo.ThreadCreate) {
 		// Pass the bot's config to the handler
 		commands.HandleThreadCreate(s, t, b.Config)
+	})
+}
+
+func handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, config *model.Config) {
+	data := i.ApplicationCommandData()
+	serverConfig, ok := config.ServerConfigs[i.GuildID]
+	if !ok {
+		return
+	}
+
+	var choices []*discordgo.ApplicationCommandOptionChoice
+	for _, p := range serverConfig.PresetMessages {
+		if strings.Contains(strings.ToLower(p.Name), strings.ToLower(data.Options[0].StringValue())) {
+			name := p.Name
+			if len(name) > 80 {
+				name = name[:80]
+			}
+			choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+				Name:  fmt.Sprintf("(%s) %s", p.ID[:4], name),
+				Value: p.ID,
+			})
+		}
+	}
+
+	if len(choices) > 25 {
+		choices = choices[:25]
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{
+			Choices: choices,
+		},
 	})
 }

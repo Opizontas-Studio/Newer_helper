@@ -26,11 +26,11 @@ func GenerateCommands(serverCfg *model.ServerConfig) []*discordgo.ApplicationCom
 			Description: "发送预设消息并提及一位成员。",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "id",
-					Description: "要发送的预设消息 ID。",
-					Required:    true,
-					Choices:     choices,
+					Type:         discordgo.ApplicationCommandOptionString,
+					Name:         "id",
+					Description:  "要发送的预设消息 ID。",
+					Required:     true,
+					Autocomplete: true,
 				},
 				{
 					Type:        discordgo.ApplicationCommandOptionUser,
@@ -63,11 +63,11 @@ func GenerateCommands(serverCfg *model.ServerConfig) []*discordgo.ApplicationCom
 			Description: "管理预设消息",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "id",
-					Description: "要管理的预设 ID",
-					Required:    true,
-					Choices:     choices,
+					Type:         discordgo.ApplicationCommandOptionString,
+					Name:         "id",
+					Description:  "要管理的预设 ID",
+					Required:     true,
+					Autocomplete: true,
 				},
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
