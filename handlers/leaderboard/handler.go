@@ -1,14 +1,13 @@
 package leaderboard
 
 import (
-	"database/sql"
+	"discord-bot/handlers/leaderboard/latest_posts"
 	"discord-bot/model"
 	"discord-bot/utils"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -30,35 +29,42 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 
 	// 检查是否已存在排行榜
-	state, err := utils.LoadLeaderboardState()
-	if err == nil && state.MessageID != "" {
-		// 如果文件存在且MessageID有效，则更新
-		UpdateLeaderboard(b, state.GuildID)
+	states, err := utils.LoadLeaderboardState()
+	if err != nil {
+		utils.SendErrorResponse(s, i, "加载排行榜状态时出错。")
+		log.Printf("Error loading leaderboard states: %v", err)
+		return
+	}
+
+	if state, ok := states[i.GuildID]; ok && state.MessageID != "" {
+		// 如果当前服务器的排行榜已存在，则更新
+		UpdateLeaderboard(b, i.GuildID)
 		utils.SendSimpleResponse(s, i, "已更新现有的排行榜。")
 		return
-	} else if err == nil {
-		// 如果文件存在但无效（例如空的JSON），则删除它
-		log.Println("Found invalid leaderboard state file, deleting it.")
-		_ = os.Remove(utils.LeaderboardStateFile)
 	}
 
 	// 如果不存在，创建一个新的
+	embeds := buildLeaderboardEmbeds(i.GuildID)
+	if len(embeds) == 0 {
+		utils.SendErrorResponse(s, i, "创建排行榜时出错, 无法生成 embeds。")
+		return
+	}
+
 	message, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
-		Embeds: []*discordgo.MessageEmbed{buildLeaderboardEmbed(b, i.GuildID, b.GetDB())},
+		Embeds: embeds,
 	})
 	if err != nil {
 		log.Printf("Error sending leaderboard message: %v", err)
 		utils.SendErrorResponse(s, i, "创建排行榜时出错。")
 		return
 	}
-
 	// 保存排行榜状态
-	newState := model.LeaderboardState{
+	states[i.GuildID] = model.LeaderboardState{
 		GuildID:   i.GuildID,
 		ChannelID: i.ChannelID,
 		MessageID: message.ID,
 	}
-	if err := utils.SaveLeaderboardState(newState); err != nil {
+	if err := utils.SaveLeaderboardState(states); err != nil {
 		log.Printf("Error saving leaderboard state: %v", err)
 	}
 
@@ -66,55 +72,71 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 }
 
 func UpdateLeaderboard(b model.Bot, guildID string) {
-	state, err := utils.LoadLeaderboardState()
+	states, err := utils.LoadLeaderboardState()
 	if err != nil {
 		log.Printf("Error loading leaderboard state for update: %v", err)
 		return
 	}
 
-	embed := buildLeaderboardEmbed(b, guildID, b.GetDB())
-	if embed == nil {
-		log.Printf("Failed to build leaderboard embed for guild %s", guildID)
+	state, ok := states[guildID]
+	if !ok {
+		log.Printf("No leaderboard state found for guild %s", guildID)
 		return
 	}
-	embeds := []*discordgo.MessageEmbed{embed}
+
+	embeds := buildLeaderboardEmbeds(guildID)
+	if len(embeds) == 0 {
+		log.Printf("Failed to build leaderboard embeds for guild %s", guildID)
+		return
+	}
+	// 只更新第一个消息（排行榜统计）
 	_, err = b.GetSession().ChannelMessageEditComplex(&discordgo.MessageEdit{
 		Channel: state.ChannelID,
 		ID:      state.MessageID,
-		Embeds:  &embeds,
+		Embeds:  &embeds, // 发送所有embeds
 	})
 	if err != nil {
 		log.Printf("Failed to edit leaderboard message for guild %s: %v", guildID, err)
 	}
 }
 
-func buildLeaderboardEmbed(b model.Bot, guildID string, db *sql.DB) *discordgo.MessageEmbed {
-	config := b.GetConfig()
+func buildLeaderboardEmbeds(guildID string) []*discordgo.MessageEmbed {
+	// 1. 从独立的映射文件中加载数据库映射
+	dbMapping, err := utils.LoadDatabaseMapping()
+	if err != nil {
+		log.Printf("Error loading database mapping: %v", err)
+		return []*discordgo.MessageEmbed{{Title: "错误", Description: "无法加载数据库映射文件。", Color: 0xff0000}}
+	}
 
-	// 1. 从配置中获取所有相关的表名和映射
+	guildMapping, ok := dbMapping[guildID]
+	if !ok {
+		log.Printf("No database mapping found for guild %s", guildID)
+		return []*discordgo.MessageEmbed{{Title: "错误", Description: "当前服务器未配置数据库映射。", Color: 0xff0000}}
+	}
+
+	// 2. 初始化特定于服务器的数据库连接
+	db, err := utils.InitDB(guildMapping.Database)
+	if err != nil {
+		log.Printf("Error initializing database for guild %s at %s: %v", guildID, guildMapping.Database, err)
+		return []*discordgo.MessageEmbed{{Title: "错误", Description: "无法连接到服务器的数据库。", Color: 0xff0000}}
+	}
+	defer db.Close()
+
 	var tableNames []string
-	tableToChannel := make(map[string]string)
-	channelToSection := make(map[string]string)
-	if guildTasks, ok := config.TaskConfig[guildID]; ok {
-		for sectionName, sectionData := range guildTasks.Data {
-			if sectionData.TableName != "" {
-				tableNames = append(tableNames, sectionData.TableName)
-				tableToChannel[sectionData.TableName] = sectionData.ChannelID
-			}
-			channelToSection[sectionData.ChannelID] = sectionName
-		}
+	for tableName := range guildMapping.DataBaseTableNameMapping {
+		tableNames = append(tableNames, tableName)
 	}
 
 	if len(tableNames) == 0 {
 		log.Printf("No tables configured for leaderboard in guild %s", guildID)
-		return &discordgo.MessageEmbed{
+		return []*discordgo.MessageEmbed{{
 			Title:       "🏆 新卡速递排行榜",
 			Description: "错误：未配置任何用于统计的数据表。",
 			Color:       0xff0000,
-		}
+		}}
 	}
 
-	// 2. 获取统计数据
+	// 3. 获取统计数据
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	yesterday := today.AddDate(0, 0, -1)
@@ -133,13 +155,6 @@ func buildLeaderboardEmbed(b model.Bot, guildID string, db *sql.DB) *discordgo.M
 		log.Printf("Error counting posts for last 7 days: %v", err)
 	}
 
-	// 3. 获取最新的12张卡片
-	posts, err := utils.GetLatestPosts(db, tableNames, 12)
-	if err != nil {
-		log.Printf("Error getting latest posts: %v", err)
-		return nil // or return an embed with error
-	}
-
 	// 4. 加载tag mapping
 	tagMappingPath := fmt.Sprintf("data/tag_mapping/%s_config.json", guildID)
 	tagMappingData, err := os.ReadFile(tagMappingPath)
@@ -152,8 +167,9 @@ func buildLeaderboardEmbed(b model.Bot, guildID string, db *sql.DB) *discordgo.M
 		log.Printf("Could not read tag mapping file for guild %s: %v", guildID, err)
 	}
 
-	// 5. 构建Embed
-	embed := &discordgo.MessageEmbed{
+	// 5. 构建Embeds
+	// Embed 1: 排行榜统计
+	leaderboardEmbed := &discordgo.MessageEmbed{
 		Title:       "🏆 新卡速递排行榜",
 		Description: fmt.Sprintf("最后更新于 <t:%d:R>", now.Unix()),
 		Color:       0x00ff00,
@@ -172,53 +188,16 @@ func buildLeaderboardEmbed(b model.Bot, guildID string, db *sql.DB) *discordgo.M
 		},
 	}
 
-	if len(posts) > 0 {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   " ", // Separator
-			Value:  "**最新卡片**",
-			Inline: false,
-		})
+	embeds := []*discordgo.MessageEmbed{leaderboardEmbed}
+
+	// Embed 2: 最新卡片列表
+	latestPostsEmbed, err := latest_posts.CreateLatestPostsEmbed(guildID)
+	if err != nil {
+		log.Printf("Error creating latest posts embed: %v", err)
+	}
+	if latestPostsEmbed != nil {
+		embeds = append(embeds, latestPostsEmbed)
 	}
 
-	for i := range posts {
-		post := &posts[i]
-		post.ChannelID = tableToChannel[post.TableName]
-
-		sectionName, ok := channelToSection[post.ChannelID]
-		if !ok {
-			sectionName = "未知区"
-		}
-
-		var tagNames []string
-		if tagMapping != nil {
-			tagIDs := strings.Split(post.Tags, ",")
-			if sectionTags, ok := tagMapping[sectionName]; ok {
-				for _, tagID := range tagIDs {
-					trimmedTagID := strings.TrimSpace(tagID)
-					if tagName, ok := sectionTags[trimmedTagID]; ok {
-						tagNames = append(tagNames, tagName)
-					}
-				}
-			}
-		}
-		if len(tagNames) == 0 {
-			tagNames = append(tagNames, "无标签")
-		}
-
-		postURL := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, post.ChannelID, post.ID)
-		value := fmt.Sprintf("> %s · <t:%d:R>\n> [跳转帖子](%s)\n> %s · %s",
-			post.Author,
-			post.Timestamp,
-			postURL,
-			sectionName,
-			strings.Join(tagNames, ", "),
-		)
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   post.Title,
-			Value:  value,
-			Inline: false,
-		})
-	}
-
-	return embed
+	return embeds
 }

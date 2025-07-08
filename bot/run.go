@@ -88,15 +88,14 @@ func (b *Bot) startScanScheduler() {
 	go func() {
 		for range b.LeaderboardUpdateTicker.C {
 			log.Println("Updating leaderboard...")
-			state, err := utils.LoadLeaderboardState()
+			states, err := utils.LoadLeaderboardState()
 			if err == nil {
-				for _, serverCfg := range b.Config.ServerConfigs {
-					if serverCfg.GuildID == state.GuildID {
-						log.Printf("Updating leaderboard for guild: %s", state.GuildID)
-						leaderboard.UpdateLeaderboard(b, state.GuildID)
-						break
-					}
+				for guildID := range states {
+					log.Printf("Updating leaderboard for guild: %s", guildID)
+					go leaderboard.UpdateLeaderboard(b, guildID) // Use goroutine to update concurrently
 				}
+			} else {
+				log.Printf("Error loading leaderboard states for scheduled update: %v", err)
 			}
 		}
 	}()

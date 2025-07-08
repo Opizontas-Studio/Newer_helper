@@ -3,7 +3,6 @@ package utils
 import (
 	"database/sql"
 	"discord-bot/model"
-	"fmt"
 	"strings"
 )
 
@@ -292,36 +291,4 @@ func CountPostsInTimeRange(db *sql.DB, tableNames []string, startTime int64, end
 	}
 
 	return int(totalCount.Int64), nil
-}
-
-func GetLatestPosts(db *sql.DB, tableNames []string, count int) ([]model.Post, error) {
-	if len(tableNames) == 0 {
-		return []model.Post{}, nil
-	}
-
-	var allPostsQuery strings.Builder
-	for i, tableName := range tableNames {
-		query := fmt.Sprintf(`SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url, '%s' as tableName FROM "%s"`, tableName, tableName)
-		allPostsQuery.WriteString(query)
-		if i < len(tableNames)-1 {
-			allPostsQuery.WriteString(" UNION ALL ")
-		}
-	}
-
-	finalQuery := `SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url, tableName FROM (` + allPostsQuery.String() + `) ORDER BY timestamp DESC LIMIT ?`
-	rows, err := db.Query(finalQuery, count)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var posts []model.Post
-	for rows.Next() {
-		var post model.Post
-		if err := rows.Scan(&post.ID, &post.Title, &post.Author, &post.AuthorID, &post.Content, &post.Tags, &post.MessageCount, &post.Timestamp, &post.CoverImageURL, &post.TableName); err != nil {
-			return nil, err
-		}
-		posts = append(posts, post)
-	}
-	return posts, nil
 }

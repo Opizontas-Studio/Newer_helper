@@ -85,18 +85,15 @@ func (b *Bot) Close() {
 }
 
 func (b *Bot) UpdateLeaderboard() {
-	state, err := utils.LoadLeaderboardState()
+	states, err := utils.LoadLeaderboardState()
 	if err != nil {
 		log.Printf("Error loading leaderboard state for update: %v", err)
 		return
 	}
 
-	for _, serverCfg := range b.Config.ServerConfigs {
-		if serverCfg.GuildID == state.GuildID {
-			log.Printf("Updating leaderboard for guild: %s", state.GuildID)
-			leaderboard.UpdateLeaderboard(b, state.GuildID)
-			break
-		}
+	for guildID := range states {
+		log.Printf("Updating leaderboard for guild: %s", guildID)
+		go leaderboard.UpdateLeaderboard(b, guildID) // Use goroutine to update concurrently
 	}
 }
 

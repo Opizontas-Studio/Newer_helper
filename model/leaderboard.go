@@ -6,3 +6,9 @@ type LeaderboardState struct {
 	ChannelID string `json:"channel_id"`
 	MessageID string `json:"message_id"`
 }
+
+type GuildMapping struct {
+	GuildsID                 string            `json:"guilds_id"`
+	Database                 string            `json:"database"`
+	DataBaseTableNameMapping map[string]string `json:"dataBaseTableNameMapping"`
+}
