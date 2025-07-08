@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"discord-bot/bot"
+	"discord-bot/handlers/leaderboard"
 	"discord-bot/handlers/preset"
 	"discord-bot/handlers/rollcard"
 	"discord-bot/scanner"
@@ -14,6 +15,9 @@ import (
 
 func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	return map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
+		"new_cards": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			leaderboard.HandleNewCardsInteraction(s, i, b)
+		},
 		"rollcard": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			rollcard.HandleRollCardInteraction(s, i, b)
 		},

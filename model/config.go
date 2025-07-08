@@ -30,6 +30,7 @@ type Config struct {
 	TaskConfig         map[string]struct {
 		Data map[string]struct {
 			ChannelID string `json:"channel_id"`
+			TableName string `json:"table_name"`
 		} `json:"data"`
 	}
 }

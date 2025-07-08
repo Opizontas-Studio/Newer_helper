@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"discord-bot/model"
 	"encoding/json"
 	"os"
 )
@@ -20,4 +21,24 @@ func LoadTagMapping(file string) (map[string]map[string]string, error) {
 		return nil, err
 	}
 	return mapping, nil
+}
+
+const LeaderboardStateFile = "data/leaderboard_state.json"
+
+func SaveLeaderboardState(state model.LeaderboardState) error {
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(LeaderboardStateFile, data, 0644)
+}
+
+func LoadLeaderboardState() (model.LeaderboardState, error) {
+	var state model.LeaderboardState
+	data, err := os.ReadFile(LeaderboardStateFile)
+	if err != nil {
+		return state, err
+	}
+	err = json.Unmarshal(data, &state)
+	return state, err
 }

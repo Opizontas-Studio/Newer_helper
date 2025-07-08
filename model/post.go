@@ -4,6 +4,7 @@ package model
 type Post struct {
 	ID            string `json:"id"`
 	ChannelID     string `json:"channel_id"`
+	TableName     string `json:"-"`
 	Title         string `json:"title"`
 	Author        string `json:"author"`
 	AuthorID      string `json:"author_id"`

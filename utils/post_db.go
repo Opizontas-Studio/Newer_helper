@@ -3,6 +3,7 @@ package utils
 import (
 	"database/sql"
 	"discord-bot/model"
+	"fmt"
 	"strings"
 )
 
@@ -259,4 +260,68 @@ func DeletePost(db *sql.DB, tableName string, postID string) error {
 
 	_, err = stmt.Exec(postID)
 	return err
+}
+
+func CountPostsInTimeRange(db *sql.DB, tableNames []string, startTime int64, endTime int64) (int, error) {
+	if len(tableNames) == 0 {
+		return 0, nil
+	}
+
+	var queryBuilder strings.Builder
+	var queryArgs []interface{}
+
+	queryBuilder.WriteString("SELECT SUM(count) FROM (")
+	for i, tableName := range tableNames {
+		queryBuilder.WriteString(`SELECT COUNT(*) as count FROM "`)
+		queryBuilder.WriteString(tableName)
+		queryBuilder.WriteString(`" WHERE timestamp >= ? AND timestamp < ?`)
+		queryArgs = append(queryArgs, startTime, endTime)
+		if i < len(tableNames)-1 {
+			queryBuilder.WriteString(" UNION ALL ")
+		}
+	}
+	queryBuilder.WriteString(")")
+
+	var totalCount sql.NullInt64
+	err := db.QueryRow(queryBuilder.String(), queryArgs...).Scan(&totalCount)
+	if err != nil {
+		return 0, err
+	}
+	if !totalCount.Valid {
+		return 0, nil
+	}
+
+	return int(totalCount.Int64), nil
+}
+
+func GetLatestPosts(db *sql.DB, tableNames []string, count int) ([]model.Post, error) {
+	if len(tableNames) == 0 {
+		return []model.Post{}, nil
+	}
+
+	var allPostsQuery strings.Builder
+	for i, tableName := range tableNames {
+		query := fmt.Sprintf(`SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url, '%s' as tableName FROM "%s"`, tableName, tableName)
+		allPostsQuery.WriteString(query)
+		if i < len(tableNames)-1 {
+			allPostsQuery.WriteString(" UNION ALL ")
+		}
+	}
+
+	finalQuery := `SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url, tableName FROM (` + allPostsQuery.String() + `) ORDER BY timestamp DESC LIMIT ?`
+	rows, err := db.Query(finalQuery, count)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []model.Post
+	for rows.Next() {
+		var post model.Post
+		if err := rows.Scan(&post.ID, &post.Title, &post.Author, &post.AuthorID, &post.Content, &post.Tags, &post.MessageCount, &post.Timestamp, &post.CoverImageURL, &post.TableName); err != nil {
+			return nil, err
+		}
+		posts = append(posts, post)
+	}
+	return posts, nil
 }

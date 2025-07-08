@@ -148,6 +148,10 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 				},
 			},
 		},
+		{
+			Name:        "new_cards",
+			Description: "显示最新的卡片榜单",
+		},
 	}
 }
 

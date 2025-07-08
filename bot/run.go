@@ -1,8 +1,9 @@
 package bot
 
 import (
-	"discord-bot/commands"
+	"discord-bot/handlers/leaderboard"
 	"discord-bot/scanner"
+	"discord-bot/utils"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -19,20 +20,19 @@ func (b *Bot) Run() {
 	if err != nil {
 		log.Fatalf("Error opening connection: %v", err)
 	}
-
-	log.Println("Removing old global commands...")
-	existingGlobalCommands, err := b.Session.ApplicationCommands(b.Session.State.User.ID, "")
-	if err != nil {
-		log.Printf("Could not fetch global commands: %v", err)
-	} else if len(existingGlobalCommands) > 0 {
-		log.Printf("Removing %d old global commands...", len(existingGlobalCommands))
-		for _, cmd := range existingGlobalCommands {
-			err := b.Session.ApplicationCommandDelete(b.Session.State.User.ID, "", cmd.ID)
-			if err != nil {
-				log.Printf("Could not delete global command %s: %v", cmd.Name, err)
-			}
-		}
-	}
+	// log.Println("Removing old global commands...")
+	// existingGlobalCommands, err := b.Session.ApplicationCommands(b.Session.State.User.ID, "")
+	// if err != nil {
+	// 	log.Printf("Could not fetch global commands: %v", err)
+	// } else if len(existingGlobalCommands) > 0 {
+	// 	log.Printf("Removing %d old global commands...", len(existingGlobalCommands))
+	// 	for _, cmd := range existingGlobalCommands {
+	// 		err := b.Session.ApplicationCommandDelete(b.Session.State.User.ID, "", cmd.ID)
+	// 		if err != nil {
+	// 			log.Printf("Could not delete global command %s: %v", cmd.Name, err)
+	// 		}
+	// 	}
+	// }
 
 	log.Println("Adding commands...")
 	b.RegisteredCommands = make([]*discordgo.ApplicationCommand, 0)
@@ -73,49 +73,31 @@ func (b *Bot) Run() {
 	<-sc
 }
 
-func (b *Bot) RefreshCommands(guildID string) {
-	serverCfg, ok := b.Config.ServerConfigs[guildID]
-	if !ok {
-		log.Printf("Could not find server config for guild: %s", guildID)
-		return
-	}
-
-	log.Printf("Fetching commands for guild %s", serverCfg.GuildID)
-	existingCommands, err := b.Session.ApplicationCommands(b.Session.State.User.ID, serverCfg.GuildID)
-	if err != nil {
-		log.Printf("cannot get commands for guild '%s': %v", serverCfg.GuildID, err)
-		return
-	}
-
-	if len(existingCommands) > 0 {
-		log.Printf("Removing %d old commands for guild %s...", len(existingCommands), serverCfg.GuildID)
-		for _, cmd := range existingCommands {
-			err := b.Session.ApplicationCommandDelete(b.Session.State.User.ID, serverCfg.GuildID, cmd.ID)
-			if err != nil {
-				log.Printf("cannot delete '%v' command for guild '%s': %v", cmd.Name, serverCfg.GuildID, err)
-			}
-		}
-	}
-
-	cmds := commands.GenerateCommands(&serverCfg)
-	log.Printf("Adding %d new commands for guild %s...", len(cmds), serverCfg.GuildID)
-	for _, v := range cmds {
-		cmd, err := b.Session.ApplicationCommandCreate(b.Session.State.User.ID, serverCfg.GuildID, v)
-		if err != nil {
-			log.Printf("Cannot create '%v' command for guild '%s': %v", v.Name, serverCfg.GuildID, err)
-		} else {
-			b.RegisteredCommands = append(b.RegisteredCommands, cmd)
-		}
-	}
-}
-
 func (b *Bot) startScanScheduler() {
 	// Schedule a cooldown cleanup every hour
 	b.CooldownTicker = time.NewTicker(1 * time.Hour)
 	go func() {
 		for range b.CooldownTicker.C {
 			log.Println("Cleaning up preset cooldowns...")
-			b.cleanupCooldowns()
+			b.CleanupCooldowns()
+		}
+	}()
+
+	// Schedule leaderboard update every 10 minutes
+	b.LeaderboardUpdateTicker = time.NewTicker(10 * time.Minute)
+	go func() {
+		for range b.LeaderboardUpdateTicker.C {
+			log.Println("Updating leaderboard...")
+			state, err := utils.LoadLeaderboardState()
+			if err == nil {
+				for _, serverCfg := range b.Config.ServerConfigs {
+					if serverCfg.GuildID == state.GuildID {
+						log.Printf("Updating leaderboard for guild: %s", state.GuildID)
+						leaderboard.UpdateLeaderboard(b, state.GuildID)
+						break
+					}
+				}
+			}
 		}
 	}()
 
