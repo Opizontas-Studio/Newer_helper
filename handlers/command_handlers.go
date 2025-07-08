@@ -2,8 +2,9 @@ package handlers
 
 import (
 	"discord-bot/bot"
-	"discord-bot/commands"
-	"discord-bot/model/preset"
+	"discord-bot/handlers/preset"
+	"discord-bot/handlers/rollcard"
+	"discord-bot/scanner"
 	"discord-bot/utils"
 	"fmt"
 	"log"
@@ -14,7 +15,7 @@ import (
 func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	return map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
 		"rollcard": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-			HandleRollCardInteraction(s, i, b)
+			rollcard.HandleRollCardInteraction(s, i, b)
 		},
 		"preset-message": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			serverConfig, ok := b.Config.ServerConfigs[i.GuildID]
@@ -110,7 +111,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 				},
 			})
 
-			go commands.Scan(s, b.Config.LogChannelID, scanMode, targetGuildID)
+			go scanner.Scan(s, b.Config.LogChannelID, scanMode, targetGuildID)
 		},
 	}
 }

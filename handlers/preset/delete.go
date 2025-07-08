@@ -1,4 +1,4 @@
-package commands
+package preset
 
 import (
 	"database/sql"
