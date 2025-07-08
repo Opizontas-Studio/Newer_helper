@@ -75,9 +75,29 @@ func GetRandomPosts(db *sql.DB, tableName string, count int) ([]model.Post, erro
 	return posts, nil
 }
 
-func GetRandomPostsByTag(db *sql.DB, tableName string, tagID string, count int) ([]model.Post, error) {
-	query := `SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM "` + tableName + `" WHERE tags LIKE ? ORDER BY RANDOM() LIMIT ?`
-	rows, err := db.Query(query, "%"+tagID+"%", count)
+func GetRandomPostsByTag(db *sql.DB, tableName string, tagID string, count int, excludeTags []string) ([]model.Post, error) {
+	var queryArgs []interface{}
+	var whereClauses []string
+
+	if tagID != "" {
+		whereClauses = append(whereClauses, "tags LIKE ?")
+		queryArgs = append(queryArgs, "%"+tagID+"%")
+	}
+
+	for _, excludedTag := range excludeTags {
+		whereClauses = append(whereClauses, "tags NOT LIKE ?")
+		queryArgs = append(queryArgs, "%"+excludedTag+"%")
+	}
+
+	whereClause := ""
+	if len(whereClauses) > 0 {
+		whereClause = "WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	query := `SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM "` + tableName + `" ` + whereClause + ` ORDER BY RANDOM() LIMIT ?`
+	queryArgs = append(queryArgs, count)
+
+	rows, err := db.Query(query, queryArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +168,7 @@ func GetRandomPostsFromAllTables(db *sql.DB, count int) ([]model.Post, error) {
 	return posts, nil
 }
 
-func GetRandomPostsByTagFromAllTables(db *sql.DB, tagID string, count int) ([]model.Post, error) {
+func GetRandomPostsByTagFromAllTables(db *sql.DB, tagID string, count int, excludeTags []string) ([]model.Post, error) {
 	// 1. Get all table names
 	rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
 	if err != nil {
@@ -175,14 +195,32 @@ func GetRandomPostsByTagFromAllTables(db *sql.DB, tagID string, count int) ([]mo
 	// 2. Build a UNION ALL query
 	var allPostsQuery strings.Builder
 	var queryArgs []interface{}
+
+	var whereClauses []string
+	var whereArgs []interface{}
+
+	if tagID != "" {
+		whereClauses = append(whereClauses, "tags LIKE ?")
+		whereArgs = append(whereArgs, "%"+tagID+"%")
+	}
+	for _, excludedTag := range excludeTags {
+		whereClauses = append(whereClauses, "tags NOT LIKE ?")
+		whereArgs = append(whereArgs, "%"+excludedTag+"%")
+	}
+	whereClause := ""
+	if len(whereClauses) > 0 {
+		whereClause = "WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
 	for i, tableName := range tableNames {
 		if i > 0 {
 			allPostsQuery.WriteString(" UNION ALL ")
 		}
 		allPostsQuery.WriteString(`SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM "`)
 		allPostsQuery.WriteString(tableName)
-		allPostsQuery.WriteString(`" WHERE tags LIKE ?`)
-		queryArgs = append(queryArgs, "%"+tagID+"%")
+		allPostsQuery.WriteString(`" `)
+		allPostsQuery.WriteString(whereClause)
+		queryArgs = append(queryArgs, whereArgs...)
 	}
 
 	if allPostsQuery.Len() == 0 {
@@ -209,4 +247,16 @@ func GetRandomPostsByTagFromAllTables(db *sql.DB, tagID string, count int) ([]mo
 		posts = append(posts, post)
 	}
 	return posts, nil
+}
+
+func DeletePost(db *sql.DB, tableName string, postID string) error {
+	deleteSQL := `DELETE FROM "` + tableName + `" WHERE id = ?`
+	stmt, err := db.Prepare(deleteSQL)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(postID)
+	return err
 }
