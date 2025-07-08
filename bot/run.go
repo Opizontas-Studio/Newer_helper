@@ -2,6 +2,7 @@ package bot
 
 import (
 	"discord-bot/scanner"
+	"discord-bot/utils"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -53,6 +54,7 @@ func (b *Bot) Run() {
 	b.startScanScheduler()
 
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
+	utils.LogInfo(b.Session, b.Config.LogChannelID, "System", "Startup", "Bot has started successfully.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
