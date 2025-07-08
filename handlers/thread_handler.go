@@ -1,6 +1,7 @@
-package commands
+package handlers
 
 import (
+	"database/sql"
 	"discord-bot/model"
 	"discord-bot/utils"
 	"encoding/json"
@@ -15,7 +16,6 @@ import (
 
 func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *model.Config) {
 	logChannelID := cfg.LogChannelID
-	// Collect all allowed channel IDs into a map for quick lookup
 	allowedChannels := make(map[string]bool)
 	for _, guildConfig := range cfg.TaskConfig {
 		for _, channelConfig := range guildConfig.Data {
@@ -23,12 +23,10 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 		}
 	}
 
-	// Check if the thread was created in one of the monitored channels
 	if _, ok := allowedChannels[t.ParentID]; !ok {
 		return
 	}
 
-	// Get the first message of the thread
 	firstMessage, err := s.ChannelMessage(t.ID, t.ID)
 	if err != nil {
 		var restErr *discordgo.RESTError
@@ -44,7 +42,6 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 		}
 	}
 
-	// Extract tags
 	var tagNames []string
 	if t.AppliedTags != nil {
 		for _, tagID := range t.AppliedTags {
@@ -52,7 +49,6 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 		}
 	}
 
-	// Truncate content to 512 characters
 	content := firstMessage.Content
 	runes := []rune(content)
 	if len(runes) > 512 {
@@ -76,7 +72,6 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 		CoverImageURL: coverImageURL,
 	}
 
-	// Define file path and data structure
 	guildID := t.GuildID
 	filePath := fmt.Sprintf("data/new_post/%s.json", guildID)
 	var posts []model.Post
@@ -86,33 +81,30 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 		return
 	}
 
-	// Read existing data from the file
 	fileData, err := os.ReadFile(filePath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			utils.LogError(s, logChannelID, "NewPost", "ReadFile", fmt.Sprintf("Error reading post file %s: %v", filePath, err))
 			return
 		}
-		// File doesn't exist, posts will be an empty slice
 	} else {
-		// File exists, unmarshal the data
 		if err := json.Unmarshal(fileData, &posts); err != nil {
 			utils.LogError(s, logChannelID, "NewPost", "Unmarshal", fmt.Sprintf("Error unmarshalling posts from %s: %v. Initializing new slice.", filePath, err))
-			// Keep posts as an empty slice
 		}
 	}
 
-	// Append the new post and sort by timestamp
 	posts = append(posts, post)
+	const maxPosts = 128
+	if len(posts) > maxPosts {
+		posts = posts[len(posts)-maxPosts:]
+	}
 
-	// Marshal the updated data back to JSON
 	jsonData, err := json.MarshalIndent(posts, "", "  ")
 	if err != nil {
 		utils.LogError(s, logChannelID, "NewPost", "Marshal", fmt.Sprintf("Error marshalling posts to JSON: %v", err))
 		return
 	}
 
-	// Write the JSON back to the file
 	if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
 		utils.LogError(s, logChannelID, "NewPost", "WriteFile", fmt.Sprintf("Error writing posts to file %s: %v", filePath, err))
 	} else {
@@ -120,65 +112,55 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 	}
 }
 
-func CleanOldPosts(s *discordgo.Session, logChannelID string) {
-	const postDir = "data/new_post/"
-	sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour).Unix()
+func HandleThreadDelete(s *discordgo.Session, t *discordgo.ThreadDelete, cfg *model.Config) {
+	logChannelID := cfg.LogChannelID
 
-	files, err := os.ReadDir(postDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return
-		}
-		utils.LogError(s, logChannelID, "CleanPosts", "ReadDir", fmt.Sprintf("Error reading post directory %s: %v", postDir, err))
+	guildID := t.GuildID
+	channelID := t.ParentID
+
+	taskGuildConfig, taskOk := cfg.TaskConfig[guildID]
+	rollCardGuildConfig, rollCardOk := cfg.RollCardConfigs[guildID]
+
+	if !taskOk || !rollCardOk {
 		return
 	}
 
-	for _, file := range files {
-		if file.IsDir() || !strings.HasSuffix(file.Name(), ".json") {
-			continue
-		}
-
-		filePath := fmt.Sprintf("%s%s", postDir, file.Name())
-		fileData, err := os.ReadFile(filePath)
-		if err != nil {
-			utils.LogError(s, logChannelID, "CleanPosts", "ReadFile", fmt.Sprintf("Error reading post file %s: %v", filePath, err))
-			continue
-		}
-
-		var posts []model.Post
-		if err := json.Unmarshal(fileData, &posts); err != nil {
-			utils.LogError(s, logChannelID, "CleanPosts", "Unmarshal", fmt.Sprintf("Error unmarshalling posts from %s: %v", filePath, err))
-			continue
-		}
-
-		var newPosts []model.Post
-		var removedPosts []string
-		for _, post := range posts {
-			if post.Timestamp >= sevenDaysAgo {
-				newPosts = append(newPosts, post)
-			} else {
-				removedPosts = append(removedPosts, post.ID)
-			}
-		}
-
-		if len(removedPosts) > 0 {
-			utils.LogInfo(s, logChannelID, "CleanPosts", "Remove", fmt.Sprintf("Removing %d old posts from %s", len(removedPosts), filePath))
-			if len(newPosts) == 0 {
-				if err := os.Remove(filePath); err != nil {
-					utils.LogError(s, logChannelID, "CleanPosts", "RemoveFile", fmt.Sprintf("Error removing empty post file %s: %v", filePath, err))
-				} else {
-					utils.LogInfo(s, logChannelID, "CleanPosts", "RemoveFile", fmt.Sprintf("Removed empty post file %s", filePath))
-				}
-			} else {
-				jsonData, err := json.MarshalIndent(newPosts, "", "  ")
-				if err != nil {
-					utils.LogError(s, logChannelID, "CleanPosts", "Marshal", fmt.Sprintf("Error marshalling cleaned posts to JSON for %s: %v", filePath, err))
-					continue
-				}
-				if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
-					utils.LogError(s, logChannelID, "CleanPosts", "WriteFile", fmt.Sprintf("Error writing cleaned posts to file %s: %v", filePath, err))
-				}
-			}
+	var areaName string
+	for name, data := range taskGuildConfig.Data {
+		if data.ChannelID == channelID {
+			areaName = name
+			break
 		}
 	}
+
+	if areaName == "" {
+		return
+	}
+
+	if len(channelID) < 4 {
+		return
+	}
+	channelIDSuffix := channelID[len(channelID)-4:]
+	tableName := fmt.Sprintf("%s_%s", areaName, channelIDSuffix)
+
+	dbPath := rollCardGuildConfig.Database
+
+	if dbPath == "" {
+		utils.LogWarn(s, logChannelID, "ThreadDelete", "DBPath", fmt.Sprintf("DB path not found for guild %s", guildID))
+		return
+	}
+
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		utils.LogError(s, logChannelID, "ThreadDelete", "DBOpen", fmt.Sprintf("Error opening database %s: %v", dbPath, err))
+		return
+	}
+	defer db.Close()
+
+	if err := utils.DeletePost(db, tableName, t.ID); err != nil {
+		utils.LogError(s, logChannelID, "ThreadDelete", "DeletePost", fmt.Sprintf("Error deleting post %s from table `%s` in db `%s`: %v", t.ID, tableName, dbPath, err))
+		return
+	}
+
+	utils.LogInfo(s, logChannelID, "ThreadDelete", "Success", fmt.Sprintf("Successfully deleted post with ID `%s` from table `%s`", t.ID, tableName))
 }

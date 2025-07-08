@@ -102,6 +102,27 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 					Required:     false,
 					Autocomplete: true,
 				},
+				{
+					Type:         discordgo.ApplicationCommandOptionString,
+					Name:         "exclude_tag1",
+					Description:  "排除不想看到的tag",
+					Required:     false,
+					Autocomplete: true,
+				},
+				{
+					Type:         discordgo.ApplicationCommandOptionString,
+					Name:         "exclude_tag2",
+					Description:  "排除不想看到的tag",
+					Required:     false,
+					Autocomplete: true,
+				},
+				{
+					Type:         discordgo.ApplicationCommandOptionString,
+					Name:         "exclude_tag3",
+					Description:  "排除不想看到的tag",
+					Required:     false,
+					Autocomplete: true,
+				},
 			},
 		},
 		{

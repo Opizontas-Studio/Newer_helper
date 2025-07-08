@@ -1,63 +1,22 @@
 package preset
 
 import (
+	"discord-bot/bot"
 	"discord-bot/model"
 	"discord-bot/utils"
 	"fmt"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-// FindPreset 在给定的服务器配置中查找预设消息
-func FindPreset(serverConfig *model.ServerConfig, presetID string) *model.PresetMessage {
-	for _, p := range serverConfig.PresetMessages {
-		if p.ID == presetID {
-			return &p
-		}
-	}
-	log.Printf("No preset found with ID: '%s'", presetID)
-	return nil
-}
+// HandlePresetMessageInteraction handles the preset message interaction
+func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
+	cooldowns := b.GetPresetCooldowns()
+	mutex := b.GetCooldownMutex()
 
-// FormatPresetMessageSend formats a preset message into a MessageSend struct.
-func FormatPresetMessageSend(preset *model.PresetMessage, user string) *discordgo.MessageSend {
-	messageSend := &discordgo.MessageSend{}
-	if preset.Type == "embed" {
-		description := preset.Description
-		if user != "" {
-			description = fmt.Sprintf("%s %s", user, description)
-		}
-		embed := &discordgo.MessageEmbed{
-			Title:       preset.Value,
-			Description: description,
-		}
-		messageSend.Embeds = []*discordgo.MessageEmbed{embed}
-	} else {
-		content := preset.Value
-		if user != "" {
-			content = fmt.Sprintf("%s \n%s", user, content)
-		}
-		messageSend.Content = content
-	}
-	return messageSend
-}
-
-// HandlePresetMessageInteraction 处理预设消息交互
-func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, b interface{}) {
-	type bot interface {
-		GetConfig() *model.Config
-		GetPresetCooldowns() map[string]time.Time
-		GetCooldownMutex() *sync.Mutex
-	}
-
-	appBot := b.(bot)
-	cooldowns := appBot.GetPresetCooldowns()
-	mutex := appBot.GetCooldownMutex()
-
-	serverConfig, ok := appBot.GetConfig().ServerConfigs[i.GuildID]
+	serverConfig, ok := b.Config.ServerConfigs[i.GuildID]
 	if !ok {
 		log.Printf("Could not find server config for guild: %s", i.GuildID)
 		return
@@ -130,10 +89,10 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 	message, err := s.ChannelMessageSendComplex(i.ChannelID, messageSend)
 	if err == nil {
 		// Log the successful preset usage
-		if appBot.GetConfig().LogChannelID != "" {
+		if b.Config.LogChannelID != "" {
 			messageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, message.ID)
 			logInfo := fmt.Sprintf("用户: `%s`\n预设名: `%s`\n[点击查看消息](%s)", i.Member.User.Username, selectedPreset.Name, messageLink)
-			err = utils.LogInfo(s, appBot.GetConfig().LogChannelID, "预设", "使用", logInfo)
+			err = utils.LogInfo(s, b.Config.LogChannelID, "预设", "使用", logInfo)
 			if err != nil {
 				log.Printf("Failed to send log: %v", err)
 			}
@@ -156,4 +115,38 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 	if err != nil {
 		log.Printf("Failed to delete interaction response: %v", err)
 	}
+}
+
+// FindPreset finds a preset message in the given server configuration.
+func FindPreset(serverConfig *model.ServerConfig, presetID string) *model.PresetMessage {
+	for _, p := range serverConfig.PresetMessages {
+		if p.ID == presetID {
+			return &p
+		}
+	}
+	log.Printf("No preset found with ID: '%s'", presetID)
+	return nil
+}
+
+// FormatPresetMessageSend formats a preset message into a MessageSend struct.
+func FormatPresetMessageSend(preset *model.PresetMessage, user string) *discordgo.MessageSend {
+	messageSend := &discordgo.MessageSend{}
+	if preset.Type == "embed" {
+		description := preset.Description
+		if user != "" {
+			description = fmt.Sprintf("%s %s", user, description)
+		}
+		embed := &discordgo.MessageEmbed{
+			Title:       preset.Value,
+			Description: description,
+		}
+		messageSend.Embeds = []*discordgo.MessageEmbed{embed}
+	} else {
+		content := preset.Value
+		if user != "" {
+			content = fmt.Sprintf("%s \n%s", user, content)
+		}
+		messageSend.Content = content
+	}
+	return messageSend
 }

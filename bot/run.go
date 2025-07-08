@@ -2,6 +2,7 @@ package bot
 
 import (
 	"discord-bot/commands"
+	"discord-bot/scanner"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -59,7 +60,7 @@ func (b *Bot) Run() {
 				}
 			}
 		}
-		go commands.Scan(b.Session, b.Config.LogChannelID, scanMode, "")
+		go scanner.Scan(b.Session, b.Config.LogChannelID, scanMode, "")
 	} else {
 		log.Println("Initial scan is disabled by environment variable.")
 	}
@@ -134,14 +135,14 @@ func (b *Bot) startScanScheduler() {
 
 			// Run the tasks
 			log.Println("Starting scheduled active forum scan...")
-			commands.Scan(b.Session, b.Config.LogChannelID, "active", "")
+			scanner.Scan(b.Session, b.Config.LogChannelID, "active", "")
 
 			b.ActiveScanCount++
 			log.Printf("Active scan count: %d", b.ActiveScanCount)
 
 			if b.ActiveScanCount >= 7 {
 				log.Println("Active scan count reached 7. Starting full scan...")
-				commands.Scan(b.Session, b.Config.LogChannelID, "full", "")
+				scanner.Scan(b.Session, b.Config.LogChannelID, "full", "")
 				b.ActiveScanCount = 0
 			}
 
@@ -158,7 +159,7 @@ func (b *Bot) startScanScheduler() {
 			}
 
 			log.Println("Cleaning up old posts...")
-			commands.CleanOldPosts(b.Session, b.Config.LogChannelID)
+			scanner.CleanOldPosts(b.Session, b.Config.LogChannelID)
 		}
 	}()
 }

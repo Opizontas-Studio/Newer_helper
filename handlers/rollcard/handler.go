@@ -1,4 +1,4 @@
-package handlers
+package rollcard
 
 import (
 	"discord-bot/bot"
@@ -30,18 +30,43 @@ func HandleRollCardInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 	if opt, ok := optionMap["tag"]; ok {
 		tagID = opt.StringValue()
 	}
+	var excludeTags []string
+	if opt, ok := optionMap["exclude_tag1"]; ok {
+		if tagValue := opt.StringValue(); tagValue != "" {
+			excludeTags = append(excludeTags, tagValue)
+		}
+	}
+	if opt, ok := optionMap["exclude_tag2"]; ok {
+		if tagValue := opt.StringValue(); tagValue != "" {
+			excludeTags = append(excludeTags, tagValue)
+		}
+	}
+	if opt, ok := optionMap["exclude_tag3"]; ok {
+		if tagValue := opt.StringValue(); tagValue != "" {
+			excludeTags = append(excludeTags, tagValue)
+		}
+	}
 
-	rollCard(s, i, b, poolName, tagID, count)
+	if tagID != "" {
+		for _, excludedTag := range excludeTags {
+			if tagID == excludedTag {
+				sendEphemeralResponse(s, i, "错误：您不能在包含和排除中选择同一个标签。")
+				return
+			}
+		}
+	}
+
+	rollCard(s, i, b, poolName, tagID, count, excludeTags)
 }
 
 // HandleRollAgain handles the "roll again" button interaction.
-func HandleRollAgain(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, poolName, tagID string) {
-	rollCard(s, i, b, poolName, tagID, 1)
+func HandleRollAgain(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, poolName, tagID string, excludeTags []string) {
+	rollCard(s, i, b, poolName, tagID, 1, excludeTags)
 }
 
 // rollCard is the core logic for fetching posts and sending the response.
-func rollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, poolName, tagID string, count int) {
-	log.Printf("Executing rollCard for user %s in guild %s. Pool: %s, Tag: %s, Count: %d", i.Member.User.ID, i.GuildID, poolName, tagID, count)
+func rollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, poolName, tagID string, count int, excludeTags []string) {
+	log.Printf("Executing rollCard for user %s in guild %s. Pool: %s, Tag: %s, ExcludeTags: %v, Count: %d", i.Member.User.ID, i.GuildID, poolName, tagID, excludeTags, count)
 	guildID := i.GuildID
 	rollCardGuildConfig, ok := b.Config.RollCardConfigs[guildID]
 	if !ok {
@@ -50,7 +75,7 @@ func rollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, 
 		return
 	}
 
-	posts, err := getPosts(&rollCardGuildConfig, poolName, tagID, count)
+	posts, err := getPosts(&rollCardGuildConfig, poolName, tagID, count, excludeTags)
 	if err != nil {
 		log.Printf("Error getting posts for guild %s: %v", guildID, err)
 		sendEphemeralResponse(s, i, err.Error())
@@ -81,7 +106,7 @@ func rollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, 
 						discordgo.Button{
 							Label:    "再来一抽",
 							Style:    discordgo.PrimaryButton,
-							CustomID: "roll_again:" + poolName + ":" + tagID,
+							CustomID: "roll_again:" + poolName + ":" + tagID + ":" + strings.Join(excludeTags, ","),
 						},
 					},
 				},
@@ -91,7 +116,7 @@ func rollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, 
 }
 
 // getPosts retrieves random posts from the database based on the pool, tag, and count.
-func getPosts(config *model.RollCardGuildConfig, poolName, tagID string, count int) ([]model.Post, error) {
+func getPosts(config *model.RollCardGuildConfig, poolName, tagID string, count int, excludeTags []string) ([]model.Post, error) {
 	db, err := utils.InitDB(config.Database)
 	if err != nil {
 		return nil, fmt.Errorf("error accessing card database")
@@ -100,8 +125,8 @@ func getPosts(config *model.RollCardGuildConfig, poolName, tagID string, count i
 
 	var posts []model.Post
 	if poolName == "all-server-roll" {
-		if tagID != "" {
-			posts, err = utils.GetRandomPostsByTagFromAllTables(db, tagID, count)
+		if tagID != "" || len(excludeTags) > 0 {
+			posts, err = utils.GetRandomPostsByTagFromAllTables(db, tagID, count, excludeTags)
 		} else {
 			posts, err = utils.GetRandomPostsFromAllTables(db, count)
 		}
@@ -121,8 +146,8 @@ func getPosts(config *model.RollCardGuildConfig, poolName, tagID string, count i
 			return nil, fmt.Errorf("invalid pool name: %s", poolName)
 		}
 
-		if tagID != "" {
-			posts, err = utils.GetRandomPostsByTag(db, tableName, tagID, count)
+		if tagID != "" || len(excludeTags) > 0 {
+			posts, err = utils.GetRandomPostsByTag(db, tableName, tagID, count, excludeTags)
 		} else {
 			posts, err = utils.GetRandomPosts(db, tableName, count)
 		}
@@ -199,4 +224,111 @@ func getTagNames(tagIDs string, tagMapping map[string]map[string]string) string 
 		return "无"
 	}
 	return strings.Join(names, ", ")
+}
+
+func HandleRollCardAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, config *model.Config) {
+	data := i.ApplicationCommandData()
+	var choices []*discordgo.ApplicationCommandOptionChoice
+
+	var focusedOption discordgo.ApplicationCommandInteractionDataOption
+	var poolName string
+	for _, opt := range data.Options {
+		if opt.Focused {
+			focusedOption = *opt
+		}
+		if opt.Name == "pool" {
+			poolName = opt.StringValue()
+		}
+	}
+
+	guildID := i.GuildID
+	rollCardGuildConfig, ok := config.RollCardConfigs[guildID]
+	if !ok {
+		return // or handle error
+	}
+
+	switch focusedOption.Name {
+	case "pool":
+		// Add the static option for all-server roll if it matches the user input or the input is empty
+		if strings.Contains(strings.ToLower("全区抽卡"), strings.ToLower(focusedOption.StringValue())) {
+			choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+				Name:  "全区抽卡",
+				Value: "all-server-roll",
+			})
+		}
+		for _, name := range rollCardGuildConfig.DataBaseTableNameMapping {
+			if strings.Contains(strings.ToLower(name), strings.ToLower(focusedOption.StringValue())) {
+				choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+					Name:  name,
+					Value: name,
+				})
+			}
+		}
+	case "tag", "exclude_tag1", "exclude_tag2", "exclude_tag3":
+		if poolName == "" {
+			// If no pool is selected, we cannot suggest tags.
+			return
+		}
+
+		// Load the tag mapping file associated with the guild.
+		tagMapping, err := utils.LoadTagMapping(rollCardGuildConfig.TagMappingFile)
+		if err != nil {
+			log.Printf("Error loading tag mapping for guild %s: %v", guildID, err)
+			return
+		}
+
+		// Filter tags based on the selected pool.
+		if poolName == "all-server-roll" {
+			// For all-server-roll, show all tags from all categories.
+			for _, tags := range tagMapping {
+				for id, name := range tags {
+					if strings.Contains(strings.ToLower(name), strings.ToLower(focusedOption.StringValue())) {
+						choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+							Name:  name,
+							Value: id,
+						})
+					}
+				}
+			}
+		} else if tags, ok := tagMapping[poolName]; ok {
+			// For a specific pool, only show tags from that category.
+			for id, name := range tags {
+				if strings.Contains(strings.ToLower(name), strings.ToLower(focusedOption.StringValue())) {
+					choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+						Name:  name,
+						Value: id,
+					})
+				}
+			}
+		}
+	}
+
+	if len(choices) > 25 {
+		choices = choices[:25]
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{
+			Choices: choices,
+		},
+	})
+}
+
+func HandleRollCardComponent(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, customID string) {
+	if strings.HasPrefix(customID, "roll_again:") {
+		parts := strings.SplitN(customID, ":", 4)
+		if len(parts) >= 2 {
+			poolName := parts[1]
+			tagID := ""
+			if len(parts) >= 3 {
+				tagID = parts[2]
+			}
+			var excludeTags []string
+			if len(parts) >= 4 && parts[3] != "" {
+				excludeTags = strings.Split(parts[3], ",")
+			}
+			HandleRollAgain(s, i, b, poolName, tagID, excludeTags)
+		}
+	}
 }

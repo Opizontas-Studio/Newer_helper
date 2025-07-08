@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"discord-bot/bot"
-	"discord-bot/commands"
 	"discord-bot/utils"
 	"log"
 
@@ -31,6 +30,10 @@ func addHandlers(b *bot.Bot) {
 
 	b.Session.AddHandler(func(s *discordgo.Session, t *discordgo.ThreadCreate) {
 		// Pass the bot's config to the handler
-		commands.HandleThreadCreate(s, t, b.Config)
+		HandleThreadCreate(s, t, b.Config)
+	})
+
+	b.Session.AddHandler(func(s *discordgo.Session, t *discordgo.ThreadDelete) {
+		HandleThreadDelete(s, t, b.Config)
 	})
 }
