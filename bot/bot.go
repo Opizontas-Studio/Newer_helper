@@ -25,8 +25,11 @@ type Bot struct {
 	CooldownTicker          *time.Ticker
 	PostCleanupTicker       *time.Ticker
 	LeaderboardUpdateTicker *time.Ticker
+	PostScanTicker          *time.Ticker
+	DegradedPostScanTicker  *time.Ticker
 	DB                      *sql.DB
 	ActiveScanCount         int
+	done                    chan struct{}
 }
 
 func (b *Bot) GetConfig() *model.Config {
@@ -62,10 +65,14 @@ func New(cfg *model.Config, db *sql.DB) (*Bot, error) {
 		PresetCooldowns: make(map[string]time.Time),
 		DB:              db,
 		ActiveScanCount: 0,
+		done:            make(chan struct{}),
 	}, nil
 }
+
 func (b *Bot) Close() {
 	log.Println("Gracefully shutting down.")
+	close(b.done) // Signal all goroutines to stop
+
 	if b.FullScanTicker != nil {
 		b.FullScanTicker.Stop()
 	}
@@ -81,6 +88,12 @@ func (b *Bot) Close() {
 	if b.LeaderboardUpdateTicker != nil {
 		b.LeaderboardUpdateTicker.Stop()
 	}
+	if b.PostScanTicker != nil {
+		b.PostScanTicker.Stop()
+	}
+	if b.DegradedPostScanTicker != nil {
+		b.DegradedPostScanTicker.Stop()
+	}
 	b.Session.Close()
 }
 
@@ -91,10 +104,25 @@ func (b *Bot) UpdateLeaderboard() {
 		return
 	}
 
+	var wg sync.WaitGroup
+	workerLimit := 5 // Limit to 5 concurrent workers
+	guard := make(chan struct{}, workerLimit)
+
 	for guildID := range states {
-		log.Printf("Updating leaderboard for guild: %s", guildID)
-		go leaderboard.UpdateLeaderboard(b, guildID) // Use goroutine to update concurrently
+		wg.Add(1)
+		guard <- struct{}{} // Acquire a worker slot
+
+		go func(guildID string) {
+			defer func() {
+				<-guard // Release the worker slot
+				wg.Done()
+			}()
+			log.Printf("Updating leaderboard for guild: %s", guildID)
+			leaderboard.UpdateLeaderboard(b, guildID)
+		}(guildID)
 	}
+
+	wg.Wait()
 }
 
 func (b *Bot) RefreshCommands(guildID string) {

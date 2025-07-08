@@ -1,9 +1,7 @@
 package bot
 
 import (
-	"discord-bot/handlers/leaderboard"
 	"discord-bot/scanner"
-	"discord-bot/utils"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -20,19 +18,6 @@ func (b *Bot) Run() {
 	if err != nil {
 		log.Fatalf("Error opening connection: %v", err)
 	}
-	// log.Println("Removing old global commands...")
-	// existingGlobalCommands, err := b.Session.ApplicationCommands(b.Session.State.User.ID, "")
-	// if err != nil {
-	// 	log.Printf("Could not fetch global commands: %v", err)
-	// } else if len(existingGlobalCommands) > 0 {
-	// 	log.Printf("Removing %d old global commands...", len(existingGlobalCommands))
-	// 	for _, cmd := range existingGlobalCommands {
-	// 		err := b.Session.ApplicationCommandDelete(b.Session.State.User.ID, "", cmd.ID)
-	// 		if err != nil {
-	// 			log.Printf("Could not delete global command %s: %v", cmd.Name, err)
-	// 		}
-	// 	}
-	// }
 
 	log.Println("Adding commands...")
 	b.RegisteredCommands = make([]*discordgo.ApplicationCommand, 0)
@@ -60,7 +45,7 @@ func (b *Bot) Run() {
 				}
 			}
 		}
-		go scanner.Scan(b.Session, b.Config.LogChannelID, scanMode, "")
+		go scanner.Scan(b.Session, b.Config.LogChannelID, scanMode, "", b.done)
 	} else {
 		log.Println("Initial scan is disabled by environment variable.")
 	}
@@ -77,70 +62,115 @@ func (b *Bot) startScanScheduler() {
 	// Schedule a cooldown cleanup every hour
 	b.CooldownTicker = time.NewTicker(1 * time.Hour)
 	go func() {
-		for range b.CooldownTicker.C {
-			log.Println("Cleaning up preset cooldowns...")
-			b.CleanupCooldowns()
+		for {
+			select {
+			case <-b.CooldownTicker.C:
+				log.Println("Cleaning up preset cooldowns...")
+				b.CleanupCooldowns()
+			case <-b.done:
+				return
+			}
 		}
 	}()
 
 	// Schedule leaderboard update every 10 minutes
 	b.LeaderboardUpdateTicker = time.NewTicker(10 * time.Minute)
 	go func() {
-		for range b.LeaderboardUpdateTicker.C {
-			log.Println("Updating leaderboard...")
-			states, err := utils.LoadLeaderboardState()
-			if err == nil {
-				for guildID := range states {
-					log.Printf("Updating leaderboard for guild: %s", guildID)
-					go leaderboard.UpdateLeaderboard(b, guildID) // Use goroutine to update concurrently
-				}
-			} else {
-				log.Printf("Error loading leaderboard states for scheduled update: %v", err)
+		for {
+			select {
+			case <-b.LeaderboardUpdateTicker.C:
+				log.Println("Updating leaderboard...")
+				b.UpdateLeaderboard()
+			case <-b.done:
+				return
 			}
 		}
 	}()
 
-	// Schedule daily tasks at 5:00 AM
+	// Schedule post deletion checks
+	b.PostScanTicker = time.NewTicker(10 * time.Minute)
 	go func() {
 		for {
+			select {
+			case <-b.PostScanTicker.C:
+				log.Println("Running active post deletion scan...")
+				scanner.CheckDeletedPosts(b.Session, b.Config.LogChannelID, "active")
+			case <-b.done:
+				return
+			}
+		}
+	}()
+
+	b.DegradedPostScanTicker = time.NewTicker(3 * time.Hour)
+	go func() {
+		for {
+			select {
+			case <-b.DegradedPostScanTicker.C:
+				log.Println("Running degraded post deletion scan...")
+				scanner.CheckDeletedPosts(b.Session, b.Config.LogChannelID, "degraded")
+			case <-b.done:
+				return
+			}
+		}
+	}()
+
+	// Schedule daily tasks at 5:00, 13:00, and 21:00
+	go func() {
+		runHours := []int{5, 13, 21} // 5 AM, 1 PM, 9 PM
+
+		for {
 			now := time.Now()
-			// Calculate the next 5:00 AM
-			next := time.Date(now.Year(), now.Month(), now.Day(), 5, 0, 0, 0, now.Location())
-			if now.After(next) {
-				next = next.Add(24 * time.Hour)
+			var next time.Time
+
+			// Find the next scheduled time
+			for _, h := range runHours {
+				t := time.Date(now.Year(), now.Month(), now.Day(), h, 0, 0, 0, now.Location())
+				if now.Before(t) {
+					next = t
+					break
+				}
+			}
+
+			// If no scheduled time is found for today, schedule for the first hour tomorrow
+			if next.IsZero() {
+				tomorrow := now.Add(24 * time.Hour)
+				next = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), runHours[0], 0, 0, 0, now.Location())
 			}
 
 			log.Printf("Next daily task scheduled for: %v", next)
-			// Wait until the next 5:00 AM
-			time.Sleep(next.Sub(now))
+			// Wait until the next scheduled time
+			select {
+			case <-time.After(next.Sub(now)):
+				// Run the tasks
+				log.Println("Starting scheduled active forum scan...")
+				scanner.Scan(b.Session, b.Config.LogChannelID, "active", "", b.done)
 
-			// Run the tasks
-			log.Println("Starting scheduled active forum scan...")
-			scanner.Scan(b.Session, b.Config.LogChannelID, "active", "")
+				b.ActiveScanCount++
+				log.Printf("Active scan count: %d", b.ActiveScanCount)
 
-			b.ActiveScanCount++
-			log.Printf("Active scan count: %d", b.ActiveScanCount)
+				if b.ActiveScanCount >= 21 { // 3 scans/day * 7 days
+					log.Println("Active scan count reached 21. Starting full scan...")
+					scanner.Scan(b.Session, b.Config.LogChannelID, "full", "", b.done)
+					b.ActiveScanCount = 0
+				}
 
-			if b.ActiveScanCount >= 7 {
-				log.Println("Active scan count reached 7. Starting full scan...")
-				scanner.Scan(b.Session, b.Config.LogChannelID, "full", "")
-				b.ActiveScanCount = 0
+				// Persist the scan count
+				lockData := make(map[string]interface{})
+				lockFile, err := os.ReadFile("data/scan_lock.json")
+				if err == nil {
+					json.Unmarshal(lockFile, &lockData)
+				}
+				lockData["active_scan_count"] = b.ActiveScanCount
+				lockFile, err = json.Marshal(lockData)
+				if err == nil {
+					os.WriteFile("data/scan_lock.json", lockFile, 0644)
+				}
+
+				log.Println("Cleaning up old posts...")
+				scanner.CleanOldPosts(b.Session, b.Config.LogChannelID, b.done)
+			case <-b.done:
+				return
 			}
-
-			// Persist the scan count
-			lockData := make(map[string]interface{})
-			lockFile, err := os.ReadFile("data/scan_lock.json")
-			if err == nil {
-				json.Unmarshal(lockFile, &lockData)
-			}
-			lockData["active_scan_count"] = b.ActiveScanCount
-			lockFile, err = json.Marshal(lockData)
-			if err == nil {
-				os.WriteFile("data/scan_lock.json", lockFile, 0644)
-			}
-
-			log.Println("Cleaning up old posts...")
-			scanner.CleanOldPosts(b.Session, b.Config.LogChannelID)
 		}
 	}()
 }

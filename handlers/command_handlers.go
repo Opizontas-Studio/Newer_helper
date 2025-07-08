@@ -115,7 +115,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 				},
 			})
 
-			go scanner.Scan(s, b.Config.LogChannelID, scanMode, targetGuildID)
+			go scanner.Scan(s, b.Config.LogChannelID, scanMode, targetGuildID, nil)
 		},
 	}
 }
