@@ -40,7 +40,7 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 	switch action {
 	case "rename":
 		if input == "" {
-			responseContent = "重命名操作需要 'input' 参数。"
+			responseContent = "重命名操作需要 'input' 参数 "
 		} else {
 			found := false
 			for _, p := range serverConfig.PresetMessages {
@@ -48,10 +48,10 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 					p.Name = input
 					db := b.DB
 					if err := utils.UpdatePreset(db, i.GuildID, p); err != nil {
-						responseContent = "无法更新预设。"
+						responseContent = "无法更新预设 "
 						utils.LogError(s, b.Config.LogChannelID, "预设管理", "更新预设失败", err.Error())
 					} else {
-						responseContent = "预设已重命名为 '" + input + "'。"
+						responseContent = "预设已重命名为 '" + input + "' "
 						logMessage := fmt.Sprintf("ID: `%s`\n新名称: `%s`\n操作者: `%s`", id, input, i.Member.User.Username)
 						utils.LogInfo(s, b.Config.LogChannelID, "预设管理", "重命名预设", logMessage)
 						go b.RefreshCommands(i.GuildID)
@@ -61,7 +61,7 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 				}
 			}
 			if !found {
-				responseContent = "找不到具有该 ID 的预设。"
+				responseContent = "找不到具有该 ID 的预设 "
 			}
 		}
 	case "del":
@@ -99,7 +99,7 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 				},
 			})
 			if err != nil {
-				responseContent = "无法发送确认消息。"
+				responseContent = "无法发送确认消息 "
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
@@ -111,7 +111,7 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 			}
 			return // The response will be handled asynchronously
 		} else {
-			responseContent = "找不到具有该 ID 的预设。"
+			responseContent = "找不到具有该 ID 的预设 "
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
@@ -122,13 +122,13 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 		}
 	case "overwrite":
 		if input == "" {
-			responseContent = "覆盖操作需要 'input' 参数。"
+			responseContent = "覆盖操作需要 'input' 参数 "
 		} else {
 			messages, err := ParseMessageLinks(s, input)
 			if err != nil {
 				responseContent = "解析消息链接时出错: " + err.Error()
 			} else if len(messages) == 0 {
-				responseContent = "在输入中找不到有效的消息链接。"
+				responseContent = "在输入中找不到有效的消息链接 "
 			} else {
 				found := false
 				for _, p := range serverConfig.PresetMessages {
@@ -137,10 +137,10 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 						p.Type = "text" // Or parse from original message
 						db := b.DB
 						if err := utils.UpdatePreset(db, i.GuildID, p); err != nil {
-							responseContent = "无法更新预设。"
+							responseContent = "无法更新预设 "
 							utils.LogError(s, b.Config.LogChannelID, "预设管理", "更新预设失败", err.Error())
 						} else {
-							responseContent = "预设已被覆盖。"
+							responseContent = "预设已被覆盖 "
 							logMessage := fmt.Sprintf("ID: `%s`\n操作者: `%s`", id, i.Member.User.Username)
 							utils.LogInfo(s, b.Config.LogChannelID, "预设管理", "覆盖预设", logMessage)
 							go b.RefreshCommands(i.GuildID)
@@ -150,12 +150,12 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 					}
 				}
 				if !found {
-					responseContent = "找不到具有该 ID 的预设。"
+					responseContent = "找不到具有该 ID 的预设 "
 				}
 			}
 		}
 	default:
-		responseContent = "未知的操作。"
+		responseContent = "未知的操作 "
 	}
 
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -251,13 +251,13 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 
 		var webhookEdit discordgo.WebhookEdit
 		if len(messages) == 0 {
-			response := "未找到或解析任何消息链接。没有预设被创建或更新。"
+			response := "未找到或解析任何消息链接 没有预设被创建或更新 "
 			webhookEdit = discordgo.WebhookEdit{
 				Content: &response,
 			}
 		} else {
 			description := fmt.Sprintf(
-				"已成功为您保存预设 `%s`。\n\n**预设内容预览:**\n```\n%s\n```",
+				"已成功为您保存预设 `%s` \n\n**预设内容预览:**\n```\n%s\n```",
 				presetName,
 				strings.Join(messages, "\n---\n"),
 			)

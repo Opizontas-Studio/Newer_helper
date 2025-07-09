@@ -15,7 +15,7 @@ import (
 
 func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	return map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
-		"new_cards": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		"new-cards": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			leaderboard.HandleNewCardsInteraction(s, i, b)
 		},
 		"rollcard": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -78,7 +78,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 			preset.HandlePresetMessageAdminInteraction(s, i, b)
 		},
-		"start_scan": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		"start-scan": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, nil, nil, b.Config.DeveloperUserIDs, nil)
 			if permissionLevel != utils.DeveloperPermission {
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -116,6 +116,28 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			})
 
 			go scanner.Scan(s, b.Config.LogChannelID, scanMode, targetGuildID, nil)
+		},
+		"setup-roll-panel": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			serverConfig, ok := b.Config.ServerConfigs[i.GuildID]
+			if !ok {
+				log.Printf("Could not find server config for guild: %s", i.GuildID)
+				return
+			}
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.Config.DeveloperUserIDs, b.Config.SuperAdminRoleIDs)
+			if permissionLevel != utils.DeveloperPermission {
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "You do not have permission to use this command.",
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				})
+				return
+			}
+			rollcard.HandleSetupRollPanel(s, i, b)
+		},
+		"system-info": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			SystemInfoHandler(s, i)
 		},
 	}
 }

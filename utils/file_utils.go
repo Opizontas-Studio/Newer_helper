@@ -4,6 +4,7 @@ import (
 	"discord-bot/model"
 	"encoding/json"
 	"os"
+	"path/filepath"
 )
 
 // LoadTagMapping loads the tag name mapping from a JSON file.
@@ -57,4 +58,19 @@ func LoadDatabaseMapping() (map[string]model.GuildMapping, error) {
 	}
 	err = json.Unmarshal(data, &mapping)
 	return mapping, err
+}
+
+// ListDBFiles lists all files with .db extension in the data directory.
+func ListDBFiles() ([]string, error) {
+	var files []string
+	fileInfos, err := os.ReadDir("./data")
+	if err != nil {
+		return nil, err
+	}
+	for _, fileInfo := range fileInfos {
+		if !fileInfo.IsDir() && filepath.Ext(fileInfo.Name()) == ".db" {
+			files = append(files, filepath.Join("./data", fileInfo.Name()))
+		}
+	}
+	return files, nil
 }

@@ -16,6 +16,14 @@ func InitDB(filepath string) (*sql.DB, error) {
 	return db, nil
 }
 
+func GetDBSize(filepath string) (int64, error) {
+	fi, err := os.Stat(filepath)
+	if err != nil {
+		return 0, err
+	}
+	return fi.Size(), nil
+}
+
 // SetupDatabase initializes the database, creates tables, and returns the DB connection.
 func SetupDatabase() (*sql.DB, error) {
 	if err := os.MkdirAll("./data", os.ModePerm); err != nil {

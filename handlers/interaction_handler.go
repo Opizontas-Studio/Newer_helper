@@ -21,6 +21,14 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 			preset.HandlePresetDeleteInteraction(s, i, b)
 		} else if strings.HasPrefix(customID, "roll_again:") {
 			rollcard.HandleRollCardComponent(s, i, b, customID)
+		} else if strings.HasPrefix(customID, "persistent_roll:") {
+			rollcard.HandlePersistentRoll(s, i, b, customID)
+		} else if strings.HasPrefix(customID, "custom_roll:") {
+			rollcard.HandleCustomRoll(s, i, b, customID)
+		} else if customID == "edit_my_pools" {
+			rollcard.HandleEditPools(s, i, b)
+		} else if customID == "select_pools_menu" {
+			rollcard.HandlePoolSelectionResponse(s, i, b)
 		}
 	case discordgo.InteractionApplicationCommandAutocomplete:
 		if i.ApplicationCommandData().Name == "rollcard" {

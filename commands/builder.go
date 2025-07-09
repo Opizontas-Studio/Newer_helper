@@ -11,19 +11,19 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 	return []*discordgo.ApplicationCommand{
 		{
 			Name:        "preset-message",
-			Description: "发送预设消息并提及一位成员。",
+			Description: "发送预设消息并提及一位成员 ",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:         discordgo.ApplicationCommandOptionString,
 					Name:         "id",
-					Description:  "要发送的预设消息 ID。",
+					Description:  "要发送的预设消息 ID ",
 					Required:     true,
 					Autocomplete: true,
 				},
 				{
 					Type:        discordgo.ApplicationCommandOptionUser,
 					Name:        "user",
-					Description: "要提及的用户。",
+					Description: "要提及的用户 ",
 					Required:    false,
 				},
 			},
@@ -35,13 +35,13 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
 					Name:        "messagelinks",
-					Description: "要解析的消息链接。",
+					Description: "要解析的消息链接 ",
 					Required:    true,
 				},
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
 					Name:        "name",
-					Description: "为预设指定一个自定义名称。",
+					Description: "为预设指定一个自定义名称 ",
 					Required:    true,
 				},
 			},
@@ -126,7 +126,7 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 			},
 		},
 		{
-			Name:        "start_scan",
+			Name:        "start-scan",
 			Description: "手动启动扫描",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
@@ -149,8 +149,30 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 			},
 		},
 		{
-			Name:        "new_cards",
+			Name:        "new-cards",
 			Description: "显示最新的卡片榜单",
+		},
+		{
+			Name:        "setup-roll-panel",
+			Description: "创建或更新一个对所有人可见的快速抽卡面板",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "title",
+					Description: "面板的标题",
+					Required:    false,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "description",
+					Description: "面板的描述信息",
+					Required:    false,
+				},
+			},
+		},
+		{
+			Name:        "system-info",
+			Description: "显示机器人和系统的状态信息",
 		},
 	}
 }

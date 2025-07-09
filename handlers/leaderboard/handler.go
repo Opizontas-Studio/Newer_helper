@@ -19,19 +19,19 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 	serverConfig, ok := config.ServerConfigs[i.GuildID]
 	if !ok {
 		log.Printf("Guild config not found for guild ID: %s", i.GuildID)
-		utils.SendErrorResponse(s, i, "服务器配置未找到。")
+		utils.SendErrorResponse(s, i, "服务器配置未找到 ")
 		return
 	}
 	permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, config.DeveloperUserIDs, config.SuperAdminRoleIDs)
 	if permissionLevel != utils.SuperAdminPermission && permissionLevel != utils.DeveloperPermission {
-		utils.SendErrorResponse(s, i, "您没有权限使用此命令。")
+		utils.SendErrorResponse(s, i, "您没有权限使用此命令 ")
 		return
 	}
 
 	// 检查是否已存在排行榜
 	states, err := utils.LoadLeaderboardState()
 	if err != nil {
-		utils.SendErrorResponse(s, i, "加载排行榜状态时出错。")
+		utils.SendErrorResponse(s, i, "加载排行榜状态时出错 ")
 		log.Printf("Error loading leaderboard states: %v", err)
 		return
 	}
@@ -39,14 +39,14 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 	if state, ok := states[i.GuildID]; ok && state.MessageID != "" {
 		// 如果当前服务器的排行榜已存在，则更新
 		UpdateLeaderboard(b, i.GuildID)
-		utils.SendSimpleResponse(s, i, "已更新现有的排行榜。")
+		utils.SendSimpleResponse(s, i, "已更新现有的排行榜 ")
 		return
 	}
 
 	// 如果不存在，创建一个新的
 	embeds := buildLeaderboardEmbeds(i.GuildID)
 	if len(embeds) == 0 {
-		utils.SendErrorResponse(s, i, "创建排行榜时出错, 无法生成 embeds。")
+		utils.SendErrorResponse(s, i, "创建排行榜时出错, 无法生成 embeds ")
 		return
 	}
 
@@ -55,7 +55,7 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 	})
 	if err != nil {
 		log.Printf("Error sending leaderboard message: %v", err)
-		utils.SendErrorResponse(s, i, "创建排行榜时出错。")
+		utils.SendErrorResponse(s, i, "创建排行榜时出错 ")
 		return
 	}
 	// 保存排行榜状态
@@ -68,7 +68,7 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 		log.Printf("Error saving leaderboard state: %v", err)
 	}
 
-	utils.SendSimpleResponse(s, i, "已成功创建排行榜，将每 10 分钟自动更新。")
+	utils.SendSimpleResponse(s, i, "已成功创建排行榜，将每 10 分钟自动更新 ")
 }
 
 func UpdateLeaderboard(b model.Bot, guildID string) {
@@ -105,20 +105,20 @@ func buildLeaderboardEmbeds(guildID string) []*discordgo.MessageEmbed {
 	dbMapping, err := utils.LoadDatabaseMapping()
 	if err != nil {
 		log.Printf("Error loading database mapping: %v", err)
-		return []*discordgo.MessageEmbed{{Title: "错误", Description: "无法加载数据库映射文件。", Color: 0xff0000}}
+		return []*discordgo.MessageEmbed{{Title: "错误", Description: "无法加载数据库映射文件 ", Color: 0xff0000}}
 	}
 
 	guildMapping, ok := dbMapping[guildID]
 	if !ok {
 		log.Printf("No database mapping found for guild %s", guildID)
-		return []*discordgo.MessageEmbed{{Title: "错误", Description: "当前服务器未配置数据库映射。", Color: 0xff0000}}
+		return []*discordgo.MessageEmbed{{Title: "错误", Description: "当前服务器未配置数据库映射 ", Color: 0xff0000}}
 	}
 
 	// 2. 初始化特定于服务器的数据库连接
 	db, err := utils.InitDB(guildMapping.Database)
 	if err != nil {
 		log.Printf("Error initializing database for guild %s at %s: %v", guildID, guildMapping.Database, err)
-		return []*discordgo.MessageEmbed{{Title: "错误", Description: "无法连接到服务器的数据库。", Color: 0xff0000}}
+		return []*discordgo.MessageEmbed{{Title: "错误", Description: "无法连接到服务器的数据库 ", Color: 0xff0000}}
 	}
 	defer db.Close()
 
@@ -131,7 +131,7 @@ func buildLeaderboardEmbeds(guildID string) []*discordgo.MessageEmbed {
 		log.Printf("No tables configured for leaderboard in guild %s", guildID)
 		return []*discordgo.MessageEmbed{{
 			Title:       "🏆 新卡速递排行榜",
-			Description: "错误：未配置任何用于统计的数据表。",
+			Description: "错误：未配置任何用于统计的数据表 ",
 			Color:       0xff0000,
 		}}
 	}
