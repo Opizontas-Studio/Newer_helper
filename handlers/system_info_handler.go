@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"discord-bot/utils"
+	"encoding/json"
 	"fmt"
+	"os"
 	"runtime"
 	"time"
 
@@ -42,13 +44,24 @@ func SystemInfoHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if err != nil {
 		users = 0
 	}
-	db, err := utils.InitDB("./data/guilds.db")
 	var threads int
+	type dbMapping struct {
+		Database string `json:"database"`
+	}
+	mappingFile, err := os.ReadFile("data/databaseMapping.json")
 	if err == nil {
-		defer db.Close()
-		threads, err = utils.GetTotalPostCount(db)
-		if err != nil {
-			threads = 0
+		var dbMap map[string]dbMapping
+		if json.Unmarshal(mappingFile, &dbMap) == nil {
+			for _, mapping := range dbMap {
+				db, err := utils.InitDB(mapping.Database)
+				if err == nil {
+					count, err := utils.GetTotalPostCount(db)
+					if err == nil {
+						threads += count
+					}
+					db.Close()
+				}
+			}
 		}
 	}
 

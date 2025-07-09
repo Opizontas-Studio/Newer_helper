@@ -3,7 +3,6 @@ package utils
 import (
 	"database/sql"
 	"discord-bot/model"
-	"strconv"
 	"strings"
 )
 
@@ -392,29 +391,22 @@ func GetTotalPostCount(db *sql.DB) (int, error) {
 	}
 	defer rows.Close()
 
-	var tableNames []string
+	var totalCount int
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
+		var tableName string
+		if err := rows.Scan(&tableName); err != nil {
 			return 0, err
 		}
-		// Check if table name is a number (server id)
-		if _, err := strconv.Atoi(name); err == nil {
-			tableNames = append(tableNames, name)
-		}
-	}
-	if err = rows.Err(); err != nil {
-		return 0, err
-	}
 
-	var totalCount int
-	for _, tableName := range tableNames {
 		var count int
 		err := db.QueryRow(`SELECT COUNT(*) FROM "` + tableName + `"`).Scan(&count)
 		if err != nil {
 			return 0, err
 		}
 		totalCount += count
+	}
+	if err = rows.Err(); err != nil {
+		return 0, err
 	}
 
 	return totalCount, nil
