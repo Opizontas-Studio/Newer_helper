@@ -4,6 +4,7 @@ import (
 	"discord-bot/handlers/leaderboard/latest_posts"
 	"discord-bot/model"
 	"discord-bot/utils"
+	"discord-bot/utils/database"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -115,7 +116,7 @@ func buildLeaderboardEmbeds(guildID string) []*discordgo.MessageEmbed {
 	}
 
 	// 2. 初始化特定于服务器的数据库连接
-	db, err := utils.InitDB(guildMapping.Database)
+	db, err := database.InitDB(guildMapping.Database)
 	if err != nil {
 		log.Printf("Error initializing database for guild %s at %s: %v", guildID, guildMapping.Database, err)
 		return []*discordgo.MessageEmbed{{Title: "错误", Description: "无法连接到服务器的数据库 ", Color: 0xff0000}}
@@ -138,21 +139,36 @@ func buildLeaderboardEmbeds(guildID string) []*discordgo.MessageEmbed {
 
 	// 3. 获取统计数据
 	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	yesterday := today.AddDate(0, 0, -1)
-	sevenDaysAgo := today.AddDate(0, 0, -7)
+	// 以凌晨 4:00 为分界线
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 4, 0, 0, 0, now.Location())
+	if now.Hour() < 4 {
+		// 如果当前时间在凌晨 4 点之前，则“今天”的开始时间是昨天的凌晨 4 点
+		todayStart = todayStart.AddDate(0, 0, -1)
+	}
+	yesterdayStart := todayStart.AddDate(0, 0, -1)
+	threeDaysAgo := todayStart.AddDate(0, 0, -3)
+	sevenDaysAgo := todayStart.AddDate(0, 0, -7)
 
-	todayCount, err := utils.CountPostsInTimeRange(db, tableNames, today.Unix(), now.Unix())
+	// 今日数据从 JSON 读取
+	todayCount, err := utils.CountPostsInJSON(guildID, todayStart.Unix(), now.Unix())
 	if err != nil {
-		log.Printf("Error counting posts for today: %v", err)
+		log.Printf("Error counting posts for today from JSON: %v", err)
 	}
-	yesterdayCount, err := utils.CountPostsInTimeRange(db, tableNames, yesterday.Unix(), today.Unix())
+
+	// 昨日数据从 JSON 读取
+	yesterdayCount, err := utils.CountPostsInJSON(guildID, yesterdayStart.Unix(), todayStart.Unix())
 	if err != nil {
-		log.Printf("Error counting posts for yesterday: %v", err)
+		log.Printf("Error counting posts for yesterday from JSON: %v", err)
 	}
-	last7DaysCount, err := utils.CountPostsInTimeRange(db, tableNames, sevenDaysAgo.Unix(), now.Unix())
+
+	// 3天及以上数据从数据库读取
+	last3DaysCount, err := database.CountPostsInTimeRange(db, tableNames, threeDaysAgo.Unix(), now.Unix())
 	if err != nil {
-		log.Printf("Error counting posts for last 7 days: %v", err)
+		log.Printf("Error counting posts for last 3 days from DB: %v", err)
+	}
+	last7DaysCount, err := database.CountPostsInTimeRange(db, tableNames, sevenDaysAgo.Unix(), now.Unix())
+	if err != nil {
+		log.Printf("Error counting posts for last 7 days from DB: %v", err)
 	}
 
 	// 4. 加载tag mapping
@@ -180,8 +196,9 @@ func buildLeaderboardEmbeds(guildID string) []*discordgo.MessageEmbed {
 				Value: fmt.Sprintf(
 					"**今日新增**: %d\n"+
 						"**昨日新增**: %d\n"+
+						"**近3日新增**: %d\n"+
 						"**近7日新增**: %d",
-					todayCount, yesterdayCount, last7DaysCount,
+					todayCount, yesterdayCount, last3DaysCount, last7DaysCount,
 				),
 				Inline: false,
 			},

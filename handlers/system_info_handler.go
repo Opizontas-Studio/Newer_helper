@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"discord-bot/utils"
+	"discord-bot/utils/database"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -30,7 +31,7 @@ func SystemInfoHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	var totalDbSize int64
 	if err == nil {
 		for _, file := range dbFiles {
-			size, err := utils.GetDBSize(file)
+			size, err := database.GetDBSize(file)
 			if err == nil {
 				totalDbSize += size
 			}
@@ -40,7 +41,7 @@ func SystemInfoHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	// Get discordgo session stats
 	guilds := len(s.State.Guilds)
-	users, err := utils.GetTotalUserCount()
+	users, err := database.GetTotalUserCount()
 	if err != nil {
 		users = 0
 	}
@@ -53,9 +54,9 @@ func SystemInfoHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		var dbMap map[string]dbMapping
 		if json.Unmarshal(mappingFile, &dbMap) == nil {
 			for _, mapping := range dbMap {
-				db, err := utils.InitDB(mapping.Database)
+				db, err := database.InitDB(mapping.Database)
 				if err == nil {
-					count, err := utils.GetTotalPostCount(db)
+					count, err := database.GetTotalPostCount(db)
 					if err == nil {
 						threads += count
 					}

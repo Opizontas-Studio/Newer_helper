@@ -1,43 +1,10 @@
-package utils
+package database
 
 import (
 	"database/sql"
 	"discord-bot/model"
 	"strings"
 )
-
-func CreateTable(db *sql.DB, tableName string) error {
-	createTableSQL := `CREATE TABLE IF NOT EXISTS "` + tableName + `" (
-		"id" TEXT NOT NULL PRIMARY KEY,
-		"title" TEXT,
-		"author" TEXT,
-		"author_id" TEXT,
-		"content" TEXT,
-		"tags" TEXT,
-		"message_count" INTEGER,
-		"timestamp" INTEGER,
-		"cover_image_url" TEXT
-	);`
-
-	_, err := db.Exec(createTableSQL)
-	return err
-}
-
-func InsertPost(db *sql.DB, post model.Post, tableName string) error {
-	if err := CreateTable(db, tableName); err != nil {
-		return err
-	}
-
-	insertSQL := `INSERT OR REPLACE INTO "` + tableName + `"(id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	stmt, err := db.Prepare(insertSQL)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	_, err = stmt.Exec(post.ID, post.Title, post.Author, post.AuthorID, post.Content, post.Tags, post.MessageCount, post.Timestamp, post.CoverImageURL)
-	return err
-}
 
 func GetAllPosts(db *sql.DB, tableName string) ([]model.Post, error) {
 	rows, err := db.Query(`SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM "` + tableName + `"`)
@@ -249,50 +216,6 @@ func GetRandomPostsByTagFromAllTables(db *sql.DB, tagID string, count int, exclu
 	return posts, nil
 }
 
-func DeletePost(db *sql.DB, tableName string, postID string) error {
-	deleteSQL := `DELETE FROM "` + tableName + `" WHERE id = ?`
-	stmt, err := db.Prepare(deleteSQL)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	_, err = stmt.Exec(postID)
-	return err
-}
-
-func CountPostsInTimeRange(db *sql.DB, tableNames []string, startTime int64, endTime int64) (int, error) {
-	if len(tableNames) == 0 {
-		return 0, nil
-	}
-
-	var queryBuilder strings.Builder
-	var queryArgs []interface{}
-
-	queryBuilder.WriteString("SELECT SUM(count) FROM (")
-	for i, tableName := range tableNames {
-		queryBuilder.WriteString(`SELECT COUNT(*) as count FROM "`)
-		queryBuilder.WriteString(tableName)
-		queryBuilder.WriteString(`" WHERE timestamp >= ? AND timestamp < ?`)
-		queryArgs = append(queryArgs, startTime, endTime)
-		if i < len(tableNames)-1 {
-			queryBuilder.WriteString(" UNION ALL ")
-		}
-	}
-	queryBuilder.WriteString(")")
-
-	var totalCount sql.NullInt64
-	err := db.QueryRow(queryBuilder.String(), queryArgs...).Scan(&totalCount)
-	if err != nil {
-		return 0, err
-	}
-	if !totalCount.Valid {
-		return 0, nil
-	}
-
-	return int(totalCount.Int64), nil
-}
-
 // GetRandomPostsFromMultipleTables retrieves a specified number of random posts from a list of tables.
 func GetRandomPostsFromMultipleTables(db *sql.DB, tableNames []string, count int) ([]model.Post, error) {
 	if len(tableNames) == 0 {
@@ -381,33 +304,4 @@ func GetRandomPostsByTagFromMultipleTables(db *sql.DB, tableNames []string, tagI
 		posts = append(posts, post)
 	}
 	return posts, nil
-}
-
-// GetTotalPostCount retrieves the total number of posts from all tables.
-func GetTotalPostCount(db *sql.DB) (int, error) {
-	rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-
-	var totalCount int
-	for rows.Next() {
-		var tableName string
-		if err := rows.Scan(&tableName); err != nil {
-			return 0, err
-		}
-
-		var count int
-		err := db.QueryRow(`SELECT COUNT(*) FROM "` + tableName + `"`).Scan(&count)
-		if err != nil {
-			return 0, err
-		}
-		totalCount += count
-	}
-	if err = rows.Err(); err != nil {
-		return 0, err
-	}
-
-	return totalCount, nil
 }

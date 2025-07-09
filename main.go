@@ -4,7 +4,7 @@ import (
 	"discord-bot/bot"
 	"discord-bot/config"
 	"discord-bot/handlers"
-	"discord-bot/utils"
+	"discord-bot/utils/database"
 	"log"
 )
 
@@ -14,12 +14,19 @@ func main() {
 		log.Fatalf("Error loading config: %v", err)
 	}
 
-	db, err := utils.SetupDatabase()
+	db, err := database.InitDB("./data/guilds.db")
 	if err != nil {
 		log.Fatalf("Error setting up database: %v", err)
 	}
+	if err := database.CreateGuildTables(db); err != nil {
+		log.Fatalf("Error creating guild tables: %v", err)
+	}
 
-	if err := utils.LoadConfigFromDB(db, cfg); err != nil {
+	if _, err := database.InitUserDB(); err != nil {
+		log.Fatalf("Error setting up user database: %v", err)
+	}
+
+	if err := database.LoadConfigFromDB(db, cfg); err != nil {
 		log.Fatalf("Error loading config from database: %v", err)
 	}
 

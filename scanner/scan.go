@@ -3,6 +3,7 @@ package scanner
 import (
 	"discord-bot/model"
 	"discord-bot/utils"
+	"discord-bot/utils/database"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -66,7 +67,7 @@ func Scan(s *discordgo.Session, logChannelID string, scanMode string, targetGuil
 		default:
 		}
 
-		db, err := utils.InitDB(fmt.Sprintf("./data/%s.db", guildID))
+		db, err := database.InitDB(fmt.Sprintf("./data/%s.db", guildID))
 		if err != nil {
 			log.Printf("Error initializing database for guild %s: %v", guildID, err)
 			continue
@@ -96,7 +97,7 @@ func Scan(s *discordgo.Session, logChannelID string, scanMode string, targetGuil
 
 			existingThreads := make(map[string]bool)
 			if !isFullScan {
-				allPosts, err := utils.GetAllPosts(db, tableName)
+				allPosts, err := database.GetAllPosts(db, tableName)
 				if err != nil {
 					log.Printf("Error getting all posts for active scan from table %s: %v", tableName, err)
 				} else {
@@ -152,7 +153,7 @@ func Scan(s *discordgo.Session, logChannelID string, scanMode string, targetGuil
 						Timestamp:     firstMessage.Timestamp.Unix(),
 						CoverImageURL: coverImageURL,
 					}
-					if err := utils.InsertPost(db, post, tableName); err != nil {
+					if err := database.InsertPost(db, post, tableName); err != nil {
 						log.Printf("Error inserting post %s into database: %v", post.ID, err)
 					} else {
 						totalNewPostsFound++

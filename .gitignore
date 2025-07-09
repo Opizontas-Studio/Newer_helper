@@ -34,5 +34,6 @@ data/
 
 # Editor/IDE
 # .idea/
-# .vscode/
+.vscode/
+.claude/
 Newer_helper-release

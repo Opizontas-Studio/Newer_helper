@@ -4,6 +4,7 @@ import (
 	"discord-bot/bot"
 	"discord-bot/model"
 	"discord-bot/utils"
+	"discord-bot/utils/database"
 	"fmt"
 	"log"
 	"strconv"
@@ -131,7 +132,7 @@ func rollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, 
 
 // getPosts retrieves random posts from the database based on the pools, tag, and count.
 func getPosts(config *model.RollCardGuildConfig, poolNames []string, tagID string, count int, excludeTags []string) ([]model.Post, error) {
-	db, err := utils.InitDB(config.Database)
+	db, err := database.InitDB(config.Database)
 	if err != nil {
 		return nil, fmt.Errorf("error accessing card database")
 	}
@@ -140,9 +141,9 @@ func getPosts(config *model.RollCardGuildConfig, poolNames []string, tagID strin
 	// Handle the special case for "all-server-roll"
 	if len(poolNames) == 1 && poolNames[0] == "all-server-roll" {
 		if tagID != "" || len(excludeTags) > 0 {
-			return utils.GetRandomPostsByTagFromAllTables(db, tagID, count, excludeTags)
+			return database.GetRandomPostsByTagFromAllTables(db, tagID, count, excludeTags)
 		}
-		return utils.GetRandomPostsFromAllTables(db, count)
+		return database.GetRandomPostsFromAllTables(db, count)
 	}
 
 	var tableNames []string
@@ -167,9 +168,9 @@ func getPosts(config *model.RollCardGuildConfig, poolNames []string, tagID strin
 	}
 
 	if tagID != "" || len(excludeTags) > 0 {
-		return utils.GetRandomPostsByTagFromMultipleTables(db, tableNames, tagID, count, excludeTags)
+		return database.GetRandomPostsByTagFromMultipleTables(db, tableNames, tagID, count, excludeTags)
 	}
-	return utils.GetRandomPostsFromMultipleTables(db, tableNames, count)
+	return database.GetRandomPostsFromMultipleTables(db, tableNames, count)
 }
 
 // buildEmbeds creates a slice of MessageEmbeds from the given posts.

@@ -5,6 +5,7 @@ import (
 	"discord-bot/bot"
 	"discord-bot/model"
 	"discord-bot/utils"
+	"discord-bot/utils/database"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -47,7 +48,7 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 				if p.ID == id {
 					p.Name = input
 					db := b.DB
-					if err := utils.UpdatePreset(db, i.GuildID, p); err != nil {
+					if err := database.UpdatePreset(db, i.GuildID, p); err != nil {
 						responseContent = "无法更新预设 "
 						utils.LogError(s, b.Config.LogChannelID, "预设管理", "更新预设失败", err.Error())
 					} else {
@@ -136,7 +137,7 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 						p.Value = strings.Join(messages, "\n")
 						p.Type = "text" // Or parse from original message
 						db := b.DB
-						if err := utils.UpdatePreset(db, i.GuildID, p); err != nil {
+						if err := database.UpdatePreset(db, i.GuildID, p); err != nil {
 							responseContent = "无法更新预设 "
 							utils.LogError(s, b.Config.LogChannelID, "预设管理", "更新预设失败", err.Error())
 						} else {
@@ -227,7 +228,7 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 			b.Config.ServerConfigs[i.GuildID] = serverConfig
 
 			db := b.DB
-			if err := utils.AddPreset(db, i.GuildID, newPreset); err != nil {
+			if err := database.AddPreset(db, i.GuildID, newPreset); err != nil {
 				log.Printf("Error saving preset: %v", err)
 				errorContent := "Error processing preset: could not save to database."
 				s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{

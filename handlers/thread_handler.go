@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"discord-bot/model"
 	"discord-bot/utils"
+	"discord-bot/utils/database"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -157,7 +158,7 @@ func HandleThreadDelete(s *discordgo.Session, t *discordgo.ThreadDelete, cfg *mo
 	}
 	defer db.Close()
 
-	if err := utils.DeletePost(db, tableName, t.ID); err != nil {
+	if err := database.DeletePost(db, tableName, t.ID); err != nil {
 		utils.LogError(s, logChannelID, "ThreadDelete", "DeletePost", fmt.Sprintf("Error deleting post %s from table `%s` in db `%s`: %v", t.ID, tableName, dbPath, err))
 		return
 	}

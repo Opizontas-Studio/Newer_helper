@@ -2,7 +2,7 @@ package rollcard
 
 import (
 	"discord-bot/bot"
-	"discord-bot/utils"
+	"discord-bot/utils/database"
 	"fmt"
 	"log"
 	"strconv"
@@ -27,7 +27,7 @@ func HandleCustomRoll(s *discordgo.Session, i *discordgo.InteractionCreate, b *b
 
 	userID := i.Member.User.ID
 	guildID := i.GuildID
-	preferredPools, err := utils.GetUserPreferredPools(userID, guildID)
+	preferredPools, err := database.GetUserPreferredPools(userID, guildID)
 	if err != nil {
 		log.Printf("Error getting user preferred pools for %s in guild %s: %v", userID, guildID, err)
 		sendEphemeralResponse(s, i, "获取用户偏好时出错。")
@@ -72,7 +72,7 @@ func SendPoolSelectionMenu(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 
 	// Check for existing preferences to set as default
-	currentPrefs, err := utils.GetUserPreferredPools(i.Member.User.ID, i.GuildID)
+	currentPrefs, err := database.GetUserPreferredPools(i.Member.User.ID, i.GuildID)
 	if err != nil {
 		log.Printf("Error getting user preferred pools for default values in guild %s: %v", i.GuildID, err)
 		// Continue without defaults
@@ -128,7 +128,7 @@ func HandlePoolSelectionResponse(s *discordgo.Session, i *discordgo.InteractionC
 	guildID := i.GuildID
 	selectedPools := data.Values
 
-	if err := utils.SetUserPreferredPools(userID, guildID, selectedPools); err != nil {
+	if err := database.SetUserPreferredPools(userID, guildID, selectedPools); err != nil {
 		log.Printf("Error setting user preferred pools for %s in guild %s: %v", userID, guildID, err)
 		sendEphemeralResponse(s, i, "保存您的偏好时发生错误。")
 		return

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"discord-bot/model"
 	"discord-bot/utils"
+	"discord-bot/utils/database"
 	"fmt"
 	"strings"
 
@@ -42,7 +43,7 @@ func HandlePresetDeleteInteraction(s *discordgo.Session, i *discordgo.Interactio
 
 			if found {
 				db := appBot.GetDB()
-				if err := utils.DeletePreset(db, i.GuildID, id); err != nil {
+				if err := database.DeletePreset(db, i.GuildID, id); err != nil {
 					responseContent = "无法删除预设 "
 					utils.LogError(s, appBot.GetConfig().LogChannelID, "预设管理", "删除预设失败", err.Error())
 				} else {

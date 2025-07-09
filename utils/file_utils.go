@@ -74,3 +74,33 @@ func ListDBFiles() ([]string, error) {
 	}
 	return files, nil
 }
+
+const NewPostDir = "data/new_post"
+
+func CountPostsInJSON(guildID string, startTime, endTime int64) (int, error) {
+	filePath := filepath.Join(NewPostDir, guildID+".json")
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil // 文件不存在，视为0个帖子
+		}
+		return 0, err
+	}
+
+	if len(data) == 0 {
+		return 0, nil // 文件为空，视为0个帖子
+	}
+
+	var posts []model.Post
+	if err := json.Unmarshal(data, &posts); err != nil {
+		return 0, err
+	}
+
+	count := 0
+	for _, post := range posts {
+		if post.Timestamp >= startTime && post.Timestamp < endTime {
+			count++
+		}
+	}
+	return count, nil
+}
