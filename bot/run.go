@@ -22,12 +22,12 @@ func (b *Bot) Run() {
 
 	log.Println("Adding commands...")
 	b.RegisteredCommands = make([]*discordgo.ApplicationCommand, 0)
-	for _, serverCfg := range b.Config.ServerConfigs {
+	for _, serverCfg := range b.GetConfig().ServerConfigs {
 		b.RefreshCommands(serverCfg.GuildID)
 	}
 
 	// Perform initial scan
-	if !b.Config.DisableInitialScan {
+	if !b.GetConfig().DisableInitialScan {
 		scanMode := "full"
 		lockFile, err := os.ReadFile("data/scan_lock.json")
 		if err == nil {
@@ -46,7 +46,7 @@ func (b *Bot) Run() {
 				}
 			}
 		}
-		go scanner.Scan(b.Session, b.Config.LogChannelID, scanMode, "", b.done)
+		go scanner.Scan(b.Session, b.GetConfig().LogChannelID, scanMode, "", b.done)
 	} else {
 		log.Println("Initial scan is disabled by environment variable.")
 	}
@@ -54,7 +54,7 @@ func (b *Bot) Run() {
 	b.startScanScheduler()
 
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
-	utils.LogInfo(b.Session, b.Config.LogChannelID, "System", "Startup", "Bot has started successfully.")
+	utils.LogInfo(b.Session, b.GetConfig().LogChannelID, "System", "Startup", "Bot has started successfully.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
@@ -96,7 +96,7 @@ func (b *Bot) startScanScheduler() {
 			select {
 			case <-b.PostScanTicker.C:
 				log.Println("Running active post deletion scan...")
-				scanner.CheckDeletedPosts(b.Session, b.Config.LogChannelID, "active")
+				scanner.CheckDeletedPosts(b.Session, b.GetConfig().LogChannelID, "active")
 			case <-b.done:
 				return
 			}
@@ -109,7 +109,7 @@ func (b *Bot) startScanScheduler() {
 			select {
 			case <-b.DegradedPostScanTicker.C:
 				log.Println("Running degraded post deletion scan...")
-				scanner.CheckDeletedPosts(b.Session, b.Config.LogChannelID, "degraded")
+				scanner.CheckDeletedPosts(b.Session, b.GetConfig().LogChannelID, "degraded")
 			case <-b.done:
 				return
 			}
@@ -145,14 +145,14 @@ func (b *Bot) startScanScheduler() {
 			case <-time.After(next.Sub(now)):
 				// Run the tasks
 				log.Println("Starting scheduled active forum scan...")
-				scanner.Scan(b.Session, b.Config.LogChannelID, "active", "", b.done)
+				scanner.Scan(b.Session, b.GetConfig().LogChannelID, "active", "", b.done)
 
 				b.ActiveScanCount++
 				log.Printf("Active scan count: %d", b.ActiveScanCount)
 
 				if b.ActiveScanCount >= 21 { // 3 scans/day * 7 days
 					log.Println("Active scan count reached 21. Starting full scan...")
-					scanner.Scan(b.Session, b.Config.LogChannelID, "full", "", b.done)
+					scanner.Scan(b.Session, b.GetConfig().LogChannelID, "full", "", b.done)
 					b.ActiveScanCount = 0
 				}
 
@@ -169,7 +169,7 @@ func (b *Bot) startScanScheduler() {
 				}
 
 				log.Println("Cleaning up old posts...")
-				scanner.CleanOldPosts(b.Session, b.Config.LogChannelID, b.done)
+				scanner.CleanOldPosts(b.Session, b.GetConfig().LogChannelID, b.done)
 			case <-b.done:
 				return
 			}

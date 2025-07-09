@@ -52,7 +52,7 @@ func HandleEditPools(s *discordgo.Session, i *discordgo.InteractionCreate, b *bo
 // SendPoolSelectionMenu sends a message with a multi-select menu for the user to choose their preferred pools.
 func SendPoolSelectionMenu(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
 	guildID := i.GuildID
-	rollCardGuildConfig, ok := b.Config.RollCardConfigs[guildID]
+	rollCardGuildConfig, ok := b.GetConfig().RollCardConfigs[guildID]
 	if !ok {
 		sendEphemeralResponse(s, i, "此服务器未配置抽卡功能 ")
 		return

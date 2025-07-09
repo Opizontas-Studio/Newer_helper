@@ -25,6 +25,15 @@ type GuildConfig struct {
 }
 
 func Scan(s *discordgo.Session, logChannelID string, scanMode string, targetGuildID string, done <-chan struct{}) {
+	targetServer := "所有服务器"
+	if targetGuildID != "" {
+		targetServer = targetGuildID
+	}
+	startMessage := fmt.Sprintf("扫描已开始。模式: %s, 目标: %s", scanMode, targetServer)
+	if err := utils.LogInfo(s, logChannelID, "扫描模块", "扫描开始", startMessage); err != nil {
+		log.Printf("Failed to send scan start log: %v", err)
+	}
+
 	isFullScan := scanMode == "full"
 	scanType := "活跃帖"
 	if isFullScan {
@@ -214,10 +223,25 @@ func Scan(s *discordgo.Session, logChannelID string, scanMode string, targetGuil
 		}
 	}
 
+	var targetSummary string
+	if targetGuildID == "" {
+		targetSummary = "所有服务器"
+	} else {
+		serverNames := make([]string, 0, len(configsToScan))
+		for _, config := range configsToScan {
+			serverNames = append(serverNames, config.Name)
+		}
+		if len(serverNames) > 0 {
+			targetSummary = strings.Join(serverNames, ", ")
+		} else {
+			targetSummary = targetGuildID
+		}
+	}
+
 	summaryMessage := fmt.Sprintf(
 		"**%s** 模式扫描完成总结报告\n- **目标**: %s\n- **服务器数**: %d\n- **分区数**: %d\n- **新帖数**: %d\n- **总耗时**: %v",
 		scanType,
-		"所有服务器",
+		targetSummary,
 		len(configsToScan),
 		totalPartitionsScanned,
 		totalNewPostsFound,

@@ -23,10 +23,10 @@ func addHandlers(b *bot.Bot) {
 
 	b.Session.AddHandler(func(s *discordgo.Session, t *discordgo.ThreadCreate) {
 		// Pass the bot's config to the handler
-		HandleThreadCreate(s, t, b.Config)
+		HandleThreadCreate(s, t, b.GetConfig())
 	})
 
 	b.Session.AddHandler(func(s *discordgo.Session, t *discordgo.ThreadDelete) {
-		HandleThreadDelete(s, t, b.Config)
+		HandleThreadDelete(s, t, b.GetConfig())
 	})
 }

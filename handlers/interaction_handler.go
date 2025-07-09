@@ -32,9 +32,9 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 		}
 	case discordgo.InteractionApplicationCommandAutocomplete:
 		if i.ApplicationCommandData().Name == "rollcard" {
-			rollcard.HandleRollCardAutocomplete(s, i, b.Config)
+			rollcard.HandleRollCardAutocomplete(s, i, b.GetConfig())
 		} else {
-			handleAutocomplete(s, i, b.Config)
+			handleAutocomplete(s, i, b.GetConfig())
 		}
 	}
 }

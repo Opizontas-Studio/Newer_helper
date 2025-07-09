@@ -3,11 +3,14 @@ package bot
 import (
 	"database/sql"
 	"discord-bot/commands"
+	"discord-bot/config"
 	"discord-bot/handlers/leaderboard"
 	"discord-bot/model"
 	"discord-bot/utils"
+	"discord-bot/utils/database"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -16,7 +19,7 @@ import (
 type Bot struct {
 	Session                 *discordgo.Session
 	RegisteredCommands      []*discordgo.ApplicationCommand
-	Config                  *model.Config
+	config                  atomic.Value // *model.Config
 	CommandHandlers         map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)
 	PresetCooldowns         map[string]time.Time
 	CooldownMutex           sync.Mutex
@@ -33,7 +36,7 @@ type Bot struct {
 }
 
 func (b *Bot) GetConfig() *model.Config {
-	return b.Config
+	return b.config.Load().(*model.Config)
 }
 
 func (b *Bot) GetPresetCooldowns() map[string]time.Time {
@@ -59,14 +62,15 @@ func New(cfg *model.Config, db *sql.DB) (*Bot, error) {
 	}
 	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
 
-	return &Bot{
+	b := &Bot{
 		Session:         dg,
-		Config:          cfg,
 		PresetCooldowns: make(map[string]time.Time),
 		DB:              db,
 		ActiveScanCount: 0,
 		done:            make(chan struct{}),
-	}, nil
+	}
+	b.config.Store(cfg)
+	return b, nil
 }
 
 func (b *Bot) Close() {
@@ -126,7 +130,7 @@ func (b *Bot) UpdateLeaderboard() {
 }
 
 func (b *Bot) RefreshCommands(guildID string) {
-	serverCfg, ok := b.Config.ServerConfigs[guildID]
+	serverCfg, ok := b.GetConfig().ServerConfigs[guildID]
 	if !ok {
 		log.Printf("Could not find server config for guild: %s", guildID)
 		return
@@ -152,4 +156,29 @@ func (b *Bot) CleanupCooldowns() {
 			delete(b.PresetCooldowns, id)
 		}
 	}
+}
+
+func (b *Bot) ReloadConfig() error {
+	log.Println("Reloading configuration...")
+	newCfg, err := config.Load()
+	if err != nil {
+		log.Printf("Error reloading config: %v", err)
+		return err
+	}
+
+	// Load server-specific configs from DB
+	if err := database.LoadConfigFromDB(b.DB, newCfg); err != nil {
+		log.Printf("Error loading config from database during reload: %v", err)
+		return err
+	}
+
+	b.config.Store(newCfg)
+	log.Println("Configuration reloaded successfully.")
+
+	log.Println("Refreshing commands for all guilds...")
+	for _, serverCfg := range newCfg.ServerConfigs {
+		go b.RefreshCommands(serverCfg.GuildID)
+	}
+
+	return nil
 }

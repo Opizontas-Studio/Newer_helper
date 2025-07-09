@@ -174,6 +174,10 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 			Name:        "system-info",
 			Description: "显示机器人和系统的状态信息",
 		},
+		{
+			Name:        "reload-config",
+			Description: "重新加载机器人配置文件 (仅限开发者)",
+		},
 	}
 }
 

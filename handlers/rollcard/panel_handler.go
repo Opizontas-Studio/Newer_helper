@@ -26,7 +26,7 @@ func HandleSetupRollPanel(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	}
 
 	guildID := i.GuildID
-	if _, ok := b.Config.RollCardConfigs[guildID]; !ok {
+	if _, ok := b.GetConfig().RollCardConfigs[guildID]; !ok {
 		sendEphemeralResponse(s, i, "This server is not configured for rollcard.")
 		return
 	}

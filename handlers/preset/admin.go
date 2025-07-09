@@ -17,7 +17,7 @@ import (
 )
 
 func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
-	serverConfig, ok := b.Config.ServerConfigs[i.GuildID]
+	serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
 	if !ok {
 		log.Printf("Could not find server config for guild: %s", i.GuildID)
 		return
@@ -50,11 +50,11 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 					db := b.DB
 					if err := database.UpdatePreset(db, i.GuildID, p); err != nil {
 						responseContent = "无法更新预设 "
-						utils.LogError(s, b.Config.LogChannelID, "预设管理", "更新预设失败", err.Error())
+						utils.LogError(s, b.GetConfig().LogChannelID, "预设管理", "更新预设失败", err.Error())
 					} else {
 						responseContent = "预设已重命名为 '" + input + "' "
 						logMessage := fmt.Sprintf("ID: `%s`\n新名称: `%s`\n操作者: `%s`", id, input, i.Member.User.Username)
-						utils.LogInfo(s, b.Config.LogChannelID, "预设管理", "重命名预设", logMessage)
+						utils.LogInfo(s, b.GetConfig().LogChannelID, "预设管理", "重命名预设", logMessage)
 						go b.RefreshCommands(i.GuildID)
 					}
 					found = true
@@ -139,11 +139,11 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 						db := b.DB
 						if err := database.UpdatePreset(db, i.GuildID, p); err != nil {
 							responseContent = "无法更新预设 "
-							utils.LogError(s, b.Config.LogChannelID, "预设管理", "更新预设失败", err.Error())
+							utils.LogError(s, b.GetConfig().LogChannelID, "预设管理", "更新预设失败", err.Error())
 						} else {
 							responseContent = "预设已被覆盖 "
 							logMessage := fmt.Sprintf("ID: `%s`\n操作者: `%s`", id, i.Member.User.Username)
-							utils.LogInfo(s, b.Config.LogChannelID, "预设管理", "覆盖预设", logMessage)
+							utils.LogInfo(s, b.GetConfig().LogChannelID, "预设管理", "覆盖预设", logMessage)
 							go b.RefreshCommands(i.GuildID)
 						}
 						found = true
@@ -181,7 +181,7 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 	}
 
 	go func() {
-		serverConfig, ok := b.Config.ServerConfigs[i.GuildID]
+		serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
 		if !ok {
 			log.Printf("Could not find server config for guild: %s", i.GuildID)
 			return
@@ -225,7 +225,7 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 				Type:  "text",
 			}
 			serverConfig.PresetMessages = append(serverConfig.PresetMessages, newPreset)
-			b.Config.ServerConfigs[i.GuildID] = serverConfig
+			b.GetConfig().ServerConfigs[i.GuildID] = serverConfig
 
 			db := b.DB
 			if err := database.AddPreset(db, i.GuildID, newPreset); err != nil {
@@ -240,8 +240,8 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 			// Log the successful preset update
 			channelLink := fmt.Sprintf("https://discord.com/channels/%s/%s", i.GuildID, i.ChannelID)
 			logInfo := fmt.Sprintf("用户 <@%s> 创建了新的预设 `%s`\n[在频道中查看](%s)", i.Member.User.Username, presetName, channelLink)
-			if b.Config.LogChannelID != "" {
-				err = utils.LogInfo(s, b.Config.LogChannelID, "预设", "创建/更新", logInfo)
+			if b.GetConfig().LogChannelID != "" {
+				err = utils.LogInfo(s, b.GetConfig().LogChannelID, "预设", "创建/更新", logInfo)
 				if err != nil {
 					log.Printf("Failed to send log: %v", err)
 				}

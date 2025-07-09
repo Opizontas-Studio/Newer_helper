@@ -72,7 +72,7 @@ func SystemInfoHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		Fields: []*discordgo.MessageEmbedField{
 			{Name: "💻 OS 版本", Value: fmt.Sprintf("%s %s", hostInfo.Platform, hostInfo.PlatformVersion), Inline: true},
 			{Name: "🔧 内核版本", Value: hostInfo.KernelVersion, Inline: true},
-			{Name: "🐹 Go 版本", Value: runtime.Version(), Inline: true},
+			{Name: "<:skilliconsgolang:1392477847268098191> Go 版本", Value: runtime.Version(), Inline: true},
 			{Name: "🔼 CPU 数量", Value: fmt.Sprintf("%d", cpuCount), Inline: true},
 			{Name: "🔥 CPU 使用率", Value: fmt.Sprintf("%.1f%%", cpuPercent[0]), Inline: true},
 			{Name: "🧠 系统内存", Value: fmt.Sprintf("%.1f%% (%d MB / %d MB)", vm.UsedPercent, vm.Used/1024/1024, vm.Total/1024/1024), Inline: true},

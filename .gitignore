@@ -24,9 +24,11 @@ profile.cov
 # Go workspace file
 go.work
 go.work.sum
+todo.md
 
 # env file
 .env
+
 # data
 data/
 *.json

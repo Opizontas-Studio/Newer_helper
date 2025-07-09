@@ -67,11 +67,11 @@ func HandleRollAgain(s *discordgo.Session, i *discordgo.InteractionCreate, b *bo
 
 // rollCard is the core logic for fetching posts and sending the response.
 func rollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, poolNames []string, tagID string, count int, excludeTags []string) {
-	// userID := i.Member.User.ID
+	userID := i.Member.User.ID
 	guildID := i.GuildID
-	// log.Printf("Executing rollCard for user %s in guild %s. Pools: %v, Tag: %s, ExcludeTags: %v, Count: %d", userID, guildID, poolNames, tagID, excludeTags, count)
+	log.Printf("Executing rollCard for user %s in guild %s. Pools: %v, Tag: %s, ExcludeTags: %v, Count: %d", userID, guildID, poolNames, tagID, excludeTags, count)
 
-	rollCardGuildConfig, ok := b.Config.RollCardConfigs[guildID]
+	rollCardGuildConfig, ok := b.GetConfig().RollCardConfigs[guildID]
 	if !ok {
 		log.Printf("Could not find roll card config for guild: %s", guildID)
 		sendEphemeralResponse(s, i, "This server is not configured for rollcard.")
@@ -98,16 +98,6 @@ func rollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, 
 	embeds := buildEmbeds(posts, tagMapping, i.Member.User.Username)
 
 	var content string
-	// Determine the content string based on the number of pools
-	if len(poolNames) == 1 && poolNames[0] == "all-server-roll" {
-		content = "这是您从 '全区卡池' 中抽取的卡片！"
-	} else if len(poolNames) > 1 {
-		content = fmt.Sprintf("这是您从 '%s' 等卡池中抽取的卡片！", poolNames[0])
-	} else if len(poolNames) == 1 {
-		content = fmt.Sprintf("这是您从 '%s' 卡池中抽取的卡片！", poolNames[0])
-	} else {
-		content = "这是您抽取的卡片！"
-	}
 
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -161,7 +151,7 @@ func getPosts(config *model.RollCardGuildConfig, poolNames []string, tagID strin
 		tableNames = append(tableNames, tableName)
 	}
 
-	log.Printf("Resolved pool names %v to table names %v for guild %s", poolNames, tableNames, config.GuildID)
+	// log.Printf("Resolved pool names %v to table names %v for guild %s", poolNames, tableNames, config.GuildID)
 
 	if len(tableNames) == 0 {
 		return nil, fmt.Errorf("no valid pools selected")

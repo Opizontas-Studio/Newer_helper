@@ -16,7 +16,7 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 	cooldowns := b.GetPresetCooldowns()
 	mutex := b.GetCooldownMutex()
 
-	serverConfig, ok := b.Config.ServerConfigs[i.GuildID]
+	serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
 	if !ok {
 		log.Printf("Could not find server config for guild: %s", i.GuildID)
 		return
@@ -89,10 +89,10 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 	message, err := s.ChannelMessageSendComplex(i.ChannelID, messageSend)
 	if err == nil {
 		// Log the successful preset usage
-		if b.Config.LogChannelID != "" {
+		if b.GetConfig().LogChannelID != "" {
 			messageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, message.ID)
 			logInfo := fmt.Sprintf("用户: `%s`\n预设名: `%s`\n[点击查看消息](%s)", i.Member.User.Username, selectedPreset.Name, messageLink)
-			err = utils.LogInfo(s, b.Config.LogChannelID, "预设", "使用", logInfo)
+			err = utils.LogInfo(s, b.GetConfig().LogChannelID, "预设", "使用", logInfo)
 			if err != nil {
 				log.Printf("Failed to send log: %v", err)
 			}
