@@ -44,11 +44,11 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 			responseContent = "重命名操作需要 'input' 参数 "
 		} else {
 			found := false
-			for _, p := range serverConfig.PresetMessages {
+			for idx, p := range serverConfig.PresetMessages {
 				if p.ID == id {
-					p.Name = input
+					serverConfig.PresetMessages[idx].Name = input
 					db := b.DB
-					if err := database.UpdatePreset(db, i.GuildID, p); err != nil {
+					if err := database.UpdatePreset(db, i.GuildID, serverConfig.PresetMessages[idx]); err != nil {
 						responseContent = "无法更新预设 "
 						utils.LogError(s, b.GetConfig().LogChannelID, "预设管理", "更新预设失败", err.Error())
 					} else {
@@ -132,12 +132,12 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 				responseContent = "在输入中找不到有效的消息链接 "
 			} else {
 				found := false
-				for _, p := range serverConfig.PresetMessages {
+				for idx, p := range serverConfig.PresetMessages {
 					if p.ID == id {
-						p.Value = strings.Join(messages, "\n")
-						p.Type = "text" // Or parse from original message
+						serverConfig.PresetMessages[idx].Value = strings.Join(messages, "\n")
+						serverConfig.PresetMessages[idx].Type = "text" // Or parse from original message
 						db := b.DB
-						if err := database.UpdatePreset(db, i.GuildID, p); err != nil {
+						if err := database.UpdatePreset(db, i.GuildID, serverConfig.PresetMessages[idx]); err != nil {
 							responseContent = "无法更新预设 "
 							utils.LogError(s, b.GetConfig().LogChannelID, "预设管理", "更新预设失败", err.Error())
 						} else {
