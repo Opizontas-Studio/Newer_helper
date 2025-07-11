@@ -84,7 +84,6 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 					Type:         discordgo.ApplicationCommandOptionString,
 					Name:         "pool",
 					Description:  "要抽卡的卡池",
-					Required:     true,
 					Autocomplete: true,
 				},
 				{
@@ -178,7 +177,45 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 			Name:        "reload-config",
 			Description: "重新加载机器人配置文件 (仅限开发者)",
 		},
+		{
+			Name:        "new-post-push_admin",
+			Description: "管理新帖子推送的配置",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "action",
+					Description: "要执行的操作",
+					Required:    true,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{Name: "添加推送频道 (add_channel)", Value: "add_channel"},
+						{Name: "移除推送频道 (remove_channel)", Value: "remove_channel"},
+						{Name: "添加白名单消息 (add_whitelist)", Value: "add_whitelist"},
+						{Name: "移除白名单消息 (remove_whitelist)", Value: "remove_whitelist"},
+						{Name: "查看当前配置 (list_config)", Value: "list_config"},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "input",
+					Description: "输入值 (频道ID或消息ID)",
+					Required:    false,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionChannel,
+					Name:        "channel",
+					Description: "目标频道 (用于白名单)",
+					Required:    false,
+					ChannelTypes: []discordgo.ChannelType{
+						discordgo.ChannelTypeGuildText,
+					},
+				},
+			},
+		},
 	}
 }
 
 var minCount = 1.0
+
+func int64Ptr(i int64) *int64 {
+	return &i
+}

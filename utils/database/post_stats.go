@@ -65,3 +65,37 @@ func GetTotalPostCount(db *sql.DB) (int, error) {
 
 	return totalCount, nil
 }
+
+// CountPostsByAuthorID counts all posts made by a specific author across all tables.
+func CountPostsByAuthorID(db *sql.DB, authorID string) (int, error) {
+	rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var totalCount int
+	for rows.Next() {
+		var tableName string
+		if err := rows.Scan(&tableName); err != nil {
+			return 0, err
+		}
+
+		var count int
+		err := db.QueryRow(`SELECT COUNT(*) FROM "`+tableName+`" WHERE author_id = ?`, authorID).Scan(&count)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				continue
+			}
+			// Log other potential errors if necessary, but for now, we'll continue
+			// to ensure one problematic table doesn't stop the whole count.
+			continue
+		}
+		totalCount += count
+	}
+	if err = rows.Err(); err != nil {
+		return 0, err
+	}
+
+	return totalCount, nil
+}

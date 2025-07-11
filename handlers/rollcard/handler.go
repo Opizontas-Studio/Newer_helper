@@ -22,7 +22,26 @@ func HandleRollCardInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 		optionMap[opt.Name] = opt
 	}
 
-	poolName := optionMap["pool"].StringValue()
+	var poolNames []string
+	if opt, ok := optionMap["pool"]; ok {
+		poolNames = []string{opt.StringValue()}
+	} else {
+		// If no pool is specified, try to get user's preferred pools
+		userID := i.Member.User.ID
+		guildID := i.GuildID
+		preferredPools, err := database.GetUserPreferredPools(userID, guildID)
+		if err != nil {
+			log.Printf("Error getting user preferred pools for user %s in guild %s: %v", userID, guildID, err)
+			sendEphemeralResponse(s, i, "获取您的偏好卡池时出错 ")
+			return
+		}
+		if len(preferredPools) == 0 {
+			sendEphemeralResponse(s, i, "您没有指定卡池，也没有设置默认卡池。请使用 `/set-default-roll` 设置或在抽卡时指定一个卡池。")
+			return
+		}
+		poolNames = preferredPools
+	}
+
 	count := 1 // Default count
 	if opt, ok := optionMap["count"]; ok {
 		count = int(opt.IntValue())
@@ -57,7 +76,7 @@ func HandleRollCardInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 		}
 	}
 
-	rollCard(s, i, b, []string{poolName}, tagID, count, excludeTags)
+	rollCard(s, i, b, poolNames, tagID, count, excludeTags)
 }
 
 // HandleRollAgain handles the "roll again" button interaction.

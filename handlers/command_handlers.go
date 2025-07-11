@@ -143,5 +143,8 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 		"reload-config": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			admin.HandleReloadConfig(s, i, b)
 		},
+		"new-post-push_admin": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			admin.HandleNewPostPushAdminCommand(s, i, b)
+		},
 	}
 }

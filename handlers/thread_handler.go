@@ -110,9 +110,11 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 		utils.LogError(s, logChannelID, "NewPost", "WriteFile", fmt.Sprintf("Error writing posts to file %s: %v", filePath, err))
 	} else {
 		utils.LogInfo(s, logChannelID, "NewPost", "Save", fmt.Sprintf("Successfully saved new post <#%s> to channel <#%s> in `%s`", post.ID, post.ChannelID, filePath))
+		if rollCardGuildConfig, ok := cfg.RollCardConfigs[guildID]; ok {
+			go utils.PushNewCard(s, guildID, post, &rollCardGuildConfig)
+		}
 	}
 }
-
 func HandleThreadDelete(s *discordgo.Session, t *discordgo.ThreadDelete, cfg *model.Config) {
 	logChannelID := cfg.LogChannelID
 
