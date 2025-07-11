@@ -90,26 +90,13 @@ func (b *Bot) startScanScheduler() {
 	}()
 
 	// Schedule post deletion checks
-	b.PostScanTicker = time.NewTicker(10 * time.Minute)
+	b.PostScanTicker = time.NewTicker(30 * time.Minute)
 	go func() {
 		for {
 			select {
 			case <-b.PostScanTicker.C:
-				log.Println("Running active post deletion scan...")
-				scanner.CheckDeletedPosts(b.Session, b.GetConfig().LogChannelID, "active")
-			case <-b.done:
-				return
-			}
-		}
-	}()
-
-	b.DegradedPostScanTicker = time.NewTicker(3 * time.Hour)
-	go func() {
-		for {
-			select {
-			case <-b.DegradedPostScanTicker.C:
-				log.Println("Running degraded post deletion scan...")
-				scanner.CheckDeletedPosts(b.Session, b.GetConfig().LogChannelID, "degraded")
+				log.Println("Running post deletion scan...")
+				scanner.CheckDeletedPosts(b.Session, b.GetConfig().LogChannelID)
 			case <-b.done:
 				return
 			}

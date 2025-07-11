@@ -33,10 +33,20 @@ type Config struct {
 			TableName string `json:"table_name"`
 		} `json:"data"`
 	}
+	ThreadConfig    ThreadConfig
 	DatabaseMapping map[string]struct {
 		Data map[string]struct {
 			ChannelID string `json:"channel_id"`
 			TableName string `json:"table_name"`
 		} `json:"data"`
 	}
+}
+
+// ThreadConfig holds the configuration for thread database paths.
+type ThreadConfig map[string]ThreadGuildConfig
+
+// ThreadGuildConfig holds the database path and table name for a single guild.
+type ThreadGuildConfig struct {
+	Database  string `json:"database"`
+	TableName string `json:"tableName"`
 }

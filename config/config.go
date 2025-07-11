@@ -48,6 +48,11 @@ func Load() (*model.Config, error) {
 		return nil, err
 	}
 
+	// Load thread config
+	if err := loadJSON("data/thread_config.json", &cfg.ThreadConfig); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
 }
 

@@ -45,7 +45,8 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 
 	// 如果不存在，创建一个新的
-	embeds := buildLeaderboardEmbeds(i.GuildID)
+	config = b.GetConfig()
+	embeds := buildLeaderboardEmbeds(i.GuildID, config)
 	if len(embeds) == 0 {
 		utils.SendErrorResponse(s, i, "创建排行榜时出错, 无法生成 embeds ")
 		return
@@ -85,7 +86,8 @@ func UpdateLeaderboard(b model.Bot, guildID string) {
 		return
 	}
 
-	embeds := buildLeaderboardEmbeds(guildID)
+	config := b.GetConfig()
+	embeds := buildLeaderboardEmbeds(guildID, config)
 	if len(embeds) == 0 {
 		log.Printf("Failed to build leaderboard embeds for guild %s", guildID)
 		return
@@ -101,8 +103,16 @@ func UpdateLeaderboard(b model.Bot, guildID string) {
 	}
 }
 
-func buildLeaderboardEmbeds(guildID string) []*discordgo.MessageEmbed {
-	// 1. 从独立的映射文件中加载数据库映射
+func buildLeaderboardEmbeds(guildID string, cfg *model.Config) []*discordgo.MessageEmbed {
+	// 1. 从配置中获取数据库路径
+	threadGuildConfig, ok := cfg.ThreadConfig[guildID]
+	if !ok || threadGuildConfig.Database == "" {
+		log.Printf("No database path configured for guild %s", guildID)
+		return []*discordgo.MessageEmbed{{Title: "错误", Description: "当前服务器未配置数据库路径 ", Color: 0xff0000}}
+	}
+	dbPath := threadGuildConfig.Database
+
+	// 2. 从独立的映射文件中加载数据库表映射
 	dbMapping, err := utils.LoadDatabaseMapping()
 	if err != nil {
 		log.Printf("Error loading database mapping: %v", err)
@@ -115,17 +125,14 @@ func buildLeaderboardEmbeds(guildID string) []*discordgo.MessageEmbed {
 		return []*discordgo.MessageEmbed{{Title: "错误", Description: "当前服务器未配置数据库映射 ", Color: 0xff0000}}
 	}
 
-	// 2. 初始化特定于服务器的数据库连接
-	db, err := database.InitDB(guildMapping.Database)
-	if err != nil {
-		log.Printf("Error initializing database for guild %s at %s: %v", guildID, guildMapping.Database, err)
-		return []*discordgo.MessageEmbed{{Title: "错误", Description: "无法连接到服务器的数据库 ", Color: 0xff0000}}
-	}
-	defer db.Close()
-
 	var tableNames []string
-	for tableName := range guildMapping.DataBaseTableNameMapping {
-		tableNames = append(tableNames, tableName)
+	if len(guildMapping.DataBaseTableNameMapping) > 0 {
+		for tableName := range guildMapping.DataBaseTableNameMapping {
+			tableNames = append(tableNames, tableName)
+		}
+	} else if threadGuildConfig.TableName != "" {
+		// Fallback to using the table name from thread config if mapping is empty
+		tableNames = append(tableNames, threadGuildConfig.TableName)
 	}
 
 	if len(tableNames) == 0 {
@@ -137,7 +144,15 @@ func buildLeaderboardEmbeds(guildID string) []*discordgo.MessageEmbed {
 		}}
 	}
 
-	// 3. 获取统计数据
+	// 3. 初始化特定于服务器的数据库连接
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		log.Printf("Error initializing database for guild %s at %s: %v", guildID, dbPath, err)
+		return []*discordgo.MessageEmbed{{Title: "错误", Description: "无法连接到服务器的数据库 ", Color: 0xff0000}}
+	}
+	defer db.Close()
+
+	// 4. 获取统计数据
 	now := time.Now()
 	// 以凌晨 4:00 为分界线
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 4, 0, 0, 0, now.Location())
@@ -149,19 +164,17 @@ func buildLeaderboardEmbeds(guildID string) []*discordgo.MessageEmbed {
 	threeDaysAgo := todayStart.AddDate(0, 0, -3)
 	sevenDaysAgo := todayStart.AddDate(0, 0, -7)
 
-	// 今日数据从 JSON 读取
-	todayCount, err := utils.CountPostsInJSON(guildID, todayStart.Unix(), now.Unix())
+	// 今日数据
+	todayCount, err := database.CountPostsInTimeRange(db, tableNames, todayStart.Unix(), now.Unix())
 	if err != nil {
-		log.Printf("Error counting posts for today from JSON: %v", err)
+		log.Printf("Error counting posts for today from DB: %v", err)
 	}
-
-	// 昨日数据从 JSON 读取
-	yesterdayCount, err := utils.CountPostsInJSON(guildID, yesterdayStart.Unix(), todayStart.Unix())
+	// 昨日数据
+	yesterdayCount, err := database.CountPostsInTimeRange(db, tableNames, yesterdayStart.Unix(), todayStart.Unix())
 	if err != nil {
-		log.Printf("Error counting posts for yesterday from JSON: %v", err)
+		log.Printf("Error counting posts for yesterday from DB: %v", err)
 	}
-
-	// 3天及以上数据从数据库读取
+	// 近3日数据
 	last3DaysCount, err := database.CountPostsInTimeRange(db, tableNames, threeDaysAgo.Unix(), now.Unix())
 	if err != nil {
 		log.Printf("Error counting posts for last 3 days from DB: %v", err)
@@ -171,7 +184,7 @@ func buildLeaderboardEmbeds(guildID string) []*discordgo.MessageEmbed {
 		log.Printf("Error counting posts for last 7 days from DB: %v", err)
 	}
 
-	// 4. 加载tag mapping
+	// 5. 加载tag mapping
 	tagMappingPath := fmt.Sprintf("data/tag_mapping/%s_config.json", guildID)
 	tagMappingData, err := os.ReadFile(tagMappingPath)
 	var tagMapping map[string]map[string]string
@@ -183,7 +196,7 @@ func buildLeaderboardEmbeds(guildID string) []*discordgo.MessageEmbed {
 		log.Printf("Could not read tag mapping file for guild %s: %v", guildID, err)
 	}
 
-	// 5. 构建Embeds
+	// 6. 构建Embeds
 	// Embed 1: 排行榜统计
 	leaderboardEmbed := &discordgo.MessageEmbed{
 		Title:       "🏆 新卡速递排行榜",

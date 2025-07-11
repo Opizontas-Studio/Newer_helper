@@ -5,10 +5,10 @@ import (
 	"discord-bot/model"
 	"discord-bot/utils"
 	"discord-bot/utils/database"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -74,42 +74,10 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 	}
 
 	guildID := t.GuildID
-	filePath := fmt.Sprintf("data/new_post/%s.json", guildID)
-	var posts []model.Post
-
-	if err := os.MkdirAll("data/new_post", 0755); err != nil {
-		utils.LogError(s, logChannelID, "NewPost", "MkdirAll", fmt.Sprintf("Error creating directory: %v", err))
-		return
-	}
-
-	fileData, err := os.ReadFile(filePath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			utils.LogError(s, logChannelID, "NewPost", "ReadFile", fmt.Sprintf("Error reading post file %s: %v", filePath, err))
-			return
-		}
+	if err := database.SaveNewPost(cfg, post, guildID, t.ParentID); err != nil {
+		utils.LogError(s, logChannelID, "NewPost", "SavePost", fmt.Sprintf("Error saving post: %v", err))
 	} else {
-		if err := json.Unmarshal(fileData, &posts); err != nil {
-			utils.LogError(s, logChannelID, "NewPost", "Unmarshal", fmt.Sprintf("Error unmarshalling posts from %s: %v. Initializing new slice.", filePath, err))
-		}
-	}
-
-	posts = append(posts, post)
-	const maxPosts = 128
-	if len(posts) > maxPosts {
-		posts = posts[len(posts)-maxPosts:]
-	}
-
-	jsonData, err := json.MarshalIndent(posts, "", "  ")
-	if err != nil {
-		utils.LogError(s, logChannelID, "NewPost", "Marshal", fmt.Sprintf("Error marshalling posts to JSON: %v", err))
-		return
-	}
-
-	if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
-		utils.LogError(s, logChannelID, "NewPost", "WriteFile", fmt.Sprintf("Error writing posts to file %s: %v", filePath, err))
-	} else {
-		utils.LogInfo(s, logChannelID, "NewPost", "Save", fmt.Sprintf("Successfully saved new post <#%s> to channel <#%s> in `%s`", post.ID, post.ChannelID, filePath))
+		utils.LogInfo(s, logChannelID, "NewPost", "Save", fmt.Sprintf("Successfully saved new post <#%s> to channel <#%s>", post.ID, post.ChannelID))
 		if rollCardGuildConfig, ok := cfg.RollCardConfigs[guildID]; ok {
 			go utils.PushNewCard(s, guildID, post, &rollCardGuildConfig)
 		}
@@ -117,39 +85,30 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 }
 func HandleThreadDelete(s *discordgo.Session, t *discordgo.ThreadDelete, cfg *model.Config) {
 	logChannelID := cfg.LogChannelID
-
 	guildID := t.GuildID
-	channelID := t.ParentID
 
-	taskGuildConfig, taskOk := cfg.TaskConfig[guildID]
-	rollCardGuildConfig, rollCardOk := cfg.RollCardConfigs[guildID]
-
-	if !taskOk || !rollCardOk {
+	threadGuildConfig, ok := cfg.ThreadConfig[guildID]
+	if !ok {
+		utils.LogWarn(s, logChannelID, "ThreadDelete", "Config", fmt.Sprintf("Thread config not found for guild %s", guildID))
 		return
 	}
 
-	var areaName string
-	for name, data := range taskGuildConfig.Data {
-		if data.ChannelID == channelID {
-			areaName = name
-			break
-		}
-	}
-
-	if areaName == "" {
-		return
-	}
-
-	if len(channelID) < 4 {
-		return
-	}
-	channelIDSuffix := channelID[len(channelID)-4:]
-	tableName := fmt.Sprintf("%s_%s", areaName, channelIDSuffix)
-
-	dbPath := rollCardGuildConfig.Database
-
+	dbPath := threadGuildConfig.Database
 	if dbPath == "" {
-		utils.LogWarn(s, logChannelID, "ThreadDelete", "DBPath", fmt.Sprintf("DB path not found for guild %s", guildID))
+		utils.LogWarn(s, logChannelID, "ThreadDelete", "DBPath", fmt.Sprintf("Thread database path is empty for guild %s", guildID))
+		return
+	}
+
+	tableName := threadGuildConfig.TableName
+	if tableName == "" {
+		utils.LogWarn(s, logChannelID, "ThreadDelete", "TableName", fmt.Sprintf("Table name is empty for guild %s", guildID))
+		return
+	}
+
+	// Ensure the directory exists before opening the database
+	dir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		utils.LogError(s, logChannelID, "ThreadDelete", "Mkdir", fmt.Sprintf("Error creating directory %s: %v", dir, err))
 		return
 	}
 

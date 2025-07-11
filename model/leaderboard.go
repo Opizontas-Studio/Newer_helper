@@ -10,5 +10,5 @@ type LeaderboardState struct {
 type GuildMapping struct {
 	GuildsID                 string            `json:"guilds_id"`
 	Database                 string            `json:"database"`
-	DataBaseTableNameMapping map[string]string `json:"dataBaseTableNameMapping"`
+	DataBaseTableNameMapping map[string]string `json:"database_table_name_mapping"`
 }

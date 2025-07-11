@@ -305,3 +305,36 @@ func GetRandomPostsByTagFromMultipleTables(db *sql.DB, tableNames []string, tagI
 	}
 	return posts, nil
 }
+
+func GetLatestPosts(db *sql.DB, tableNames []string, count int) ([]model.Post, error) {
+	if len(tableNames) == 0 {
+		return []model.Post{}, nil
+	}
+
+	var queryBuilder strings.Builder
+	for i, tableName := range tableNames {
+		queryBuilder.WriteString(`SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM "`)
+		queryBuilder.WriteString(tableName)
+		queryBuilder.WriteString(`"`)
+		if i < len(tableNames)-1 {
+			queryBuilder.WriteString(" UNION ALL ")
+		}
+	}
+
+	finalQuery := `SELECT * FROM (` + queryBuilder.String() + `) ORDER BY timestamp DESC LIMIT ?`
+	rows, err := db.Query(finalQuery, count)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []model.Post
+	for rows.Next() {
+		var post model.Post
+		if err := rows.Scan(&post.ID, &post.Title, &post.Author, &post.AuthorID, &post.Content, &post.Tags, &post.MessageCount, &post.Timestamp, &post.CoverImageURL); err != nil {
+			return nil, err
+		}
+		posts = append(posts, post)
+	}
+	return posts, nil
+}

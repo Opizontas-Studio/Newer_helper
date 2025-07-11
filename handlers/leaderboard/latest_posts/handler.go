@@ -1,9 +1,12 @@
 package latest_posts
 
 import (
-	"discord-bot/model"
+	"discord-bot/config"
+	"discord-bot/utils"
+	"discord-bot/utils/database"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,7 +16,6 @@ import (
 )
 
 const (
-	newPostDir    = "data/new_post"
 	tagMappingDir = "data/tag_mapping"
 )
 
@@ -37,23 +39,56 @@ func LoadTagMapping(guildID string) (map[string]map[string]string, error) {
 
 // CreateLatestPostsEmbed creates a new embed for the latest posts
 func CreateLatestPostsEmbed(guildID string) (*discordgo.MessageEmbed, error) {
-	filePath := filepath.Join(newPostDir, fmt.Sprintf("%s.json", guildID))
-
-	data, err := os.ReadFile(filePath)
+	cfg, err := config.Load()
 	if err != nil {
-		// If the file doesn't exist, it's not an error, just means no posts.
-		if _, ok := err.(*os.PathError); ok {
-			return nil, nil
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	threadGuildConfig, ok := cfg.ThreadConfig[guildID]
+	if !ok || threadGuildConfig.Database == "" {
+		log.Printf("No database path configured for guild %s", guildID)
+		return nil, nil
+	}
+	dbPath := threadGuildConfig.Database
+
+	dbMapping, err := utils.LoadDatabaseMapping()
+	if err != nil {
+		log.Printf("Error loading database mapping: %v", err)
+		return nil, nil
+	}
+
+	guildMapping, ok := dbMapping[guildID]
+	if !ok {
+		log.Printf("No database mapping found for guild %s", guildID)
+		return nil, nil
+	}
+
+	var tableNames []string
+	if len(guildMapping.DataBaseTableNameMapping) > 0 {
+		for tableName := range guildMapping.DataBaseTableNameMapping {
+			tableNames = append(tableNames, tableName)
 		}
-		return nil, fmt.Errorf("failed to read file: %w", err)
+	} else if threadGuildConfig.TableName != "" {
+		tableNames = append(tableNames, threadGuildConfig.TableName)
 	}
 
-	var posts []model.Post
-	if err := json.Unmarshal(data, &posts); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal posts: %w", err)
+	if len(tableNames) == 0 {
+		log.Printf("No tables configured for leaderboard in guild %s", guildID)
+		return nil, nil
 	}
 
-	// Sort posts by timestamp descending
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		log.Printf("Error initializing database for guild %s at %s: %v", guildID, dbPath, err)
+		return nil, nil
+	}
+	defer db.Close()
+
+	posts, err := database.GetLatestPosts(db, tableNames, 12)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest posts from db: %w", err)
+	}
+
 	sort.Slice(posts, func(i, j int) bool {
 		return posts[i].Timestamp > posts[j].Timestamp
 	})
