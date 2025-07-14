@@ -16,9 +16,9 @@ import (
 )
 
 type GuildConfig struct {
-	Name    string `json:"name"`
-	GuildID string `json:"guilds_id"`
-	Data    map[string]struct {
+	Name     string `json:"name"`
+	GuildsID string `json:"guilds_id"`
+	Data     map[string]struct {
 		ChannelID string   `json:"channel_id"`
 		ThreadIDs []string `json:"thread_id"`
 	} `json:"data"`

@@ -32,16 +32,16 @@ func handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, co
 				}
 			}
 		}
-	case "start_scan":
-		var focusedOption discordgo.ApplicationCommandInteractionDataOption
-		for _, opt := range data.Options {
-			if opt.Focused {
-				focusedOption = *opt
+	case "start-scan":
+		var focusedOption *discordgo.ApplicationCommandInteractionDataOption
+		for _, option := range data.Options {
+			if option.Focused {
+				focusedOption = option
 				break
 			}
 		}
 
-		if focusedOption.Name == "guild" {
+		if focusedOption != nil && focusedOption.Name == "guild" {
 			file, err := os.ReadFile("data/task_config.json")
 			if err != nil {
 				log.Printf("Error reading task_config.json for autocomplete: %v", err)
@@ -53,9 +53,9 @@ func handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, co
 				return
 			}
 
+			inputValue := focusedOption.Value.(string)
 			for id, config := range configs {
-				// Match against both name and ID
-				if strings.Contains(strings.ToLower(config.Name), strings.ToLower(focusedOption.StringValue())) || strings.Contains(strings.ToLower(id), strings.ToLower(focusedOption.StringValue())) {
+				if strings.Contains(strings.ToLower(config.Name), strings.ToLower(inputValue)) || strings.Contains(strings.ToLower(id), strings.ToLower(inputValue)) {
 					choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
 						Name:  fmt.Sprintf("%s (%s)", config.Name, id),
 						Value: id,
@@ -69,10 +69,13 @@ func handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, co
 		choices = choices[:25]
 	}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
 		Data: &discordgo.InteractionResponseData{
 			Choices: choices,
 		},
 	})
+	if err != nil {
+		log.Printf("Error responding to autocomplete: %v", err)
+	}
 }
