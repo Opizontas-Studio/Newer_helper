@@ -23,6 +23,8 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 			rollcard.HandleRollCardComponent(s, i, b, customID)
 		} else if strings.HasPrefix(customID, "persistent_roll:") {
 			rollcard.HandlePersistentRoll(s, i, b, customID)
+		} else if strings.HasPrefix(customID, "global_roll:") {
+			rollcard.HandleGlobalRoll(s, i, b, customID)
 		} else if strings.HasPrefix(customID, "custom_roll:") {
 			rollcard.HandleCustomRoll(s, i, b, customID)
 		} else if customID == "edit_my_pools" {

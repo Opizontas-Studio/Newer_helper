@@ -167,6 +167,16 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 					Description: "面板的描述信息",
 					Required:    false,
 				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "scope",
+					Description: "面板的作用域 (默认为当前服务器)",
+					Required:    false,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{Name: "当前服务器 (server)", Value: "server"},
+						{Name: "全局 (global)", Value: "global"},
+					},
+				},
 			},
 		},
 		{

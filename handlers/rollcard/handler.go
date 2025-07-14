@@ -226,7 +226,7 @@ func sendEphemeralResponse(s *discordgo.Session, i *discordgo.InteractionCreate,
 // getTagNames converts a comma-separated string of tag IDs to a string of tag names.
 func getTagNames(tagIDs string, tagMapping map[string]map[string]string) string {
 	if tagMapping == nil || tagIDs == "" {
-		return "无"
+		return "无或全局模式不兼容"
 	}
 	ids := strings.Split(tagIDs, ",")
 	var names []string

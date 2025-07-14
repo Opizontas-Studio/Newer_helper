@@ -25,37 +25,62 @@ func HandleSetupRollPanel(s *discordgo.Session, i *discordgo.InteractionCreate, 
 		description = opt.StringValue()
 	}
 
-	guildID := i.GuildID
-	if _, ok := b.GetConfig().RollCardConfigs[guildID]; !ok {
-		sendEphemeralResponse(s, i, "This server is not configured for rollcard.")
-		return
+	scope := "server"
+	if opt, ok := optionMap["scope"]; ok {
+		scope = opt.StringValue()
 	}
 
-	components := []discordgo.MessageComponent{
-		discordgo.ActionsRow{
-			Components: []discordgo.MessageComponent{
-				discordgo.Button{
-					Label:    "单抽 (我的卡池)",
-					Style:    discordgo.PrimaryButton,
-					CustomID: "custom_roll:1",
-				},
-				discordgo.Button{
-					Label:    "五连抽 (我的卡池)",
-					Style:    discordgo.PrimaryButton,
-					CustomID: "custom_roll:5",
-				},
-				discordgo.Button{
-					Label:    "修改我的卡池",
-					Style:    discordgo.SecondaryButton,
-					CustomID: "edit_my_pools",
-				},
-				discordgo.Button{
-					Label:    "全区抽卡",
-					Style:    discordgo.SecondaryButton,
-					CustomID: "persistent_roll:all-server-roll",
+	var components []discordgo.MessageComponent
+
+	if scope == "global" {
+		components = []discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					discordgo.Button{
+						Label:    "全局单抽",
+						Style:    discordgo.PrimaryButton,
+						CustomID: "global_roll:1",
+					},
+					discordgo.Button{
+						Label:    "全局五连抽",
+						Style:    discordgo.PrimaryButton,
+						CustomID: "global_roll:5",
+					},
 				},
 			},
-		},
+		}
+	} else {
+		guildID := i.GuildID
+		if _, ok := b.GetConfig().RollCardConfigs[guildID]; !ok {
+			sendEphemeralResponse(s, i, "This server is not configured for rollcard.")
+			return
+		}
+		components = []discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					discordgo.Button{
+						Label:    "单抽 (我的卡池)",
+						Style:    discordgo.PrimaryButton,
+						CustomID: "custom_roll:1",
+					},
+					discordgo.Button{
+						Label:    "五连抽 (我的卡池)",
+						Style:    discordgo.PrimaryButton,
+						CustomID: "custom_roll:5",
+					},
+					discordgo.Button{
+						Label:    "修改我的卡池",
+						Style:    discordgo.SecondaryButton,
+						CustomID: "edit_my_pools",
+					},
+					discordgo.Button{
+						Label:    "全区抽卡",
+						Style:    discordgo.SecondaryButton,
+						CustomID: "persistent_roll:all-server-roll",
+					},
+				},
+			},
+		}
 	}
 
 	embed := &discordgo.MessageEmbed{
