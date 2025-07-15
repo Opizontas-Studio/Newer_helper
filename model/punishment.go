@@ -9,4 +9,7 @@ type PunishmentRecord struct {
 	UserID       string `db:"user_id"`
 	UserUsername string `db:"user_username"`
 	Reason       string `db:"reason"`
+	GuildID      string `db:"guild_id"`
+	Timestamp    int64  `db:"timestamp"`
+	Evidence     string `db:"evidence"` // JSON string with message content and file paths
 }

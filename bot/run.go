@@ -3,6 +3,7 @@ package bot
 import (
 	"discord-bot/scanner"
 	"discord-bot/utils"
+	"discord-bot/utils/database"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -52,6 +53,17 @@ func (b *Bot) Run() {
 	}
 
 	b.startScanScheduler()
+
+	// Start the role remover scheduler
+	kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
+	if err != nil {
+		log.Fatalf("Failed to load kick config for  scanner: %v", err)
+	}
+	timedTaskDB, err := database.InitTimedTaskDB(kickConfig.InitConfig.DBPath)
+	if err != nil {
+		log.Fatalf("Failed to initialize timed task DB: %v", err)
+	}
+	scanner.StartRoleRemover(b.Session, timedTaskDB)
 
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
 	utils.LogInfo(b.Session, b.GetConfig().LogChannelID, "System", "Startup", "Bot has started successfully.")

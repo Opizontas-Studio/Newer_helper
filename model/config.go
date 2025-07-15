@@ -52,10 +52,21 @@ type ThreadGuildConfig struct {
 }
 
 // KickConfigEntry defines the settings for a specific kick configuration.
+// TimeoutConfig defines the settings for user timeout punishments.
+type TimeoutConfig struct {
+	Frequency          int      `json:"frequency"`
+	Time               string   `json:"time"`
+	TimeoutTime        string   `json:"timeout_time"`
+	AddRole            []string `json:"add_role"`
+	AddRoleTimeoutTime string   `json:"add_role_timeout_time"`
+}
+
 type KickConfigEntry struct {
-	Name            string   `json:"name"`
-	RemoveRoleID    []string `json:"remove_role_id"`
-	WhitelistRoleID []string `json:"whitelist_role_id"`
+	Name            string        `json:"name"`
+	LogChannelID    string        `json:"log_channel_id,omitempty"`
+	RemoveRoleID    []string      `json:"remove_role_id"`
+	WhitelistRoleID []string      `json:"whitelist_role_id"`
+	Timeout         TimeoutConfig `json:"timeout,omitempty"`
 }
 
 // KickConfig defines the overall structure for kick configurations.

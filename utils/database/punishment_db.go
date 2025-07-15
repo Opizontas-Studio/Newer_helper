@@ -3,6 +3,7 @@ package database
 import (
 	"discord-bot/model"
 	"fmt"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -15,16 +16,17 @@ func InitPunishmentDB(dbPath string) (*sqlx.DB, error) {
 		return nil, fmt.Errorf("failed to connect to punishment database: %w", err)
 	}
 
-	schema := `
-    CREATE TABLE IF NOT EXISTS punishments (
-        punishment_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        message_id TEXT NOT NULL,
-        admin_id TEXT NOT NULL,
-        user_id TEXT NOT NULL,
-        user_username TEXT NOT NULL,
-        reason TEXT NOT NULL
-    );`
-
+	schema := `CREATE TABLE IF NOT EXISTS punishments (
+	          punishment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+	          message_id TEXT NOT NULL,
+	          admin_id TEXT NOT NULL,
+	          user_id TEXT NOT NULL,
+	          user_username TEXT NOT NULL,
+	          reason TEXT NOT NULL,
+	          guild_id TEXT NOT NULL,
+	          timestamp INTEGER NOT NULL,
+	          evidence TEXT
+	      );`
 	_, err = db.Exec(schema)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create punishments table: %w", err)
@@ -35,8 +37,7 @@ func InitPunishmentDB(dbPath string) (*sqlx.DB, error) {
 
 // AddPunishmentRecord adds a new punishment record to the database.
 func AddPunishmentRecord(db *sqlx.DB, record model.PunishmentRecord) error {
-	query := `INSERT INTO punishments (message_id, admin_id, user_id, user_username, reason)
-              VALUES (:message_id, :admin_id, :user_id, :user_username, :reason)`
+	query := `INSERT INTO punishments (message_id, admin_id, user_id, user_username, reason, guild_id, timestamp, evidence) VALUES (:message_id, :admin_id, :user_id, :user_username, :reason, :guild_id, :timestamp, :evidence)`
 
 	_, err := db.NamedExec(query, record)
 	if err != nil {
@@ -46,11 +47,18 @@ func AddPunishmentRecord(db *sqlx.DB, record model.PunishmentRecord) error {
 	return nil
 }
 
-// GetPunishmentRecordsByUserID retrieves all punishment records for a specific user.
-func GetPunishmentRecordsByUserID(db *sqlx.DB, userID string) ([]model.PunishmentRecord, error) {
+// GetPunishmentRecordsByUserID retrieves punishment records for a specific user, optionally filtered by a start time.
+func GetPunishmentRecordsByUserID(db *sqlx.DB, userID string, since *time.Time) ([]model.PunishmentRecord, error) {
 	var records []model.PunishmentRecord
 	query := "SELECT * FROM punishments WHERE user_id = ?"
-	err := db.Select(&records, query, userID)
+	args := []interface{}{userID}
+
+	if since != nil {
+		query += " AND timestamp >= ?"
+		args = append(args, since.Unix())
+	}
+
+	err := db.Select(&records, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get punishment records for user %s: %w", userID, err)
 	}

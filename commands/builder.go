@@ -11,7 +11,15 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 	return []*discordgo.ApplicationCommand{
 		{
 			Name:        "punish",
-			Description: "移除用户的身份组并记录处罚",
+			Description: "Remove user roles and record punishment",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "答题处罚",
+				discordgo.ChineseTW: "答題處罰",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "移除用户的身份组并记录处罚",
+				discordgo.ChineseTW: "移除用戶的身份組並記錄處罰",
+			},
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionUser,
@@ -25,11 +33,25 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 					Description: "处罚原因",
 					Required:    true,
 				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "message_links",
+					Description: "作为证据的消息链接，多个链接请用空格分开",
+					Required:    false,
+				},
 			},
 		},
 		{
 			Name:        "preset-message",
-			Description: "发送预设消息并提及一位成员 ",
+			Description: "Send preset message and mention a member",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "预设",
+				discordgo.ChineseTW: "預設",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "发送预设消息并提及一位成员",
+				discordgo.ChineseTW: "發送預設消息並提及一位成員",
+			},
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:         discordgo.ApplicationCommandOptionString,
@@ -48,7 +70,15 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 		},
 		{
 			Name:        "preset-message_upd",
-			Description: "从消息链接中解析和创建预设",
+			Description: "Parse and create preset from message links",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "更新预设",
+				discordgo.ChineseTW: "更新預設",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "从消息链接中解析和创建预设",
+				discordgo.ChineseTW: "從消息鏈接中解析和創建預設",
+			},
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
@@ -66,7 +96,15 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 		},
 		{
 			Name:        "preset-message_admin",
-			Description: "管理预设消息",
+			Description: "Manage preset messages",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "管理预设",
+				discordgo.ChineseTW: "管理預設",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "管理预设消息",
+				discordgo.ChineseTW: "管理預設消息",
+			},
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:         discordgo.ApplicationCommandOptionString,
@@ -96,7 +134,15 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 		},
 		{
 			Name:        "rollcard",
-			Description: "从指定卡池中抽取卡片",
+			Description: "Draw cards from specified card pool",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "抽卡",
+				discordgo.ChineseTW: "抽卡",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "从指定卡池中抽取卡片",
+				discordgo.ChineseTW: "從指定卡池中抽取卡片",
+			},
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:         discordgo.ApplicationCommandOptionString,
@@ -144,7 +190,15 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 		},
 		{
 			Name:        "start-scan",
-			Description: "手动启动扫描",
+			Description: "Manually start scanning",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "开始扫描",
+				discordgo.ChineseTW: "開始掃描",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "手动启动扫描",
+				discordgo.ChineseTW: "手動啟動掃描",
+			},
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
@@ -167,11 +221,27 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 		},
 		{
 			Name:        "new-cards",
-			Description: "显示最新的卡片榜单",
+			Description: "Display latest card leaderboard",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "最新卡片",
+				discordgo.ChineseTW: "最新卡片",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "显示最新的卡片榜单",
+				discordgo.ChineseTW: "顯示最新的卡片榜單",
+			},
 		},
 		{
 			Name:        "setup-roll-panel",
-			Description: "创建或更新一个对所有人可见的快速抽卡面板",
+			Description: "Create or update a quick roll panel visible to everyone",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "设置抽卡面板",
+				discordgo.ChineseTW: "設置抽卡面板",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "创建或更新一个对所有人可见的快速抽卡面板",
+				discordgo.ChineseTW: "創建或更新一個對所有人可見的快速抽卡面板",
+			},
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
@@ -199,15 +269,39 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 		},
 		{
 			Name:        "system-info",
-			Description: "显示机器人和系统的状态信息",
+			Description: "Display bot and system status information",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "系统信息",
+				discordgo.ChineseTW: "系統信息",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "显示机器人和系统的状态信息",
+				discordgo.ChineseTW: "顯示機器人和系統的狀態信息",
+			},
 		},
 		{
 			Name:        "reload-config",
-			Description: "重新加载机器人配置文件 (仅限开发者)",
+			Description: "Reload bot configuration file (developers only)",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "重载配置",
+				discordgo.ChineseTW: "重載配置",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "重新加载机器人配置文件 (仅限开发者)",
+				discordgo.ChineseTW: "重新加載機器人配置文件 (僅限開發者)",
+			},
 		},
 		{
 			Name:        "new-post-push_admin",
-			Description: "管理新帖子推送的配置",
+			Description: "Manage new post push configuration",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "推送管理",
+				discordgo.ChineseTW: "推送管理",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "管理新帖子推送的配置",
+				discordgo.ChineseTW: "管理新帖子推送的配置",
+			},
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
@@ -243,7 +337,3 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 }
 
 var minCount = 1.0
-
-func int64Ptr(i int64) *int64 {
-	return &i
-}
