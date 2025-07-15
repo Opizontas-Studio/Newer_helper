@@ -50,3 +50,18 @@ type ThreadGuildConfig struct {
 	Database  string `json:"database"`
 	TableName string `json:"tableName"`
 }
+
+// KickConfigEntry defines the settings for a specific kick configuration.
+type KickConfigEntry struct {
+	Name            string   `json:"name"`
+	RemoveRoleID    []string `json:"remove_role_id"`
+	WhitelistRoleID []string `json:"whitelist_role_id"`
+}
+
+// KickConfig defines the overall structure for kick configurations.
+type KickConfig struct {
+	InitConfig struct {
+		DBPath string                     `json:"dbpath"`
+		Data   map[string]KickConfigEntry `json:"data"`
+	} `json:"initConfig"`
+}

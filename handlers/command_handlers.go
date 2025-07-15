@@ -5,6 +5,7 @@ import (
 	"discord-bot/handlers/admin"
 	"discord-bot/handlers/leaderboard"
 	"discord-bot/handlers/preset"
+	"discord-bot/handlers/punish"
 	"discord-bot/handlers/rollcard"
 	"discord-bot/scanner"
 	"discord-bot/utils"
@@ -16,6 +17,19 @@ import (
 
 func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	return map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
+		"punish": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
+			if !ok {
+				log.Printf("Could not find server config for guild: %s", i.GuildID)
+				return
+			}
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
+			if permissionLevel != utils.AdminPermission && permissionLevel != utils.SuperAdminPermission && permissionLevel != utils.DeveloperPermission {
+				utils.SendErrorResponse(s, i, "You do not have permission to use this command.")
+				return
+			}
+			punish.HandlePunishCommand(s, i, b)
+		},
 		"new-cards": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			leaderboard.HandleNewCardsInteraction(s, i, b)
 		},

@@ -10,6 +10,24 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 
 	return []*discordgo.ApplicationCommand{
 		{
+			Name:        "punish",
+			Description: "移除用户的身份组并记录处罚",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Name:        "user",
+					Description: "要处罚的用户",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "reason",
+					Description: "处罚原因",
+					Required:    true,
+				},
+			},
+		},
+		{
 			Name:        "preset-message",
 			Description: "发送预设消息并提及一位成员 ",
 			Options: []*discordgo.ApplicationCommandOption{

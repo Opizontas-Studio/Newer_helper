@@ -56,3 +56,18 @@ func SaveNewCardPushConfig(guildID string, config *model.NewCardPushConfig) erro
 
 	return nil
 }
+
+// LoadKickConfig loads the kick configuration from the specified path.
+func LoadKickConfig(path string) (*model.KickConfig, error) {
+	fileData, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("error reading kick config file %s: %w", path, err)
+	}
+
+	var config model.KickConfig
+	if err := json.Unmarshal(fileData, &config); err != nil {
+		return nil, fmt.Errorf("error unmarshalling kick config from %s: %w", path, err)
+	}
+
+	return &config, nil
+}

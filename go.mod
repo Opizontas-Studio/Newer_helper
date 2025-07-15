@@ -4,6 +4,7 @@ go 1.23.0
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
+	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
 	github.com/shirou/gopsutil/v3 v3.24.5
 )
