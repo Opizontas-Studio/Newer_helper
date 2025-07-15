@@ -333,6 +333,44 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 				},
 			},
 		},
+		{
+			Name:        "punish_admin",
+			Description: "Manage punishment records",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "处罚管理",
+				discordgo.ChineseTW: "處罰管理",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "管理处罚记录",
+				discordgo.ChineseTW: "管理處罰記錄",
+			},
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Name:        "user",
+					Description: "The user whose punishment records to manage",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "action",
+					Description: "Action to perform",
+					Required:    true,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{Name: "查询 (Search)", Value: "search"},
+						{Name: "删除 (Delete)", Value: "delete"},
+						{Name: "撤销 (Revoke)", Value: "revoke"},
+					},
+				},
+				{
+					Type:         discordgo.ApplicationCommandOptionInteger,
+					Name:         "id",
+					Description:  "Punishment ID to act on (required for delete/revoke)",
+					Required:     false,
+					Autocomplete: true,
+				},
+			},
+		},
 	}
 }
 

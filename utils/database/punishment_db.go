@@ -64,3 +64,31 @@ func GetPunishmentRecordsByUserID(db *sqlx.DB, userID string, since *time.Time) 
 	}
 	return records, nil
 }
+
+// GetPunishmentRecordByID retrieves a single punishment record by its primary key.
+func GetPunishmentRecordByID(db *sqlx.DB, id int64) (*model.PunishmentRecord, error) {
+	var record model.PunishmentRecord
+	query := "SELECT * FROM punishments WHERE punishment_id = ?"
+	err := db.Get(&record, query, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get punishment record by id %d: %w", id, err)
+	}
+	return &record, nil
+}
+
+// DeletePunishmentRecordByID deletes a punishment record by its primary key.
+func DeletePunishmentRecordByID(db *sqlx.DB, id int64) error {
+	query := "DELETE FROM punishments WHERE punishment_id = ?"
+	result, err := db.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete punishment record by id %d: %w", id, err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected for punishment id %d: %w", id, err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("no punishment record found with id %d", id)
+	}
+	return nil
+}
