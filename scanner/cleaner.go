@@ -1,32 +1,25 @@
 package scanner
 
 import (
+	"database/sql"
 	"discord-bot/model"
 	"discord-bot/utils"
-	"encoding/json"
+	"discord-bot/utils/database"
 	"fmt"
 	"log"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-func CleanOldPosts(s *discordgo.Session, logChannelID string, done <-chan struct{}) {
-	const postDir = "data/new_post/"
-	sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour).Unix()
+// CleanOldPosts iterates through all configured databases and deletes posts older than a week.
+func CleanOldPosts(s *discordgo.Session, cfg *model.Config, done <-chan struct{}) {
+	sevenDaysAgo := time.Now().Add(-8 * 24 * time.Hour).Unix()
+	logChannelID := cfg.LogChannelID
 
-	files, err := os.ReadDir(postDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return
-		}
-		utils.LogError(s, logChannelID, "CleanPosts", "ReadDir", fmt.Sprintf("Error reading post directory %s: %v", postDir, err))
-		return
-	}
+	log.Println("Starting cleanup of old posts from databases...")
 
-	for _, file := range files {
+	for guildID, guildConfig := range cfg.ThreadConfig {
 		select {
 		case <-done:
 			log.Println("CleanOldPosts cancelled.")
@@ -34,51 +27,31 @@ func CleanOldPosts(s *discordgo.Session, logChannelID string, done <-chan struct
 		default:
 		}
 
-		if file.IsDir() || !strings.HasSuffix(file.Name(), ".json") {
+		dbPath := guildConfig.Database
+		tableName := guildConfig.TableName
+
+		if dbPath == "" || tableName == "" {
+			utils.LogWarn(s, logChannelID, "CleanDBPosts", "Config", fmt.Sprintf("Database path or table name is empty for guild %s, skipping.", guildID))
 			continue
 		}
 
-		filePath := fmt.Sprintf("%s%s", postDir, file.Name())
-		fileData, err := os.ReadFile(filePath)
+		db, err := sql.Open("sqlite3", dbPath)
 		if err != nil {
-			utils.LogError(s, logChannelID, "CleanPosts", "ReadFile", fmt.Sprintf("Error reading post file %s: %v", filePath, err))
+			utils.LogError(s, logChannelID, "CleanDBPosts", "DBOpen", fmt.Sprintf("Error opening database %s for guild %s: %v", dbPath, guildID, err))
+			continue
+		}
+		defer db.Close()
+
+		rowsAffected, err := database.DeletePostsOlderThan(db, tableName, sevenDaysAgo)
+		if err != nil {
+			utils.LogError(s, logChannelID, "CleanDBPosts", "Delete", fmt.Sprintf("Error cleaning old posts from %s (table: %s): %v", dbPath, tableName, err))
 			continue
 		}
 
-		var posts []model.Post
-		if err := json.Unmarshal(fileData, &posts); err != nil {
-			utils.LogError(s, logChannelID, "CleanPosts", "Unmarshal", fmt.Sprintf("Error unmarshalling posts from %s: %v", filePath, err))
-			continue
-		}
-
-		var newPosts []model.Post
-		var removedPosts []string
-		for _, post := range posts {
-			if post.Timestamp >= sevenDaysAgo {
-				newPosts = append(newPosts, post)
-			} else {
-				removedPosts = append(removedPosts, post.ID)
-			}
-		}
-
-		if len(removedPosts) > 0 {
-			utils.LogInfo(s, logChannelID, "CleanPosts", "Remove", fmt.Sprintf("Removing %d old posts from %s", len(removedPosts), filePath))
-			if len(newPosts) == 0 {
-				if err := os.Remove(filePath); err != nil {
-					utils.LogError(s, logChannelID, "CleanPosts", "RemoveFile", fmt.Sprintf("Error removing empty post file %s: %v", filePath, err))
-				} else {
-					utils.LogInfo(s, logChannelID, "CleanPosts", "RemoveFile", fmt.Sprintf("Removed empty post file %s", filePath))
-				}
-			} else {
-				jsonData, err := json.MarshalIndent(newPosts, "", "  ")
-				if err != nil {
-					utils.LogError(s, logChannelID, "CleanPosts", "Marshal", fmt.Sprintf("Error marshalling cleaned posts to JSON for %s: %v", filePath, err))
-					continue
-				}
-				if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
-					utils.LogError(s, logChannelID, "CleanPosts", "WriteFile", fmt.Sprintf("Error writing cleaned posts to file %s: %v", filePath, err))
-				}
-			}
+		if rowsAffected > 0 {
+			utils.LogInfo(s, logChannelID, "CleanDBPosts", "Success", fmt.Sprintf("Successfully deleted %d old posts from %s (table: %s)", rowsAffected, dbPath, tableName))
 		}
 	}
+
+	log.Println("Finished cleanup of old posts from databases.")
 }

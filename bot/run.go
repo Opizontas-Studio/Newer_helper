@@ -168,7 +168,7 @@ func (b *Bot) startScanScheduler() {
 				}
 
 				log.Println("Cleaning up old posts...")
-				scanner.CleanOldPosts(b.Session, b.GetConfig().LogChannelID, b.done)
+				scanner.CleanOldPosts(b.Session, b.GetConfig(), b.done)
 			case <-b.done:
 				return
 			}

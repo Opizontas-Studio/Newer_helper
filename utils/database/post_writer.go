@@ -49,3 +49,26 @@ func DeletePost(db *sql.DB, tableName string, postID string) error {
 	_, err = stmt.Exec(postID)
 	return err
 }
+
+// DeletePostsOlderThan deletes posts from a table that are older than the given timestamp.
+// It returns the number of posts deleted.
+func DeletePostsOlderThan(db *sql.DB, tableName string, timestamp int64) (int64, error) {
+	deleteSQL := `DELETE FROM "` + tableName + `" WHERE timestamp < ?`
+	stmt, err := db.Prepare(deleteSQL)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	result, err := stmt.Exec(timestamp)
+	if err != nil {
+		return 0, err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	return rowsAffected, nil
+}
