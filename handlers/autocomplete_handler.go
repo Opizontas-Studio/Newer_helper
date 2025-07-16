@@ -25,40 +25,49 @@ func handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, co
 
 	switch data.Name {
 	case "punish_admin":
-		if idField, ok := optionMap["id"]; ok && idField.Focused {
-			userOpt, userOk := optionMap["user"]
-			if !userOk {
-				return // User must be selected first
-			}
-			userID := userOpt.UserValue(s).ID
+		inputField, inputOk := optionMap["input"]
+		searchByOpt, searchByOk := optionMap["search_by"]
 
-			kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
-			if err != nil {
-				log.Printf("Autocomplete: failed to load kick config: %v", err)
-				return
-			}
-			db, err := database.InitPunishmentDB(kickConfig.InitConfig.DBPath)
-			if err != nil {
-				log.Printf("Autocomplete: failed to connect to db: %v", err)
-				return
-			}
-			defer db.Close()
+		if inputOk && inputField.Focused && searchByOk {
+			searchBy := searchByOpt.StringValue()
+			inputValue := inputField.StringValue()
 
-			records, err := database.GetPunishmentRecordsByUserID(db, userID, nil)
-			if err != nil {
-				log.Printf("Autocomplete: failed to get records: %v", err)
-				return
-			}
-
-			for _, r := range records {
-				choiceName := fmt.Sprintf("ID: %d - %s", r.PunishmentID, r.Reason)
-				if len(choiceName) > 100 {
-					choiceName = choiceName[:97] + "..."
+			if searchBy == "punishment_id" {
+				kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
+				if err != nil {
+					log.Printf("Autocomplete: failed to load kick config: %v", err)
+					return
 				}
-				choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
-					Name:  choiceName,
-					Value: r.PunishmentID,
-				})
+				db, err := database.InitPunishmentDB(kickConfig.InitConfig.DBPath)
+				if err != nil {
+					log.Printf("Autocomplete: failed to connect to db: %v", err)
+					return
+				}
+				defer db.Close()
+
+				records, err := database.GetAllPunishmentRecords(db, i.GuildID)
+				if err != nil {
+					log.Printf("Autocomplete: failed to get records: %v", err)
+					return
+				}
+
+				for _, r := range records {
+					// Fuzzy match against reason, user ID or username
+					matchReason := strings.Contains(strings.ToLower(r.Reason), strings.ToLower(inputValue))
+					matchUserID := strings.Contains(r.UserID, inputValue)
+					matchUsername := strings.Contains(strings.ToLower(r.UserUsername), strings.ToLower(inputValue))
+
+					if matchReason || matchUserID || matchUsername {
+						choiceName := fmt.Sprintf("ID: %d (%s) - %s", r.PunishmentID, r.UserUsername, r.Reason)
+						if len(choiceName) > 100 {
+							choiceName = choiceName[:97] + "..."
+						}
+						choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+							Name:  choiceName,
+							Value: fmt.Sprintf("%d", r.PunishmentID),
+						})
+					}
+				}
 			}
 		}
 	case "preset-message", "preset-message_admin":

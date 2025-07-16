@@ -3,6 +3,7 @@ package handlers
 import (
 	"discord-bot/bot"
 	"discord-bot/handlers/preset"
+	"discord-bot/handlers/punish"
 	"discord-bot/handlers/rollcard"
 	"strings"
 
@@ -19,6 +20,8 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 		customID := i.MessageComponentData().CustomID
 		if strings.HasPrefix(customID, "confirm_delete_") || strings.HasPrefix(customID, "cancel_delete_") {
 			preset.HandlePresetDeleteInteraction(s, i, b)
+		} else if strings.HasPrefix(customID, "punish_page:") {
+			punish.HandlePunishPagination(s, i, b)
 		} else if strings.HasPrefix(customID, "roll_again:") {
 			rollcard.HandleRollCardComponent(s, i, b, customID)
 		} else if strings.HasPrefix(customID, "persistent_roll:") {

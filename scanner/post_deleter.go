@@ -47,14 +47,14 @@ func CheckDeletedPosts(s *discordgo.Session, logChannelID string) {
 				<-guard // Release the worker slot
 				wg.Done()
 			}()
-			processDatabase(s, cfg.Database, cfg.TableName, logChannelID)
+			processDatabase(s, cfg.Database, cfg.TableName)
 		}(threadID, config)
 	}
 
 	wg.Wait()
 }
 
-func processDatabase(s *discordgo.Session, dbPath, tableName, logChannelID string) {
+func processDatabase(s *discordgo.Session, dbPath, tableName string) {
 	db, err := database.InitDB(dbPath)
 	if err != nil {
 		log.Printf("Error opening database %s: %v", dbPath, err)

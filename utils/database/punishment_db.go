@@ -92,3 +92,25 @@ func DeletePunishmentRecordByID(db *sqlx.DB, id int64) error {
 	}
 	return nil
 }
+
+// GetPunishmentRecordsByAdminID retrieves punishment records for a specific admin.
+func GetPunishmentRecordsByAdminID(db *sqlx.DB, adminID string) ([]model.PunishmentRecord, error) {
+	var records []model.PunishmentRecord
+	query := "SELECT * FROM punishments WHERE admin_id = ?"
+	err := db.Select(&records, query, adminID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get punishment records for admin %s: %w", adminID, err)
+	}
+	return records, nil
+}
+
+// GetAllPunishmentRecords retrieves all punishment records for a specific guild.
+func GetAllPunishmentRecords(db *sqlx.DB, guildID string) ([]model.PunishmentRecord, error) {
+	var records []model.PunishmentRecord
+	query := "SELECT * FROM punishments WHERE guild_id = ?"
+	err := db.Select(&records, query, guildID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all punishment records for guild %s: %w", guildID, err)
+	}
+	return records, nil
+}
