@@ -61,6 +61,7 @@ func New(cfg *model.Config, db *sql.DB) (*Bot, error) {
 		return nil, err
 	}
 	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
+	dg.StateEnabled = false
 
 	b := &Bot{
 		Session:         dg,

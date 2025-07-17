@@ -8,9 +8,25 @@ import (
 	"discord-bot/handlers"
 	"discord-bot/utils/database"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
 )
 
+func startPprofServer() {
+	if os.Getenv("ENABLE_PPROF") == "true" {
+		log.Println("Starting pprof server on :6060")
+		go func() {
+			if err := http.ListenAndServe(":6060", nil); err != nil {
+				log.Printf("Failed to start pprof server: %v", err)
+			}
+		}()
+	}
+}
+
 func main() {
+	startPprofServer()
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Error loading config: %v", err)
