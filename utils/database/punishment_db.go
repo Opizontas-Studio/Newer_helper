@@ -35,16 +35,21 @@ func InitPunishmentDB(dbPath string) (*sqlx.DB, error) {
 	return db, nil
 }
 
-// AddPunishmentRecord adds a new punishment record to the database.
-func AddPunishmentRecord(db *sqlx.DB, record model.PunishmentRecord) error {
+// AddPunishmentRecord adds a new punishment record to the database and returns the new record's ID.
+func AddPunishmentRecord(db *sqlx.DB, record model.PunishmentRecord) (int64, error) {
 	query := `INSERT INTO punishments (message_id, admin_id, user_id, user_username, reason, guild_id, timestamp, evidence) VALUES (:message_id, :admin_id, :user_id, :user_username, :reason, :guild_id, :timestamp, :evidence)`
 
-	_, err := db.NamedExec(query, record)
+	result, err := db.NamedExec(query, record)
 	if err != nil {
-		return fmt.Errorf("failed to insert punishment record: %w", err)
+		return 0, fmt.Errorf("failed to insert punishment record: %w", err)
 	}
 
-	return nil
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get last insert ID: %w", err)
+	}
+
+	return id, nil
 }
 
 // GetPunishmentRecordsByUserID retrieves punishment records for a specific user, optionally filtered by a start time.
@@ -113,4 +118,15 @@ func GetAllPunishmentRecords(db *sqlx.DB, guildID string) ([]model.PunishmentRec
 		return nil, fmt.Errorf("failed to get all punishment records for guild %s: %w", guildID, err)
 	}
 	return records, nil
+}
+
+// GetLatestPunishmentByUserID retrieves the latest punishment record for a specific user in a specific guild.
+func GetLatestPunishmentByUserID(db *sqlx.DB, guildID, userID string) (*model.PunishmentRecord, error) {
+	var record model.PunishmentRecord
+	query := "SELECT * FROM punishments WHERE guild_id = ? AND user_id = ? ORDER BY timestamp DESC LIMIT 1"
+	err := db.Get(&record, query, guildID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest punishment record for user %s in guild %s: %w", userID, guildID, err)
+	}
+	return &record, nil
 }

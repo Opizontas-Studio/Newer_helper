@@ -58,9 +58,26 @@ func GetDueTasks(db *sqlx.DB) ([]model.TimedTask, error) {
 // DeleteTask deletes a task from the database by its ID.
 func DeleteTask(db *sqlx.DB, taskID int64) error {
 	query := "DELETE FROM timed_tasks WHERE id = ?"
-	_, err := db.Exec(query, taskID)
+	result, err := db.Exec(query, taskID)
 	if err != nil {
 		return fmt.Errorf("failed to delete task %d: %w", taskID, err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected for task id %d: %w", taskID, err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("no task found with id %d", taskID)
+	}
+	return nil
+}
+
+// DeleteTaskByDetails deletes a task from the database by guild, user, and role ID.
+func DeleteTaskByDetails(db *sqlx.DB, guildID, userID, roleID string) error {
+	query := "DELETE FROM timed_tasks WHERE guild_id = ? AND user_id = ? AND role_id = ?"
+	_, err := db.Exec(query, guildID, userID, roleID)
+	if err != nil {
+		return fmt.Errorf("failed to delete task by details for user %s in guild %s: %w", userID, guildID, err)
 	}
 	return nil
 }

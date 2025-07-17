@@ -32,6 +32,18 @@ func CreateGuildTables(db *sql.DB) error {
 		return err
 	}
 
+	createTopChannelsTableSQL := `CREATE TABLE IF NOT EXISTS top_channels (
+		"channel_id" TEXT NOT NULL PRIMARY KEY,
+		"guild_id" TEXT NOT NULL,
+		"message_limit" INTEGER,
+		"excluded_message_ids" TEXT,
+		FOREIGN KEY(guild_id) REFERENCES guild_configs(guild_id)
+	);`
+	_, err = db.Exec(createTopChannelsTableSQL)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -77,6 +89,33 @@ func LoadConfigFromDB(db *sql.DB, cfg *model.Config) error {
 		}
 	}
 
+	topChannelRows, err := db.Query("SELECT channel_id, guild_id, message_limit, excluded_message_ids FROM top_channels")
+	if err != nil {
+		return err
+	}
+	defer topChannelRows.Close()
+
+	for topChannelRows.Next() {
+		var tc model.TopChannelConfig
+		var guildID string
+		var excludedIDs string
+		if err := topChannelRows.Scan(&tc.ChannelID, &guildID, &tc.MessageLimit, &excludedIDs); err != nil {
+			return err
+		}
+		if excludedIDs != "" {
+			tc.ExcludedMessageIDs = strings.Split(excludedIDs, ",")
+		} else {
+			tc.ExcludedMessageIDs = []string{}
+		}
+		if sc, ok := cfg.ServerConfigs[guildID]; ok {
+			if sc.TopChannels == nil {
+				sc.TopChannels = make(map[string]*model.TopChannelConfig)
+			}
+			sc.TopChannels[tc.ChannelID] = &tc
+			cfg.ServerConfigs[guildID] = sc
+		}
+	}
+
 	return nil
 }
 
@@ -88,6 +127,30 @@ func AddPreset(db *sql.DB, guildID string, preset model.PresetMessage) error {
 
 	_, err = tx.Exec("INSERT INTO preset_messages (id, guild_id, name, value, description, type) VALUES (?, ?, ?, ?, ?, ?)",
 		preset.ID, guildID, preset.Name, preset.Value, preset.Description, preset.Type)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func SaveTopChannelConfig(db *sql.DB, guildID string, config model.TopChannelConfig) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	excludedIDs := strings.Join(config.ExcludedMessageIDs, ",")
+
+	_, err = tx.Exec(`
+		INSERT INTO top_channels (channel_id, guild_id, message_limit, excluded_message_ids)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(channel_id) DO UPDATE SET
+			message_limit = excluded.message_limit,
+			excluded_message_ids = excluded.excluded_message_ids;
+	`, config.ChannelID, guildID, config.MessageLimit, excludedIDs)
+
 	if err != nil {
 		tx.Rollback()
 		return err

@@ -65,6 +65,9 @@ func (b *Bot) Run() {
 	}
 	scanner.StartRoleRemover(b.Session, timedTaskDB)
 
+	// Start the channel cleaner scheduler
+	go scanner.StartChannelCleaner(b.Session, b.GetConfig(), b.done)
+
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
 	utils.LogInfo(b.Session, b.GetConfig().LogChannelID, "System", "Startup", "Bot has started successfully.")
 	sc := make(chan os.Signal, 1)

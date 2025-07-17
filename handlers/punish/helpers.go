@@ -224,8 +224,8 @@ func applyTimeoutIfRequired(s *discordgo.Session, i *discordgo.InteractionCreate
 	return true, configEntry.Timeout.TimeoutTime, nil
 }
 
-// addPunishmentRecord adds a new punishment record to the database.
-func addPunishmentRecord(db *sqlx.DB, i *discordgo.InteractionCreate, targetUser *discordgo.User, reason, evidenceJSON string) error {
+// addPunishmentRecord adds a new punishment record to the database and returns the new record's ID.
+func addPunishmentRecord(db *sqlx.DB, i *discordgo.InteractionCreate, targetUser *discordgo.User, reason, evidenceJSON string) (int64, error) {
 	record := model.PunishmentRecord{
 		MessageID:    i.ID,
 		AdminID:      i.Member.User.ID,
@@ -261,7 +261,7 @@ func getPunishmentHistory(db *sqlx.DB, userID, currentGuildID string) ([]model.P
 }
 
 // buildPunishmentEmbed creates the rich embed message for the punishment announcement.
-func buildPunishmentEmbed(i *discordgo.InteractionCreate, targetUser *discordgo.User, reason string, allEvidence []Evidence, currentGuildHistory []model.PunishmentRecord, otherGuildsHistory map[string][]model.PunishmentRecord, kickConfig *model.KickConfig, timeoutApplied bool, timeoutDurationStr string) *discordgo.MessageEmbed {
+func buildPunishmentEmbed(i *discordgo.InteractionCreate, targetUser *discordgo.User, reason string, allEvidence []Evidence, currentGuildHistory []model.PunishmentRecord, otherGuildsHistory map[string][]model.PunishmentRecord, kickConfig *model.KickConfig, timeoutApplied bool, timeoutDurationStr string, punishmentID int64) *discordgo.MessageEmbed {
 	embed := &discordgo.MessageEmbed{
 		Title: "用户惩罚",
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
@@ -278,7 +278,7 @@ func buildPunishmentEmbed(i *discordgo.InteractionCreate, targetUser *discordgo.
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("由 %s 操作", i.Member.User.Username),
+			Text: fmt.Sprintf("由 %s 操作 | 处罚ID: %d", i.Member.User.Username, punishmentID),
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 		Color:     0xff0000,
@@ -294,7 +294,11 @@ func buildPunishmentEmbed(i *discordgo.InteractionCreate, targetUser *discordgo.
 	if len(currentGuildHistory) > 0 {
 		var historyValue string
 		for _, rec := range currentGuildHistory {
-			historyValue += fmt.Sprintf("操作人: <@%s>, 原因: %s\n", rec.AdminID, rec.Reason)
+			entry := fmt.Sprintf("操作人: <@%s>, 原因: %s\n", rec.AdminID, rec.Reason)
+			if rec.PunishmentID == punishmentID {
+				entry = fmt.Sprintf("\n**> 本次处罚** %s", entry)
+			}
+			historyValue += entry
 		}
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:  "历史处罚记录",
@@ -306,7 +310,7 @@ func buildPunishmentEmbed(i *discordgo.InteractionCreate, targetUser *discordgo.
 		var otherGuildsValue string
 		for guildID, records := range otherGuildsHistory {
 			var guildName string
-			if guildConfig, exists := kickConfig.InitConfig.Data[guildID]; exists {
+			if guildConfig, exists := kickConfig.Data[guildID]; exists {
 				guildName = guildConfig.Name
 			} else {
 				guildName = "未知服务器"
@@ -326,7 +330,7 @@ func buildPunishmentEmbed(i *discordgo.InteractionCreate, targetUser *discordgo.
 		})
 	}
 
-	if configEntry, ok := kickConfig.InitConfig.Data[i.GuildID]; ok && configEntry.Timeout.Frequency <= 0 {
+	if configEntry, ok := kickConfig.Data[i.GuildID]; ok && configEntry.Timeout.Frequency <= 0 {
 		embed.Footer.Text += "\n此服务器已禁用自动禁言"
 	}
 

@@ -41,7 +41,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 				utils.SendErrorResponse(s, i, "You do not have permission to use this command.")
 				return
 			}
-			punish.HandlePunishAdminCommand(s, i, b)
+			punish.HandlePunishAdminCommandV2(s, i, b)
 		},
 		"new-cards": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			leaderboard.HandleNewCardsInteraction(s, i, b)
@@ -135,6 +135,18 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 				targetGuildID = opt.StringValue()
 			}
 
+			if scanMode == "clean" {
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "Channel cleanup started.",
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				})
+				go scanner.CleanAllChannels(s, b.GetConfig())
+				return
+			}
+
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
@@ -172,6 +184,19 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 		},
 		"new-post-push_admin": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			admin.HandleNewPostPushAdminCommand(s, i, b)
+		},
+		"register-top-channel": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
+			if !ok {
+				log.Printf("Could not find server config for guild: %s", i.GuildID)
+				return
+			}
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
+			if permissionLevel != utils.SuperAdminPermission && permissionLevel != utils.DeveloperPermission {
+				utils.SendErrorResponse(s, i, "You do not have permission to use this command.")
+				return
+			}
+			HandleRegisterTopChannel(s, i, b)
 		},
 	}
 }

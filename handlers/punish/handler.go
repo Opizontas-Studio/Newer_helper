@@ -26,7 +26,7 @@ func HandlePunishCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b
 		sendErrorResponse(s, i, "Failed to load kick configuration.")
 		return
 	}
-	configEntry, ok := kickConfig.InitConfig.Data[i.GuildID]
+	configEntry, ok := kickConfig.Data[i.GuildID]
 	if !ok {
 		sendErrorResponse(s, i, "❓ 此服务器未找到可用配置文件")
 		return
@@ -77,7 +77,8 @@ func HandlePunishCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b
 	}
 
 	// 9. Add punishment record to the database
-	if err := addPunishmentRecord(db, i, targetUser, reason, evidenceJSON); err != nil {
+	punishmentID, err := addPunishmentRecord(db, i, targetUser, reason, evidenceJSON)
+	if err != nil {
 		log.Printf("Error saving punishment record: %v", err)
 		sendErrorResponse(s, i, "Failed to save the punishment record.")
 		return
@@ -91,7 +92,7 @@ func HandlePunishCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b
 	}
 
 	// 11. Build and send responses
-	embed := buildPunishmentEmbed(i, targetUser, reason, allEvidence, currentGuildHistory, otherGuildsHistory, kickConfig, timeoutApplied, timeoutDurationStr)
+	embed := buildPunishmentEmbed(i, targetUser, reason, allEvidence, currentGuildHistory, otherGuildsHistory, kickConfig, timeoutApplied, timeoutDurationStr, punishmentID)
 	punishmentMessage := sendResponseMessages(s, i, targetUser, embed, timeoutApplied, timeoutDurationStr, reason)
 
 	// 12. Log the punishment

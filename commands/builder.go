@@ -208,6 +208,7 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 					Choices: []*discordgo.ApplicationCommandOptionChoice{
 						{Name: "活跃 (active)", Value: "active"},
 						{Name: "全区 (full)", Value: "full"},
+						{Name: "清理频道 (clean)", Value: "clean"},
 					},
 				},
 				{
@@ -354,6 +355,7 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 						{Name: "处罚ID", Value: "punishment_id"},
 						{Name: "被处罚者ID", Value: "punished_user_id"},
 						{Name: "处罚者ID", Value: "punisher_id"},
+						{Name: "禁言数据库ID", Value: "mute_db_id"},
 					},
 				},
 				{
@@ -365,12 +367,48 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
 					Name:        "action",
-					Description: "要执行的操作 (仅限按处罚ID搜索时)",
+					Description: "要执行的操作 (仅限按 处罚ID/禁言数据库ID 搜索时)",
 					Required:    false,
 					Choices: []*discordgo.ApplicationCommandOptionChoice{
 						{Name: "撤销处罚", Value: "revoke"},
 						{Name: "删除记录", Value: "delete"},
+						{Name: "打印证据", Value: "print_evidence"},
 					},
+				},
+			},
+		},
+		{
+			Name:        "register-top-channel",
+			Description: "Register a channel for auto-topping and cleaning.",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "注册回顶频道",
+				discordgo.ChineseTW: "註冊回頂頻道",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.ChineseCN: "注册一个频道，用于自动回顶和消息清理",
+				discordgo.ChineseTW: "註冊一個頻道，用於自動回頂和消息清理",
+			},
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionChannel,
+					Name:        "channel",
+					Description: "要注册的频道",
+					Required:    true,
+					ChannelTypes: []discordgo.ChannelType{
+						discordgo.ChannelTypeGuildText,
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "limit",
+					Description: "频道内保留的最大消息数量",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "exclude-ids",
+					Description: "要排除的消息ID，多个请用逗号隔开",
+					Required:    false,
 				},
 			},
 		},

@@ -29,4 +29,8 @@ func addHandlers(b *bot.Bot) {
 	b.Session.AddHandler(func(s *discordgo.Session, t *discordgo.ThreadDelete) {
 		HandleThreadDelete(s, t, b.GetConfig())
 	})
+
+	b.Session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
+		HandleMessageCreate(s, m, b)
+	})
 }

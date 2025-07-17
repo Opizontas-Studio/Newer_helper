@@ -9,13 +9,21 @@ type PresetMessage struct {
 	Type        string `json:"type"`
 }
 
+// TopChannelConfig 定义了回顶频道的配置
+type TopChannelConfig struct {
+	ChannelID          string   `json:"channel_id"`
+	MessageLimit       int      `json:"message_limit"`
+	ExcludedMessageIDs []string `json:"excluded_message_ids"`
+}
+
 // ServerConfig 定义了每个服务器的配置
 type ServerConfig struct {
-	Name           string          `json:"name"`
-	GuildID        string          `json:"guilds_id"`
-	AdminRoleIDs   []string        `json:"admin_role_ids"`
-	UserRoleIDs    []string        `json:"user_role_ids"`
-	PresetMessages []PresetMessage `json:"preset_messages"`
+	Name           string                       `json:"name"`
+	GuildID        string                       `json:"guilds_id"`
+	AdminRoleIDs   []string                     `json:"admin_role_ids"`
+	UserRoleIDs    []string                     `json:"user_role_ids"`
+	PresetMessages []PresetMessage              `json:"preset_messages"`
+	TopChannels    map[string]*TopChannelConfig `json:"top_channels,omitempty"`
 }
 
 // Config 存储应用程序的配置
@@ -52,7 +60,6 @@ type ThreadGuildConfig struct {
 }
 
 // KickConfigEntry defines the settings for a specific kick configuration.
-// TimeoutConfig defines the settings for user timeout punishments.
 type TimeoutConfig struct {
 	Frequency          int      `json:"frequency"`
 	Time               string   `json:"time"`
@@ -61,8 +68,10 @@ type TimeoutConfig struct {
 	AddRoleTimeoutTime string   `json:"add_role_timeout_time"`
 }
 
+// TimeoutConfig defines the settings for user timeout punishments.
 type KickConfigEntry struct {
 	Name            string        `json:"name"`
+	BaseRoleID      string        `json:"base_role_id"`
 	LogChannelID    string        `json:"log_channel_id,omitempty"`
 	RemoveRoleID    []string      `json:"remove_role_id"`
 	WhitelistRoleID []string      `json:"whitelist_role_id"`
@@ -72,7 +81,7 @@ type KickConfigEntry struct {
 // KickConfig defines the overall structure for kick configurations.
 type KickConfig struct {
 	InitConfig struct {
-		DBPath string                     `json:"dbpath"`
-		Data   map[string]KickConfigEntry `json:"data"`
+		DBPath string `json:"dbpath"`
 	} `json:"initConfig"`
+	Data map[string]KickConfigEntry `json:"data"`
 }
