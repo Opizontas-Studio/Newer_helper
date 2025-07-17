@@ -85,35 +85,52 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 	log.Printf("Updating cooldown for preset: %s", selectedPreset.ID)
 	cooldowns[selectedPreset.ID] = time.Now()
 
-	messageSend := FormatPresetMessageSend(selectedPreset, user)
-	message, err := s.ChannelMessageSendComplex(i.ChannelID, messageSend)
-	if err == nil {
-		// Log the successful preset usage
-		if b.GetConfig().LogChannelID != "" {
-			messageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, message.ID)
-			logInfo := fmt.Sprintf("用户: `%s`\n预设名: `%s`\n[点击查看消息](%s)", i.Member.User.Username, selectedPreset.Name, messageLink)
-			err = utils.LogInfo(s, b.GetConfig().LogChannelID, "预设", "使用", logInfo)
-			if err != nil {
-				log.Printf("Failed to send log: %v", err)
+	permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
+
+	if permissionLevel == utils.GuestPermission {
+		// Guest users can only view the preset privately
+		messageSend := FormatPresetMessageSend(selectedPreset, "") // User mention is ignored for private view
+		webhookParams := &discordgo.WebhookParams{
+			Content: messageSend.Content,
+			Embeds:  messageSend.Embeds,
+		}
+		// The followup message will be ephemeral because the initial response was deferred as ephemeral.
+		_, err := s.FollowupMessageCreate(i.Interaction, true, webhookParams)
+		if err != nil {
+			log.Printf("Failed to send private followup message: %v", err)
+		}
+	} else {
+		// Authorized users can send the message to the channel
+		messageSend := FormatPresetMessageSend(selectedPreset, user)
+		message, err := s.ChannelMessageSendComplex(i.ChannelID, messageSend)
+		if err == nil {
+			// Log the successful preset usage
+			if b.GetConfig().LogChannelID != "" {
+				messageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, message.ID)
+				logInfo := fmt.Sprintf("用户: `%s`\n预设名: `%s`\n[点击查看消息](%s)", i.Member.User.Username, selectedPreset.Name, messageLink)
+				err = utils.LogInfo(s, b.GetConfig().LogChannelID, "预设", "使用", logInfo)
+				if err != nil {
+					log.Printf("Failed to send log: %v", err)
+				}
 			}
 		}
-	}
 
-	if err != nil {
-		log.Printf("Failed to send channel message: %v", err)
-		_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: "Failed to send the preset message.",
-		})
 		if err != nil {
-			log.Printf("Failed to send error followup message: %v", err)
+			log.Printf("Failed to send channel message: %v", err)
+			_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+				Content: "Failed to send the preset message.",
+			})
+			if err != nil {
+				log.Printf("Failed to send error followup message: %v", err)
+			}
+			return
 		}
-		return
-	}
 
-	// Delete the original deferred response ("Bot is thinking...")
-	err = s.InteractionResponseDelete(i.Interaction)
-	if err != nil {
-		log.Printf("Failed to delete interaction response: %v", err)
+		// Delete the original deferred response ("Bot is thinking...")
+		err = s.InteractionResponseDelete(i.Interaction)
+		if err != nil {
+			log.Printf("Failed to delete interaction response: %v", err)
+		}
 	}
 }
 

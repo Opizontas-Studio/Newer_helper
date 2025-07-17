@@ -50,22 +50,6 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			rollcard.HandleRollCardInteraction(s, i, b)
 		},
 		"preset-message": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-			serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
-			if !ok {
-				log.Printf("Could not find server config for guild: %s", i.GuildID)
-				return
-			}
-			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
-			if permissionLevel == utils.GuestPermission {
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "You do not have permission to use this command.",
-						Flags:   discordgo.MessageFlagsEphemeral,
-					},
-				})
-				return
-			}
 			preset.HandlePresetMessageInteraction(s, i, b)
 		},
 		"preset-message_upd": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
