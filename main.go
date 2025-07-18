@@ -7,6 +7,7 @@ import (
 	"discord-bot/config"
 	"discord-bot/handlers"
 	"discord-bot/internal/container"
+	"discord-bot/internal/repository"
 	"discord-bot/utils/database"
 	"log"
 	"net/http"
@@ -90,6 +91,17 @@ func main() {
 		log.Fatalf("Error: config service type assertion failed")
 	}
 
+	// 获取Repository管理器
+	repoManagerInterface, err := serviceContainer.Get("repository_manager")
+	if err != nil {
+		log.Fatalf("Error getting repository manager: %v", err)
+	}
+
+	repoManager, ok := repoManagerInterface.(repository.RepositoryManager)
+	if !ok {
+		log.Fatalf("Error: repository manager type assertion failed")
+	}
+
 	// 创建Bot实例
 	b, err := bot.NewBot(
 		discordService,
@@ -99,16 +111,17 @@ func main() {
 		cfg,
 		db,
 		configService,
+		repoManager,
 	)
 	if err != nil {
 		log.Fatalf("Error creating bot: %v", err)
 	}
 
-	// 注册处理器
-	handlers.Register(b)
-
-	// 注册中间件处理器
+	// 注册中间件处理器（新系统）
 	handlers.RegisterMiddlewareHandlers(b)
+	
+	// 注册其他处理器（非交互处理器）
+	handlers.RegisterNonInteractionHandlers(b)
 
 	// 运行Bot
 	b.Run()

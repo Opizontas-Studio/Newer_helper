@@ -5,6 +5,7 @@ import (
 	"discord-bot/config"
 	"discord-bot/handlers/leaderboard"
 	"discord-bot/internal/services"
+	"discord-bot/internal/repository"
 	"discord-bot/model"
 	"discord-bot/utils"
 	"discord-bot/utils/database"
@@ -30,6 +31,7 @@ type Bot struct {
 	config       atomic.Value // *model.Config
 	configService *configSvc.Service // 新的配置服务
 	database     *sql.DB
+	repoManager  repository.RepositoryManager // Repository 管理器
 
 	// 扫描相关状态
 	ActiveScanCount int
@@ -46,6 +48,10 @@ func (b *Bot) GetConfig() *model.Config {
 
 func (b *Bot) GetConfigService() *configSvc.Service {
 	return b.configService
+}
+
+func (b *Bot) GetRepositoryManager() repository.RepositoryManager {
+	return b.repoManager
 }
 
 func (b *Bot) GetDB() *sql.DB {
@@ -100,7 +106,7 @@ func (b *Bot) GetCooldownMutex() *sync.Mutex {
 }
 
 // NewBot 创建新的Bot实例，使用依赖注入
-func NewBot(discord interface{}, command interface{}, scheduler interface{}, cooldown interface{}, cfg *model.Config, db *sql.DB, configService *configSvc.Service) (*Bot, error) {
+func NewBot(discord interface{}, command interface{}, scheduler interface{}, cooldown interface{}, cfg *model.Config, db *sql.DB, configService *configSvc.Service, repoManager repository.RepositoryManager) (*Bot, error) {
 	// 类型断言
 	discordSvc, ok := discord.(services.DiscordService)
 	if !ok {
@@ -129,6 +135,7 @@ func NewBot(discord interface{}, command interface{}, scheduler interface{}, coo
 		cooldown:        cooldownSvc,
 		database:        db,
 		configService:   configService,
+		repoManager:     repoManager,
 		ActiveScanCount: 0,
 		done:            make(chan struct{}),
 		commandHandlers: make(map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)),
@@ -159,7 +166,9 @@ func New(cfg *model.Config, db *sql.DB) (*Bot, error) {
 		return nil, fmt.Errorf("failed to load config service: %w", err)
 	}
 
-	return NewBot(discord, command, scheduler, cooldown, cfg, db, configService)
+	// 创建空的Repository管理器（向后兼容）
+	// 在实际使用中，应该通过依赖注入获取真正的Repository管理器
+	return NewBot(discord, command, scheduler, cooldown, cfg, db, configService, nil)
 }
 
 func (b *Bot) Close() {

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"strings"
+
+	"github.com/jmoiron/sqlx"
 )
 
 // postRepository 帖子数据访问实现
@@ -21,31 +23,43 @@ func NewPostRepository(dbService *database.Service) PostRepository {
 	}
 }
 
-// validateTableName 验证表名安全性，防止SQL注入
+// validateTableName 验证表名安全性（基础）
 func (r *postRepository) validateTableName(tableName string) error {
-	// 只允许字母、数字、下划线和中文字符
-	for _, char := range tableName {
-		if !((char >= 'a' && char <= 'z') ||
-			(char >= 'A' && char <= 'Z') ||
-			(char >= '0' && char <= '9') ||
-			char == '_' ||
-			char == '中' || char == '文' || char == '字' || char == '符' ||
-			(char >= 0x4e00 && char <= 0x9fff)) { // 中文字符范围
-			return fmt.Errorf("invalid table name: %s", tableName)
-		}
-	}
-
-	// 检查表名长度
 	if len(tableName) == 0 || len(tableName) > 64 {
 		return fmt.Errorf("table name length must be between 1 and 64 characters")
 	}
-
+	for _, char := range tableName {
+		if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_') {
+			return fmt.Errorf("invalid character in table name: %s. Only letters, numbers, and underscores are allowed", tableName)
+		}
+	}
 	return nil
+}
+
+// validateTableNameWithWhitelist 使用白名单验证表名，防止SQL注入
+func (r *postRepository) validateTableNameWithWhitelist(guildID, tableName string) error {
+	if err := r.validateTableName(tableName); err != nil {
+		return err
+	}
+
+	// 白名单验证
+	validTableNames, err := r.GetTableNames(guildID)
+	if err != nil {
+		return fmt.Errorf("could not get table names for validation: %w", err)
+	}
+
+	for _, validName := range validTableNames {
+		if tableName == validName {
+			return nil // 表名在白名单中
+		}
+	}
+
+	return fmt.Errorf("table name '%s' is not in the whitelist of allowed table names", tableName)
 }
 
 // GetByID 通过ID获取帖子
 func (r *postRepository) GetByID(guildID, tableName, postID string) (*model.Post, error) {
-	if err := r.validateTableName(tableName); err != nil {
+	if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
 		return nil, err
 	}
 
@@ -53,25 +67,20 @@ func (r *postRepository) GetByID(guildID, tableName, postID string) (*model.Post
 	if err != nil {
 		return nil, fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
-	// 使用参数化查询，表名通过验证后拼接
 	query := fmt.Sprintf(`
 		SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url 
 		FROM "%s" 
 		WHERE id = ?`, tableName)
 
 	var post model.Post
-	err = db.QueryRow(query, postID).Scan(
-		&post.ID, &post.Title, &post.Author, &post.AuthorID,
-		&post.Content, &post.Tags, &post.MessageCount,
-		&post.Timestamp, &post.CoverImageURL,
-	)
-
+	err = sqlxDB.Get(&post, query, postID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil
+			return nil, nil // Not found is not an error
 		}
-		return nil, fmt.Errorf("failed to get post by id: %w", err)
+		return nil, fmt.Errorf("failed to get post by id with sqlx: %w", err)
 	}
 
 	return &post, nil
@@ -79,7 +88,7 @@ func (r *postRepository) GetByID(guildID, tableName, postID string) (*model.Post
 
 // GetAll 获取所有帖子
 func (r *postRepository) GetAll(guildID, tableName string) ([]model.Post, error) {
-	if err := r.validateTableName(tableName); err != nil {
+	if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
 		return nil, err
 	}
 
@@ -87,30 +96,17 @@ func (r *postRepository) GetAll(guildID, tableName string) ([]model.Post, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
 	query := fmt.Sprintf(`
 		SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url 
 		FROM "%s" 
 		ORDER BY timestamp DESC`, tableName)
 
-	rows, err := db.Query(query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query posts: %w", err)
-	}
-	defer rows.Close()
-
 	var posts []model.Post
-	for rows.Next() {
-		var post model.Post
-		if err := rows.Scan(
-			&post.ID, &post.Title, &post.Author, &post.AuthorID,
-			&post.Content, &post.Tags, &post.MessageCount,
-			&post.Timestamp, &post.CoverImageURL,
-		); err != nil {
-			log.Printf("Failed to scan post row: %v", err)
-			continue
-		}
-		posts = append(posts, post)
+	err = sqlxDB.Select(&posts, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all posts with sqlx: %w", err)
 	}
 
 	return posts, nil
@@ -118,10 +114,9 @@ func (r *postRepository) GetAll(guildID, tableName string) ([]model.Post, error)
 
 // GetRandom 获取随机帖子
 func (r *postRepository) GetRandom(guildID, tableName string, count int) ([]model.Post, error) {
-	if err := r.validateTableName(tableName); err != nil {
+	if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
 		return nil, err
 	}
-
 	if count <= 0 {
 		return []model.Post{}, nil
 	}
@@ -130,6 +125,7 @@ func (r *postRepository) GetRandom(guildID, tableName string, count int) ([]mode
 	if err != nil {
 		return nil, fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
 	query := fmt.Sprintf(`
 		SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url 
@@ -137,24 +133,10 @@ func (r *postRepository) GetRandom(guildID, tableName string, count int) ([]mode
 		ORDER BY RANDOM() 
 		LIMIT ?`, tableName)
 
-	rows, err := db.Query(query, count)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query random posts: %w", err)
-	}
-	defer rows.Close()
-
 	var posts []model.Post
-	for rows.Next() {
-		var post model.Post
-		if err := rows.Scan(
-			&post.ID, &post.Title, &post.Author, &post.AuthorID,
-			&post.Content, &post.Tags, &post.MessageCount,
-			&post.Timestamp, &post.CoverImageURL,
-		); err != nil {
-			log.Printf("Failed to scan post row: %v", err)
-			continue
-		}
-		posts = append(posts, post)
+	err = sqlxDB.Select(&posts, query, count)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get random posts with sqlx: %w", err)
 	}
 
 	return posts, nil
@@ -170,19 +152,15 @@ func (r *postRepository) Create(guildID, tableName string, post *model.Post) err
 	if err != nil {
 		return fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
 	query := fmt.Sprintf(`
 		INSERT INTO "%s" (id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, tableName)
+		VALUES (:id, :title, :author, :author_id, :content, :tags, :message_count, :timestamp, :cover_image_url)`, tableName)
 
-	_, err = db.Exec(query,
-		post.ID, post.Title, post.Author, post.AuthorID,
-		post.Content, post.Tags, post.MessageCount,
-		post.Timestamp, post.CoverImageURL,
-	)
-
+	_, err = sqlxDB.NamedExec(query, post)
 	if err != nil {
-		return fmt.Errorf("failed to create post: %w", err)
+		return fmt.Errorf("failed to create post with sqlx: %w", err)
 	}
 
 	return nil
@@ -190,7 +168,7 @@ func (r *postRepository) Create(guildID, tableName string, post *model.Post) err
 
 // Update 更新帖子
 func (r *postRepository) Update(guildID, tableName string, post *model.Post) error {
-	if err := r.validateTableName(tableName); err != nil {
+	if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
 		return err
 	}
 
@@ -198,30 +176,26 @@ func (r *postRepository) Update(guildID, tableName string, post *model.Post) err
 	if err != nil {
 		return fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
 	query := fmt.Sprintf(`
 		UPDATE "%s" 
-		SET title = ?, author = ?, author_id = ?, content = ?, tags = ?, 
-		    message_count = ?, timestamp = ?, cover_image_url = ?
-		WHERE id = ?`, tableName)
+		SET title = :title, author = :author, author_id = :author_id, content = :content, 
+		    tags = :tags, message_count = :message_count, timestamp = :timestamp, 
+		    cover_image_url = :cover_image_url
+		WHERE id = :id`, tableName)
 
-	result, err := db.Exec(query,
-		post.Title, post.Author, post.AuthorID, post.Content,
-		post.Tags, post.MessageCount, post.Timestamp,
-		post.CoverImageURL, post.ID,
-	)
-
+	result, err := sqlxDB.NamedExec(query, post)
 	if err != nil {
-		return fmt.Errorf("failed to update post: %w", err)
+		return fmt.Errorf("failed to update post with sqlx: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
-
 	if rowsAffected == 0 {
-		return fmt.Errorf("post not found: %s", post.ID)
+		return fmt.Errorf("post not found for update: %s", post.ID)
 	}
 
 	return nil
@@ -229,7 +203,7 @@ func (r *postRepository) Update(guildID, tableName string, post *model.Post) err
 
 // Delete 删除帖子
 func (r *postRepository) Delete(guildID, tableName, postID string) error {
-	if err := r.validateTableName(tableName); err != nil {
+	if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
 		return err
 	}
 
@@ -237,21 +211,21 @@ func (r *postRepository) Delete(guildID, tableName, postID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
 	query := fmt.Sprintf(`DELETE FROM "%s" WHERE id = ?`, tableName)
 
-	result, err := db.Exec(query, postID)
+	result, err := sqlxDB.Exec(query, postID)
 	if err != nil {
-		return fmt.Errorf("failed to delete post: %w", err)
+		return fmt.Errorf("failed to delete post with sqlx: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
-
 	if rowsAffected == 0 {
-		return fmt.Errorf("post not found: %s", postID)
+		return fmt.Errorf("post not found for delete: %s", postID)
 	}
 
 	return nil
@@ -259,7 +233,7 @@ func (r *postRepository) Delete(guildID, tableName, postID string) error {
 
 // GetByAuthor 通过作者ID获取帖子
 func (r *postRepository) GetByAuthor(guildID, tableName, authorID string) ([]model.Post, error) {
-	if err := r.validateTableName(tableName); err != nil {
+	if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
 		return nil, err
 	}
 
@@ -267,31 +241,18 @@ func (r *postRepository) GetByAuthor(guildID, tableName, authorID string) ([]mod
 	if err != nil {
 		return nil, fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
 	query := fmt.Sprintf(`
 		SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url 
 		FROM "%s" 
-		WHERE author_id = ?
+		WHERE author_id = ? 
 		ORDER BY timestamp DESC`, tableName)
 
-	rows, err := db.Query(query, authorID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query posts by author: %w", err)
-	}
-	defer rows.Close()
-
 	var posts []model.Post
-	for rows.Next() {
-		var post model.Post
-		if err := rows.Scan(
-			&post.ID, &post.Title, &post.Author, &post.AuthorID,
-			&post.Content, &post.Tags, &post.MessageCount,
-			&post.Timestamp, &post.CoverImageURL,
-		); err != nil {
-			log.Printf("Failed to scan post row: %v", err)
-			continue
-		}
-		posts = append(posts, post)
+	err = sqlxDB.Select(&posts, query, authorID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get posts by author with sqlx: %w", err)
 	}
 
 	return posts, nil
@@ -299,7 +260,7 @@ func (r *postRepository) GetByAuthor(guildID, tableName, authorID string) ([]mod
 
 // GetByTag 通过标签获取帖子
 func (r *postRepository) GetByTag(guildID, tableName, tag string) ([]model.Post, error) {
-	if err := r.validateTableName(tableName); err != nil {
+	if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
 		return nil, err
 	}
 
@@ -307,31 +268,18 @@ func (r *postRepository) GetByTag(guildID, tableName, tag string) ([]model.Post,
 	if err != nil {
 		return nil, fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
 	query := fmt.Sprintf(`
 		SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url 
 		FROM "%s" 
-		WHERE tags LIKE ?
+		WHERE tags LIKE ? 
 		ORDER BY timestamp DESC`, tableName)
 
-	rows, err := db.Query(query, "%"+tag+"%")
-	if err != nil {
-		return nil, fmt.Errorf("failed to query posts by tag: %w", err)
-	}
-	defer rows.Close()
-
 	var posts []model.Post
-	for rows.Next() {
-		var post model.Post
-		if err := rows.Scan(
-			&post.ID, &post.Title, &post.Author, &post.AuthorID,
-			&post.Content, &post.Tags, &post.MessageCount,
-			&post.Timestamp, &post.CoverImageURL,
-		); err != nil {
-			log.Printf("Failed to scan post row: %v", err)
-			continue
-		}
-		posts = append(posts, post)
+	err = sqlxDB.Select(&posts, query, "%"+tag+"%")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get posts by tag with sqlx: %w", err)
 	}
 
 	return posts, nil
@@ -339,7 +287,7 @@ func (r *postRepository) GetByTag(guildID, tableName, tag string) ([]model.Post,
 
 // GetByTimeRange 通过时间范围获取帖子
 func (r *postRepository) GetByTimeRange(guildID, tableName string, startTime, endTime int64) ([]model.Post, error) {
-	if err := r.validateTableName(tableName); err != nil {
+	if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
 		return nil, err
 	}
 
@@ -347,31 +295,18 @@ func (r *postRepository) GetByTimeRange(guildID, tableName string, startTime, en
 	if err != nil {
 		return nil, fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
 	query := fmt.Sprintf(`
 		SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url 
 		FROM "%s" 
-		WHERE timestamp >= ? AND timestamp < ?
+		WHERE timestamp >= ? AND timestamp < ? 
 		ORDER BY timestamp DESC`, tableName)
 
-	rows, err := db.Query(query, startTime, endTime)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query posts by time range: %w", err)
-	}
-	defer rows.Close()
-
 	var posts []model.Post
-	for rows.Next() {
-		var post model.Post
-		if err := rows.Scan(
-			&post.ID, &post.Title, &post.Author, &post.AuthorID,
-			&post.Content, &post.Tags, &post.MessageCount,
-			&post.Timestamp, &post.CoverImageURL,
-		); err != nil {
-			log.Printf("Failed to scan post row: %v", err)
-			continue
-		}
-		posts = append(posts, post)
+	err = sqlxDB.Select(&posts, query, startTime, endTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get posts by time range with sqlx: %w", err)
 	}
 
 	return posts, nil
@@ -379,7 +314,7 @@ func (r *postRepository) GetByTimeRange(guildID, tableName string, startTime, en
 
 // Count 统计帖子数量
 func (r *postRepository) Count(guildID, tableName string) (int, error) {
-	if err := r.validateTableName(tableName); err != nil {
+	if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
 		return 0, err
 	}
 
@@ -387,13 +322,14 @@ func (r *postRepository) Count(guildID, tableName string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM "%s"`, tableName)
 
 	var count int
-	err = db.QueryRow(query).Scan(&count)
+	err = sqlxDB.Get(&count, query)
 	if err != nil {
-		return 0, fmt.Errorf("failed to count posts: %w", err)
+		return 0, fmt.Errorf("failed to count posts with sqlx: %w", err)
 	}
 
 	return count, nil
@@ -401,7 +337,7 @@ func (r *postRepository) Count(guildID, tableName string) (int, error) {
 
 // CountByAuthor 统计作者的帖子数量
 func (r *postRepository) CountByAuthor(guildID, tableName, authorID string) (int, error) {
-	if err := r.validateTableName(tableName); err != nil {
+	if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
 		return 0, err
 	}
 
@@ -409,13 +345,14 @@ func (r *postRepository) CountByAuthor(guildID, tableName, authorID string) (int
 	if err != nil {
 		return 0, fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM "%s" WHERE author_id = ?`, tableName)
 
 	var count int
-	err = db.QueryRow(query, authorID).Scan(&count)
+	err = sqlxDB.Get(&count, query, authorID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to count posts by author: %w", err)
+		return 0, fmt.Errorf("failed to count posts by author with sqlx: %w", err)
 	}
 
 	return count, nil
@@ -423,7 +360,7 @@ func (r *postRepository) CountByAuthor(guildID, tableName, authorID string) (int
 
 // CountByTag 统计包含特定标签的帖子数量
 func (r *postRepository) CountByTag(guildID, tableName, tag string) (int, error) {
-	if err := r.validateTableName(tableName); err != nil {
+	if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
 		return 0, err
 	}
 
@@ -431,13 +368,14 @@ func (r *postRepository) CountByTag(guildID, tableName, tag string) (int, error)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM "%s" WHERE tags LIKE ?`, tableName)
 
 	var count int
-	err = db.QueryRow(query, "%"+tag+"%").Scan(&count)
+	err = sqlxDB.Get(&count, query, "%"+tag+"%")
 	if err != nil {
-		return 0, fmt.Errorf("failed to count posts by tag: %w", err)
+		return 0, fmt.Errorf("failed to count posts by tag with sqlx: %w", err)
 	}
 
 	return count, nil
@@ -445,7 +383,7 @@ func (r *postRepository) CountByTag(guildID, tableName, tag string) (int, error)
 
 // CountByTimeRange 统计时间范围内的帖子数量
 func (r *postRepository) CountByTimeRange(guildID, tableName string, startTime, endTime int64) (int, error) {
-	if err := r.validateTableName(tableName); err != nil {
+	if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
 		return 0, err
 	}
 
@@ -453,13 +391,14 @@ func (r *postRepository) CountByTimeRange(guildID, tableName string, startTime, 
 	if err != nil {
 		return 0, fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM "%s" WHERE timestamp >= ? AND timestamp < ?`, tableName)
 
 	var count int
-	err = db.QueryRow(query, startTime, endTime).Scan(&count)
+	err = sqlxDB.Get(&count, query, startTime, endTime)
 	if err != nil {
-		return 0, fmt.Errorf("failed to count posts by time range: %w", err)
+		return 0, fmt.Errorf("failed to count posts by time range with sqlx: %w", err)
 	}
 
 	return count, nil
@@ -471,46 +410,171 @@ func (r *postRepository) CountInMultipleTables(guildID string, tableNames []stri
 		return 0, nil
 	}
 
-	// 验证所有表名
-	for _, tableName := range tableNames {
-		if err := r.validateTableName(tableName); err != nil {
-			return 0, err
-		}
-	}
-
 	db, err := r.dbService.GetPool().GetGuildDB(guildID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
-	// 构建安全的查询
-	var queryBuilder strings.Builder
-	var queryArgs []interface{}
-
-	queryBuilder.WriteString("SELECT SUM(count) FROM (")
-	for i, tableName := range tableNames {
-		queryBuilder.WriteString(fmt.Sprintf(`SELECT COUNT(*) as count FROM "%s" WHERE timestamp >= ? AND timestamp < ?`, tableName))
-		queryArgs = append(queryArgs, startTime, endTime)
-		if i < len(tableNames)-1 {
-			queryBuilder.WriteString(" UNION ALL ")
+	var totalCount int
+	for _, tableName := range tableNames {
+		if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
+			return 0, err
 		}
-	}
-	queryBuilder.WriteString(")")
-
-	var totalCount sql.NullInt64
-	err = db.QueryRow(queryBuilder.String(), queryArgs...).Scan(&totalCount)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count posts in multiple tables: %w", err)
-	}
-
-	if !totalCount.Valid {
-		return 0, nil
+		query := fmt.Sprintf(`SELECT COUNT(*) FROM "%s" WHERE timestamp >= ? AND timestamp < ?`, tableName)
+		var count int
+		err := sqlxDB.Get(&count, query, startTime, endTime)
+		if err != nil {
+			log.Printf("failed to count posts in table %s: %v. Skipping.", tableName, err)
+			continue
+		}
+		totalCount += count
 	}
 
-	return int(totalCount.Int64), nil
+	return totalCount, nil
 }
 
-// CreateTable 创建帖子表
+// --- Missing method implementations ---
+
+// GetTableNames 获取所有表名
+func (r *postRepository) GetTableNames(guildID string) ([]string, error) {
+	db, err := r.dbService.GetPool().GetGuildDB(guildID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get guild database: %w", err)
+	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
+
+	rows, err := sqlxDB.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query table names: %w", err)
+	}
+	defer rows.Close()
+
+	var tableNames []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("failed to scan table name: %w", err)
+		}
+		tableNames = append(tableNames, name)
+	}
+	return tableNames, nil
+}
+
+// GetRandomFromAllTables 从所有表中随机获取帖子
+func (r *postRepository) GetRandomFromAllTables(guildID string, count int) ([]model.Post, error) {
+	tableNames, err := r.GetTableNames(guildID)
+	if err != nil {
+		return nil, err
+	}
+	return r.GetRandomFromMultipleTables(guildID, tableNames, count)
+}
+
+// GetRandomFromAllTablesByTag 从所有表中按标签随机获取帖子
+func (r *postRepository) GetRandomFromAllTablesByTag(guildID string, tagID string, count int, excludeTags []string) ([]model.Post, error) {
+	tableNames, err := r.GetTableNames(guildID)
+	if err != nil {
+		return nil, err
+	}
+	return r.GetRandomFromMultipleTablesByTag(guildID, tableNames, tagID, count, excludeTags)
+}
+
+// GetRandomFromMultipleTables 从多个表中随机获取帖子
+func (r *postRepository) GetRandomFromMultipleTables(guildID string, tableNames []string, count int) ([]model.Post, error) {
+	if len(tableNames) == 0 || count <= 0 {
+		return []model.Post{}, nil
+	}
+
+	db, err := r.dbService.GetPool().GetGuildDB(guildID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get guild database: %w", err)
+	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
+
+	var queries []string
+	for _, tableName := range tableNames {
+		if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
+			return nil, err
+		}
+		queries = append(queries, fmt.Sprintf(`SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM "%s"`, tableName))
+	}
+	fullQuery := strings.Join(queries, " UNION ALL ")
+	finalQuery := fmt.Sprintf("SELECT * FROM (%s) ORDER BY RANDOM() LIMIT ?", fullQuery)
+
+	var posts []model.Post
+	err = sqlxDB.Select(&posts, finalQuery, count)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get random posts from multiple tables with sqlx: %w", err)
+	}
+	return posts, nil
+}
+
+// GetRandomFromMultipleTablesByTag 从多个表中按标签随机获取帖子
+func (r *postRepository) GetRandomFromMultipleTablesByTag(guildID string, tableNames []string, tagID string, count int, excludeTags []string) ([]model.Post, error) {
+	if len(tableNames) == 0 || count <= 0 {
+		return []model.Post{}, nil
+	}
+
+	db, err := r.dbService.GetPool().GetGuildDB(guildID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get guild database: %w", err)
+	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
+
+	var queries []string
+	var args []interface{}
+	for _, tableName := range tableNames {
+		if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
+			return nil, err
+		}
+		baseQuery := fmt.Sprintf(`SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM "%s" WHERE tags LIKE ?`, tableName)
+		args = append(args, "%"+tagID+"%")
+
+		if len(excludeTags) > 0 {
+			for _, exclude := range excludeTags {
+				baseQuery += " AND tags NOT LIKE ?"
+				args = append(args, "%"+exclude+"%")
+			}
+		}
+		queries = append(queries, baseQuery)
+	}
+
+	fullQuery := strings.Join(queries, " UNION ALL ")
+	finalQuery := fmt.Sprintf("SELECT * FROM (%s) ORDER BY RANDOM() LIMIT ?", fullQuery)
+	args = append(args, count)
+
+	var posts []model.Post
+	err = sqlxDB.Select(&posts, finalQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get random posts by tag from multiple tables with sqlx: %w", err)
+	}
+	return posts, nil
+}
+
+// TableExists 检查表是否存在
+func (r *postRepository) TableExists(guildID, tableName string) (bool, error) {
+	if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
+		return false, err
+	}
+	db, err := r.dbService.GetPool().GetGuildDB(guildID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get guild database: %w", err)
+	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
+
+	query := "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
+	var name string
+	err = sqlxDB.Get(&name, query, tableName)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check if table exists: %w", err)
+	}
+	return true, nil
+}
+
+// CreateTable 创建一个新的帖子表
 func (r *postRepository) CreateTable(guildID, tableName string) error {
 	if err := r.validateTableName(tableName); err != nil {
 		return err
@@ -520,46 +584,31 @@ func (r *postRepository) CreateTable(guildID, tableName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
 	query := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS "%s" (
 			id TEXT PRIMARY KEY,
-			title TEXT NOT NULL,
-			author TEXT NOT NULL,
-			author_id TEXT NOT NULL,
+			title TEXT,
+			author TEXT,
+			author_id TEXT,
 			content TEXT,
 			tags TEXT,
-			message_count INTEGER DEFAULT 0,
-			timestamp INTEGER NOT NULL,
-			cover_image_url TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`, tableName)
+			message_count INTEGER,
+			timestamp INTEGER,
+			cover_image_url TEXT
+		);`, tableName)
 
-	_, err = db.Exec(query)
+	_, err = sqlxDB.Exec(query)
 	if err != nil {
-		return fmt.Errorf("failed to create table: %w", err)
+		return fmt.Errorf("failed to create table %s: %w", tableName, err)
 	}
-
-	// 创建索引
-	indexQueries := []string{
-		fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_author_id ON "%s"(author_id)`, tableName, tableName),
-		fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_timestamp ON "%s"(timestamp)`, tableName, tableName),
-		fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_tags ON "%s"(tags)`, tableName, tableName),
-	}
-
-	for _, indexQuery := range indexQueries {
-		if _, err := db.Exec(indexQuery); err != nil {
-			log.Printf("Failed to create index: %v", err)
-		}
-	}
-
 	return nil
 }
 
-// DropTable 删除帖子表
+// DropTable 删除一个帖子表
 func (r *postRepository) DropTable(guildID, tableName string) error {
-	if err := r.validateTableName(tableName); err != nil {
+	if err := r.validateTableNameWithWhitelist(guildID, tableName); err != nil {
 		return err
 	}
 
@@ -567,225 +616,19 @@ func (r *postRepository) DropTable(guildID, tableName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get guild database: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
 	query := fmt.Sprintf(`DROP TABLE IF EXISTS "%s"`, tableName)
 
-	_, err = db.Exec(query)
+	_, err = sqlxDB.Exec(query)
 	if err != nil {
-		return fmt.Errorf("failed to drop table: %w", err)
+		return fmt.Errorf("failed to drop table %s: %w", tableName, err)
 	}
-
 	return nil
 }
 
-// TableExists 检查表是否存在
-func (r *postRepository) TableExists(guildID, tableName string) (bool, error) {
-	if err := r.validateTableName(tableName); err != nil {
-		return false, err
-	}
-
-	db, err := r.dbService.GetPool().GetGuildDB(guildID)
-	if err != nil {
-		return false, fmt.Errorf("failed to get guild database: %w", err)
-	}
-
-	query := `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
-
-	var name string
-	err = db.QueryRow(query, tableName).Scan(&name)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return false, nil
-		}
-		return false, fmt.Errorf("failed to check table existence: %w", err)
-	}
-
-	return true, nil
-}
-
-// GetTableNames 获取所有表名
-func (r *postRepository) GetTableNames(guildID string) ([]string, error) {
-	db, err := r.dbService.GetPool().GetGuildDB(guildID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get guild database: %w", err)
-	}
-
-	query := `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`
-
-	rows, err := db.Query(query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get table names: %w", err)
-	}
-	defer rows.Close()
-
-	var tableNames []string
-	for rows.Next() {
-		var tableName string
-		if err := rows.Scan(&tableName); err != nil {
-			log.Printf("Failed to scan table name: %v", err)
-			continue
-		}
-		tableNames = append(tableNames, tableName)
-	}
-
-	return tableNames, nil
-}
-
-// GetRandomFromMultipleTables 从多个表中获取随机帖子
-func (r *postRepository) GetRandomFromMultipleTables(guildID string, tableNames []string, count int) ([]model.Post, error) {
-	if len(tableNames) == 0 || count <= 0 {
-		return []model.Post{}, nil
-	}
-
-	// 验证所有表名
-	for _, tableName := range tableNames {
-		if err := r.validateTableName(tableName); err != nil {
-			return nil, err
-		}
-	}
-
-	db, err := r.dbService.GetPool().GetGuildDB(guildID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get guild database: %w", err)
-	}
-
-	// 构建安全的 UNION 查询
-	var queryBuilder strings.Builder
-	queryBuilder.WriteString("SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM (")
-	
-	for i, tableName := range tableNames {
-		if i > 0 {
-			queryBuilder.WriteString(" UNION ALL ")
-		}
-		queryBuilder.WriteString(fmt.Sprintf(`SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM "%s"`, tableName))
-	}
-	
-	queryBuilder.WriteString(") ORDER BY RANDOM() LIMIT ?")
-
-	rows, err := db.Query(queryBuilder.String(), count)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query random posts from multiple tables: %w", err)
-	}
-	defer rows.Close()
-
-	var posts []model.Post
-	for rows.Next() {
-		var post model.Post
-		if err := rows.Scan(
-			&post.ID, &post.Title, &post.Author, &post.AuthorID,
-			&post.Content, &post.Tags, &post.MessageCount,
-			&post.Timestamp, &post.CoverImageURL,
-		); err != nil {
-			log.Printf("Failed to scan post row: %v", err)
-			continue
-		}
-		posts = append(posts, post)
-	}
-
-	return posts, nil
-}
-
-// GetRandomFromMultipleTablesByTag 从多个表中按标签获取随机帖子
-func (r *postRepository) GetRandomFromMultipleTablesByTag(guildID string, tableNames []string, tagID string, count int, excludeTags []string) ([]model.Post, error) {
-	if len(tableNames) == 0 || count <= 0 {
-		return []model.Post{}, nil
-	}
-
-	// 验证所有表名
-	for _, tableName := range tableNames {
-		if err := r.validateTableName(tableName); err != nil {
-			return nil, err
-		}
-	}
-
-	db, err := r.dbService.GetPool().GetGuildDB(guildID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get guild database: %w", err)
-	}
-
-	// 构建安全的 UNION 查询
-	var queryBuilder strings.Builder
-	var queryArgs []interface{}
-	
-	queryBuilder.WriteString("SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM (")
-	
-	for i, tableName := range tableNames {
-		if i > 0 {
-			queryBuilder.WriteString(" UNION ALL ")
-		}
-		queryBuilder.WriteString(fmt.Sprintf(`SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM "%s"`, tableName))
-		
-		// 添加条件
-		if tagID != "" || len(excludeTags) > 0 {
-			queryBuilder.WriteString(" WHERE ")
-			conditions := []string{}
-			
-			if tagID != "" {
-				conditions = append(conditions, "tags LIKE ?")
-				queryArgs = append(queryArgs, "%"+tagID+"%")
-			}
-			
-			for _, excludeTag := range excludeTags {
-				conditions = append(conditions, "tags NOT LIKE ?")
-				queryArgs = append(queryArgs, "%"+excludeTag+"%")
-			}
-			
-			queryBuilder.WriteString(strings.Join(conditions, " AND "))
-		}
-	}
-	
-	queryBuilder.WriteString(") ORDER BY RANDOM() LIMIT ?")
-	queryArgs = append(queryArgs, count)
-
-	rows, err := db.Query(queryBuilder.String(), queryArgs...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query random posts from multiple tables by tag: %w", err)
-	}
-	defer rows.Close()
-
-	var posts []model.Post
-	for rows.Next() {
-		var post model.Post
-		if err := rows.Scan(
-			&post.ID, &post.Title, &post.Author, &post.AuthorID,
-			&post.Content, &post.Tags, &post.MessageCount,
-			&post.Timestamp, &post.CoverImageURL,
-		); err != nil {
-			log.Printf("Failed to scan post row: %v", err)
-			continue
-		}
-		posts = append(posts, post)
-	}
-
-	return posts, nil
-}
-
-// GetRandomFromAllTables 从所有表中获取随机帖子
-func (r *postRepository) GetRandomFromAllTables(guildID string, count int) ([]model.Post, error) {
-	if count <= 0 {
-		return []model.Post{}, nil
-	}
-
-	// 获取所有表名
-	tableNames, err := r.GetTableNames(guildID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get table names: %w", err)
-	}
-
-	return r.GetRandomFromMultipleTables(guildID, tableNames, count)
-}
-
-// GetRandomFromAllTablesByTag 从所有表中按标签获取随机帖子
-func (r *postRepository) GetRandomFromAllTablesByTag(guildID string, tagID string, count int, excludeTags []string) ([]model.Post, error) {
-	if count <= 0 {
-		return []model.Post{}, nil
-	}
-
-	// 获取所有表名
-	tableNames, err := r.GetTableNames(guildID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get table names: %w", err)
-	}
-
-	return r.GetRandomFromMultipleTablesByTag(guildID, tableNames, tagID, count, excludeTags)
+// transactionalPostRepository 事务版本的帖子数据访问实现
+type transactionalPostRepository struct {
+	*postRepository
+	tx *sqlx.Tx
 }

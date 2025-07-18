@@ -14,7 +14,7 @@ type PostRepository interface {
 	Create(guildID, tableName string, post *model.Post) error
 	Update(guildID, tableName string, post *model.Post) error
 	Delete(guildID, tableName, postID string) error
-	
+
 	// 多表操作
 	GetRandomFromMultipleTables(guildID string, tableNames []string, count int) ([]model.Post, error)
 	GetRandomFromMultipleTablesByTag(guildID string, tableNames []string, tagID string, count int, excludeTags []string) ([]model.Post, error)
@@ -64,12 +64,15 @@ type UserRepository interface {
 // PunishmentRepository 惩罚系统数据访问接口
 type PunishmentRepository interface {
 	// 惩罚记录
-	GetByID(punishmentID string) (*model.PunishmentRecord, error)
+	GetByID(punishmentID int64) (*model.PunishmentRecord, error)
 	GetByUserID(userID string) ([]model.PunishmentRecord, error)
+	GetByUserIDSince(userID string, since time.Time) ([]model.PunishmentRecord, error)
+	GetByAdminID(adminID string) ([]model.PunishmentRecord, error)
 	GetByGuildID(guildID string) ([]model.PunishmentRecord, error)
-	Create(punishment *model.PunishmentRecord) error
+	GetLatestByUserID(guildID, userID string) (*model.PunishmentRecord, error)
+	Create(punishment *model.PunishmentRecord) (int64, error)
 	Update(punishment *model.PunishmentRecord) error
-	Delete(punishmentID string) error
+	Delete(punishmentID int64) error
 
 	// 统计查询
 	CountByUser(userID string) (int, error)
@@ -137,9 +140,9 @@ type RepositoryManager interface {
 	PostRepository() PostRepository
 	UserRepository() UserRepository
 	PunishmentRepository() PunishmentRepository
-	GuildRepository() GuildRepository
-	TimedTaskRepository() TimedTaskRepository
-	LeaderboardRepository() LeaderboardRepository
+	// GuildRepository() GuildRepository
+	// TimedTaskRepository() TimedTaskRepository
+	// LeaderboardRepository() LeaderboardRepository
 
 	// 事务管理
 	BeginTransaction() (Transaction, error)
@@ -160,7 +163,7 @@ type Transaction interface {
 	PostRepository() PostRepository
 	UserRepository() UserRepository
 	PunishmentRepository() PunishmentRepository
-	GuildRepository() GuildRepository
-	TimedTaskRepository() TimedTaskRepository
-	LeaderboardRepository() LeaderboardRepository
+	// GuildRepository() GuildRepository
+	// TimedTaskRepository() TimedTaskRepository
+	// LeaderboardRepository() LeaderboardRepository
 }

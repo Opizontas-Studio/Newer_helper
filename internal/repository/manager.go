@@ -1,9 +1,10 @@
 package repository
 
 import (
-	"database/sql"
 	"discord-bot/internal/database"
 	"fmt"
+
+	"github.com/jmoiron/sqlx"
 )
 
 // repositoryManager 仓库管理器实现
@@ -11,12 +12,12 @@ type repositoryManager struct {
 	dbService *database.Service
 
 	// 仓库实例缓存
-	postRepo        PostRepository
-	userRepo        UserRepository
-	punishmentRepo  PunishmentRepository
-	guildRepo       GuildRepository
-	timedTaskRepo   TimedTaskRepository
-	leaderboardRepo LeaderboardRepository
+	postRepo       PostRepository
+	userRepo       UserRepository
+	punishmentRepo PunishmentRepository
+	// guildRepo       GuildRepository
+	// timedTaskRepo   TimedTaskRepository
+	// leaderboardRepo LeaderboardRepository
 }
 
 // NewRepositoryManager 创建新的仓库管理器
@@ -51,29 +52,31 @@ func (m *repositoryManager) PunishmentRepository() PunishmentRepository {
 }
 
 // GuildRepository 获取服务器仓库实例
-func (m *repositoryManager) GuildRepository() GuildRepository {
-	if m.guildRepo == nil {
-		m.guildRepo = NewGuildRepository(m.dbService)
-	}
-	return m.guildRepo
-}
+// GuildRepository 获取服务器仓库实例
+// func (m *repositoryManager) GuildRepository() GuildRepository {
+// 	if m.guildRepo == nil {
+// 		m.guildRepo = NewGuildRepository(m.dbService)
+// 	}
+// 	return m.guildRepo
+// }
 
 // TimedTaskRepository 获取定时任务仓库实例
-func (m *repositoryManager) TimedTaskRepository() TimedTaskRepository {
-	if m.timedTaskRepo == nil {
-		m.timedTaskRepo = NewTimedTaskRepository(m.dbService)
-	}
-	return m.timedTaskRepo
-}
+// func (m *repositoryManager) TimedTaskRepository() TimedTaskRepository {
+// 	if m.timedTaskRepo == nil {
+// 		m.timedTaskRepo = NewTimedTaskRepository(m.dbService)
+// 	}
+// 	return m.timedTaskRepo
+// }
 
 // LeaderboardRepository 获取排行榜仓库实例
-func (m *repositoryManager) LeaderboardRepository() LeaderboardRepository {
-	if m.leaderboardRepo == nil {
-		m.leaderboardRepo = NewLeaderboardRepository(m.dbService)
-	}
-	return m.leaderboardRepo
-}
-
+//
+//	func (m *repositoryManager) LeaderboardRepository() LeaderboardRepository {
+//		if m.leaderboardRepo == nil {
+//			m.leaderboardRepo = NewLeaderboardRepository(m.dbService)
+//		}
+//		return m.leaderboardRepo
+//	}
+//
 // BeginTransaction 开始事务
 func (m *repositoryManager) BeginTransaction() (Transaction, error) {
 	return NewTransaction(m.dbService)
@@ -115,30 +118,30 @@ func (m *repositoryManager) getRepositoryCount() int {
 	if m.punishmentRepo != nil {
 		count++
 	}
-	if m.guildRepo != nil {
-		count++
-	}
-	if m.timedTaskRepo != nil {
-		count++
-	}
-	if m.leaderboardRepo != nil {
-		count++
-	}
+	// if m.guildRepo != nil {
+	// 	count++
+	// }
+	// if m.timedTaskRepo != nil {
+	// 	count++
+	// }
+	// if m.leaderboardRepo != nil {
+	// 	count++
+	// }
 	return count
 }
 
 // transaction 事务实现
 type transaction struct {
-	tx        *sql.Tx
+	tx        *sqlx.Tx
 	dbService *database.Service
 
 	// 事务中的仓库实例
-	postRepo        PostRepository
-	userRepo        UserRepository
-	punishmentRepo  PunishmentRepository
-	guildRepo       GuildRepository
-	timedTaskRepo   TimedTaskRepository
-	leaderboardRepo LeaderboardRepository
+	postRepo       PostRepository
+	userRepo       UserRepository
+	punishmentRepo PunishmentRepository
+	// guildRepo       GuildRepository
+	// timedTaskRepo   TimedTaskRepository
+	// leaderboardRepo LeaderboardRepository
 }
 
 // NewTransaction 创建新的事务
@@ -149,8 +152,9 @@ func NewTransaction(dbService *database.Service) (Transaction, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database for transaction: %w", err)
 	}
+	sqlxDB := sqlx.NewDb(db, "sqlite3")
 
-	tx, err := db.Begin()
+	tx, err := sqlxDB.Beginx()
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -196,77 +200,83 @@ func (t *transaction) UserRepository() UserRepository {
 // PunishmentRepository 获取事务中的惩罚仓库实例
 func (t *transaction) PunishmentRepository() PunishmentRepository {
 	if t.punishmentRepo == nil {
-		t.punishmentRepo = NewTransactionalPunishmentRepository(t.tx, t.dbService)
+		t.punishmentRepo = NewTransactionalPunishmentRepository(t.tx)
 	}
 	return t.punishmentRepo
 }
 
 // GuildRepository 获取事务中的服务器仓库实例
-func (t *transaction) GuildRepository() GuildRepository {
-	if t.guildRepo == nil {
-		t.guildRepo = NewTransactionalGuildRepository(t.tx, t.dbService)
-	}
-	return t.guildRepo
-}
+// GuildRepository 获取事务中的服务器仓库实例
+// func (t *transaction) GuildRepository() GuildRepository {
+// 	if t.guildRepo == nil {
+// 		t.guildRepo = NewTransactionalGuildRepository(t.tx)
+// 	}
+// 	return t.guildRepo
+// }
 
 // TimedTaskRepository 获取事务中的定时任务仓库实例
-func (t *transaction) TimedTaskRepository() TimedTaskRepository {
-	if t.timedTaskRepo == nil {
-		t.timedTaskRepo = NewTransactionalTimedTaskRepository(t.tx, t.dbService)
-	}
-	return t.timedTaskRepo
-}
+// func (t *transaction) TimedTaskRepository() TimedTaskRepository {
+// 	if t.timedTaskRepo == nil {
+// 		t.timedTaskRepo = NewTransactionalTimedTaskRepository(t.tx)
+// 	}
+// 	return t.timedTaskRepo
+// }
 
 // LeaderboardRepository 获取事务中的排行榜仓库实例
-func (t *transaction) LeaderboardRepository() LeaderboardRepository {
-	if t.leaderboardRepo == nil {
-		t.leaderboardRepo = NewTransactionalLeaderboardRepository(t.tx, t.dbService)
-	}
-	return t.leaderboardRepo
-}
-
+// func (t *transaction) LeaderboardRepository() LeaderboardRepository {
+// 	if t.leaderboardRepo == nil {
+// 		t.leaderboardRepo = NewTransactionalLeaderboardRepository(t.tx)
+// 	}
+// 	return t.leaderboardRepo
+// }
 // 仓库构造函数 - 当前只实现了PostRepository，其他返回nil
-func NewUserRepository(dbService *database.Service) UserRepository {
-	return nil // 暂未实现
-}
 
-func NewPunishmentRepository(dbService *database.Service) PunishmentRepository {
-	return nil // 暂未实现
-}
+// func NewGuildRepository(dbService *database.Service) GuildRepository {
+// 	return nil // 暂未实现
+// }
 
-func NewGuildRepository(dbService *database.Service) GuildRepository {
-	return nil // 暂未实现
-}
+// func NewTimedTaskRepository(dbService *database.Service) TimedTaskRepository {
+// 	return nil // 暂未实现
+// }
 
-func NewTimedTaskRepository(dbService *database.Service) TimedTaskRepository {
-	return nil // 暂未实现
-}
-
-func NewLeaderboardRepository(dbService *database.Service) LeaderboardRepository {
-	return nil // 暂未实现
-}
+// func NewLeaderboardRepository(dbService *database.Service) LeaderboardRepository {
+// 	return nil // 暂未实现
+// }
 
 // 事务版本的仓库构造函数 - 暂未实现
-func NewTransactionalPostRepository(tx *sql.Tx, dbService *database.Service) PostRepository {
-	return nil // 暂未实现
+// 事务版本的仓库构造函数
+func NewTransactionalPostRepository(tx *sqlx.Tx, dbService *database.Service) PostRepository {
+	// 复用非事务性仓库的逻辑，但使用事务对象
+	return &transactionalPostRepository{
+		postRepository: &postRepository{dbService: dbService},
+		tx:             tx,
+	}
 }
 
-func NewTransactionalUserRepository(tx *sql.Tx, dbService *database.Service) UserRepository {
-	return nil // 暂未实现
+func NewTransactionalPunishmentRepository(tx *sqlx.Tx) PunishmentRepository {
+	return &transactionalPunishmentRepository{
+		punishmentRepository: &punishmentRepository{}, // dbService 在事务中不是必需的
+		tx:                   tx,
+	}
 }
 
-func NewTransactionalPunishmentRepository(tx *sql.Tx, dbService *database.Service) PunishmentRepository {
-	return nil // 暂未实现
-}
+// func NewTransactionalGuildRepository(tx *sqlx.Tx) GuildRepository {
+// 	return &transactionalGuildRepository{
+// 		guildRepository: &guildRepository{},
+// 		tx:              tx,
+// 	}
+// }
 
-func NewTransactionalGuildRepository(tx *sql.Tx, dbService *database.Service) GuildRepository {
-	return nil // 暂未实现
-}
+// func NewTransactionalTimedTaskRepository(tx *sqlx.Tx) TimedTaskRepository {
+// 	return &transactionalTimedTaskRepository{
+// 		timedTaskRepository: &timedTaskRepository{},
+// 		tx:                  tx,
+// 	}
+// }
 
-func NewTransactionalTimedTaskRepository(tx *sql.Tx, dbService *database.Service) TimedTaskRepository {
-	return nil // 暂未实现
-}
-
-func NewTransactionalLeaderboardRepository(tx *sql.Tx, dbService *database.Service) LeaderboardRepository {
-	return nil // 暂未实现
-}
+// func NewTransactionalLeaderboardRepository(tx *sqlx.Tx) LeaderboardRepository {
+// 	return &transactionalLeaderboardRepository{
+// 		leaderboardRepository: &leaderboardRepository{},
+// 		tx:                    tx,
+// 	}
+// }

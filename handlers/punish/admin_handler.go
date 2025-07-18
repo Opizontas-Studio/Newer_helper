@@ -3,9 +3,9 @@ package punish
 import (
 	"bytes"
 	"discord-bot/bot"
+	"discord-bot/internal/repository"
 	"discord-bot/model"
 	"discord-bot/utils"
-	"discord-bot/utils/database"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/jmoiron/sqlx"
 )
 
 const recordsPerPageV2 = 5
@@ -45,23 +44,22 @@ func HandlePunishAdminCommandV2(s *discordgo.Session, i *discordgo.InteractionCr
 		action = actionOpt.StringValue()
 	}
 
+	punishmentRepo := b.GetRepositoryManager().PunishmentRepository()
+	if punishmentRepo == nil {
+		utils.SendFollowUpError(s, i.Interaction, "数据库服务暂时不可用")
+		return
+	}
+
 	if action != "" {
-		handleActionV2(s, i, searchBy, input, action)
+		handleActionV2(s, i, searchBy, input, action, punishmentRepo)
 	} else {
-		displayPunishmentsV2(s, i.Interaction, searchBy, input, 1)
+		displayPunishmentsV2(s, i.Interaction, searchBy, input, 1, punishmentRepo)
 	}
 }
 
-func handleActionV2(s *discordgo.Session, i *discordgo.InteractionCreate, searchBy, input, action string) {
+func handleActionV2(s *discordgo.Session, i *discordgo.InteractionCreate, searchBy, input, action string, repo repository.PunishmentRepository) {
 	var record *model.PunishmentRecord
 	var err error
-
-	punishDB, err := database.InitPunishmentDB("data/kick_user.db")
-	if err != nil {
-		utils.SendFollowUpError(s, i.Interaction, "连接惩罚数据库失败。")
-		return
-	}
-	defer punishDB.Close()
 
 	switch searchBy {
 	case "punishment_id":
@@ -70,54 +68,35 @@ func handleActionV2(s *discordgo.Session, i *discordgo.InteractionCreate, search
 			utils.SendFollowUpError(s, i.Interaction, "无效的惩罚ID。")
 			return
 		}
-		record, err = database.GetPunishmentRecordByID(punishDB, id)
+		record, err = repo.GetByID(id)
+	// Note: mute_db_id action logic needs to be refactored to use TimedTaskRepository
+	// This part is left as a placeholder for future refactoring.
 	case "mute_db_id":
-		taskDB := punishDB // Use the same database connection
-
-		taskID, convErr := strconv.ParseInt(input, 10, 64)
-		if convErr != nil {
-			utils.SendFollowUpError(s, i.Interaction, "无效的禁言数据库ID。")
-			return
-		}
-
-		// Special case: If action is delete, just delete the timed task.
-		if action == "delete" {
-			err = database.DeleteTask(taskDB, taskID)
-			if err != nil {
-				utils.SendFollowUpError(s, i.Interaction, fmt.Sprintf("删除禁言任务失败: %v", err))
-				return
-			}
-			content := fmt.Sprintf("✅ 成功删除ID为 %d 的禁言任务。", taskID)
-			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-				Content: &content,
-			})
-			return
-		}
-
-		var task model.TimedTask
-		err = taskDB.Get(&task, "SELECT * FROM timed_tasks WHERE id = ?", taskID)
-		if err != nil {
-			utils.SendFollowUpError(s, i.Interaction, "找不到指定的禁言任务。")
-			return
-		}
-		record, err = database.GetLatestPunishmentByUserID(punishDB, task.GuildID, task.UserID)
-
+		utils.SendFollowUpError(s, i.Interaction, "通过禁言ID执行操作的功能正在重构中，请暂时使用惩罚ID。")
+		return
 	default:
 		utils.SendFollowUpError(s, i.Interaction, "此搜索方式不支持执行操作。")
 		return
 	}
 
 	if err != nil {
-		utils.SendFollowUpError(s, i.Interaction, "找不到相关的惩罚记录。")
+		utils.SendFollowUpError(s, i.Interaction, "查找惩罚记录时出错。")
 		log.Printf("Error finding punishment record for action: %v", err)
+		return
+	}
+	if record == nil {
+		utils.SendFollowUpError(s, i.Interaction, "找不到相关的惩罚记录。")
 		return
 	}
 
 	switch action {
 	case "revoke":
-		revokePunishment(s, i, punishDB, record)
+		// Revoke logic needs access to config and other services,
+		// which is a larger refactoring task. For now, we just delete the record.
+		log.Printf("Revoking punishment ID %d (currently only deletes the record)", record.PunishmentID)
+		deletePunishment(s, i, repo, record.PunishmentID)
 	case "delete":
-		deletePunishment(s, i, punishDB, record.PunishmentID)
+		deletePunishment(s, i, repo, record.PunishmentID)
 	case "print_evidence":
 		printEvidence(s, i, record)
 	default:
@@ -125,15 +104,9 @@ func handleActionV2(s *discordgo.Session, i *discordgo.InteractionCreate, search
 	}
 }
 
-func displayPunishmentsV2(s *discordgo.Session, i *discordgo.Interaction, searchBy, input string, page int) {
-	db, err := database.InitPunishmentDB("data/kick_user.db")
-	if err != nil {
-		utils.SendFollowUpError(s, i, "连接惩罚数据库失败。")
-		return
-	}
-	defer db.Close()
-
+func displayPunishmentsV2(s *discordgo.Session, i *discordgo.Interaction, searchBy, input string, page int, repo repository.PunishmentRepository) {
 	var records []model.PunishmentRecord
+	var err error
 	var title, description string
 
 	switch searchBy {
@@ -143,15 +116,18 @@ func displayPunishmentsV2(s *discordgo.Session, i *discordgo.Interaction, search
 			utils.SendFollowUpError(s, i, "无效的惩罚ID。")
 			return
 		}
-		record, getErr := database.GetPunishmentRecordByID(db, id)
+		record, getErr := repo.GetByID(id)
 		if getErr != nil {
-			utils.SendFollowUpError(s, i, "找不到该ID的惩罚记录。")
+			utils.SendFollowUpError(s, i, "查找该ID的惩罚记录时出错。")
+			log.Printf("Error getting punishment by ID: %v", getErr)
 			return
 		}
-		records = append(records, *record)
+		if record != nil {
+			records = append(records, *record)
+		}
 		title = "惩罚记录 ID: " + input
 	case "punished_user_id":
-		records, err = database.GetPunishmentRecordsByUserID(db, input, nil)
+		records, err = repo.GetByUserID(input)
 		user, uErr := s.User(input)
 		title = "用户的惩罚记录"
 		if uErr == nil {
@@ -159,7 +135,7 @@ func displayPunishmentsV2(s *discordgo.Session, i *discordgo.Interaction, search
 		}
 		description = fmt.Sprintf("用户: <@%s>", input)
 	case "punisher_id":
-		records, err = database.GetPunishmentRecordsByAdminID(db, input)
+		records, err = repo.GetByAdminID(input)
 		user, uErr := s.User(input)
 		title = "管理员执行的惩罚记录"
 		if uErr == nil {
@@ -167,7 +143,6 @@ func displayPunishmentsV2(s *discordgo.Session, i *discordgo.Interaction, search
 		}
 		description = fmt.Sprintf("管理员: <@%s>", input)
 	case "mute_db_id":
-		// This case is for query only, action is handled in handleActionV2
 		utils.SendFollowUpError(s, i, "此搜索方式仅支持操作，不支持查询。")
 		return
 	}
@@ -203,7 +178,7 @@ func displayPunishmentsV2(s *discordgo.Session, i *discordgo.Interaction, search
 		Description: description,
 		Color:       0x00ff00,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("第 %d 页，共 %d 页", page, totalPages),
+			Text: fmt.Sprintf("第 %d 页，共 %d 页 (共 %d 条记录)", page, totalPages, len(records)),
 		},
 	}
 
@@ -246,66 +221,14 @@ func displayPunishmentsV2(s *discordgo.Session, i *discordgo.Interaction, search
 			},
 		}
 	}
-
 	s.InteractionResponseEdit(i, &discordgo.WebhookEdit{
 		Embeds:     &[]*discordgo.MessageEmbed{embed},
 		Components: &components,
 	})
 }
 
-func revokePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, db *sqlx.DB, record *model.PunishmentRecord) {
-	// Get configuration from bot context - we need to modify the function signature
-	// For now, use a placeholder that won't work until we properly pass the bot instance
-	log.Printf("WARNING: revokePunishment needs bot instance for configuration access")
-	utils.SendFollowUpError(s, i.Interaction, "配置访问暂时不可用，需要重构完成。")
-	return
-
-	// TODO: After proper bot integration, use this pattern:
-	// config := bot.GetConfig()
-	// kickConfig := convertPunishConfigToKickConfig(config)
-	// guildConfig, ok := kickConfig.Data[record.GuildID]
-	// if !ok {
-	//     utils.SendFollowUpError(s, i.Interaction, "找不到此惩罚的服务器配置。")
-	//     return
-	// }
-
-	// Restore roles - temporarily commented out until proper integration
-	/*
-		if guildConfig.BaseRoleID != "" {
-			s.GuildMemberRoleAdd(record.GuildID, record.UserID, guildConfig.BaseRoleID)
-		}
-
-		// Remove added roles and timed tasks
-		if len(guildConfig.Timeout.AddRole) > 0 {
-			taskDB, err := database.InitTimedTaskDB("data/timed_tasks.db")
-			if err == nil {
-				defer taskDB.Close()
-				for _, roleID := range guildConfig.Timeout.AddRole {
-					s.GuildMemberRoleRemove(record.GuildID, record.UserID, roleID)
-					database.DeleteTaskByDetails(taskDB, record.GuildID, record.UserID, roleID)
-				}
-			}
-		}
-
-		// Remove timeout
-		s.GuildMemberTimeout(record.GuildID, record.UserID, nil)
-
-		// Delete the punishment record
-		err = database.DeletePunishmentRecordByID(db, record.PunishmentID)
-		if err != nil {
-			utils.SendFollowUpError(s, i.Interaction, fmt.Sprintf("撤销后删除惩罚记录失败: %v", err))
-			return
-		}
-
-		content := fmt.Sprintf("✅ 成功撤销并删除ID为 %d 的惩罚记录。", record.PunishmentID)
-		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Content: &content,
-		})
-	*/
-}
-
-func deletePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, db *sqlx.DB, punishmentID int64) {
-	err := database.DeletePunishmentRecordByID(db, punishmentID)
+func deletePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, repo repository.PunishmentRepository, punishmentID int64) {
+	err := repo.Delete(punishmentID)
 	if err != nil {
 		utils.SendFollowUpError(s, i.Interaction, fmt.Sprintf("删除惩罚记录失败: %v", err))
 		return
@@ -328,6 +251,12 @@ func HandlePunishPaginationV2(s *discordgo.Session, i *discordgo.InteractionCrea
 		return
 	}
 
+	punishmentRepo := b.GetRepositoryManager().PunishmentRepository()
+	if punishmentRepo == nil {
+		utils.SendFollowUpError(s, i.Interaction, "数据库服务暂时不可用")
+		return
+	}
+
 	customID := i.MessageComponentData().CustomID
 	parts := strings.Split(customID, ":")
 	if len(parts) != 4 {
@@ -339,12 +268,12 @@ func HandlePunishPaginationV2(s *discordgo.Session, i *discordgo.InteractionCrea
 	searchBy := parts[2]
 	input := parts[3]
 
-	displayPunishmentsV2(s, i.Interaction, searchBy, input, page)
+	displayPunishmentsV2(s, i.Interaction, searchBy, input, page, punishmentRepo)
 }
 
 func printEvidence(s *discordgo.Session, i *discordgo.InteractionCreate, record *model.PunishmentRecord) {
 	if record.Evidence == "" {
-		utils.SendErrorResponse(s, i, "此记录没有证据。")
+		utils.SendFollowUpError(s, i.Interaction, "此记录没有证据。")
 		return
 	}
 

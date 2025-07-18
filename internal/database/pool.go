@@ -12,18 +12,26 @@ import (
 
 // PoolConfig 数据库连接池配置
 type PoolConfig struct {
-	MaxOpenConns    int           `mapstructure:"max_open_conns"`
-	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
-	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
-	ConnMaxIdleTime time.Duration `mapstructure:"conn_max_idle_time"`
+	MaxOpenConns     int           `mapstructure:"max_open_conns"`
+	MaxIdleConns     int           `mapstructure:"max_idle_conns"`
+	ConnMaxLifetime  time.Duration `mapstructure:"conn_max_lifetime"`
+	ConnMaxIdleTime  time.Duration `mapstructure:"conn_max_idle_time"`
+	GuildsDBPath     string        `mapstructure:"guilds_db_path"`
+	UserDBPath       string        `mapstructure:"user_db_path"`
+	KickUserDBPath   string        `mapstructure:"kick_user_db_path"`
+	TimedTasksDBPath string        `mapstructure:"timed_tasks_db_path"`
 }
 
 // DefaultPoolConfig 默认连接池配置
 var DefaultPoolConfig = PoolConfig{
-	MaxOpenConns:    25,
-	MaxIdleConns:    5,
-	ConnMaxLifetime: 1 * time.Hour,
-	ConnMaxIdleTime: 10 * time.Minute,
+	MaxOpenConns:     25,
+	MaxIdleConns:     5,
+	ConnMaxLifetime:  1 * time.Hour,
+	ConnMaxIdleTime:  10 * time.Minute,
+	GuildsDBPath:     "./data/guilds.db",
+	UserDBPath:       "./data/user.db",
+	KickUserDBPath:   "./data/kick_user.db",
+	TimedTasksDBPath: "./data/timed_tasks.db",
 }
 
 // Pool 数据库连接池

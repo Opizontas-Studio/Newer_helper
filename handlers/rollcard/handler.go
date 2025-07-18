@@ -2,9 +2,9 @@ package rollcard
 
 import (
 	"discord-bot/bot"
+	"discord-bot/internal/repository"
 	"discord-bot/model"
 	"discord-bot/utils"
-	"discord-bot/utils/database"
 	"fmt"
 	"log"
 	"strconv"
@@ -29,7 +29,8 @@ func HandleRollCardInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 		// If no pool is specified, try to get user's preferred pools
 		userID := i.Member.User.ID
 		guildID := i.GuildID
-		preferredPools, err := database.GetUserPreferredPools(userID, guildID)
+		userRepo := b.GetRepositoryManager().UserRepository()
+		preferredPools, err := userRepo.GetUserPreferences(userID, guildID)
 		if err != nil {
 			log.Printf("Error getting user preferred pools for user %s in guild %s: %v", userID, guildID, err)
 			sendEphemeralResponse(s, i, "获取您的偏好卡池时出错 ")
@@ -97,7 +98,15 @@ func rollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, 
 		return
 	}
 
-	posts, err := getPosts(&rollCardGuildConfig, poolNames, tagID, count, excludeTags)
+	// 获取PostRepository
+	postRepo := b.GetRepositoryManager().PostRepository()
+	if postRepo == nil {
+		log.Printf("PostRepository is not available for guild %s", guildID)
+		sendEphemeralResponse(s, i, "数据库服务暂时不可用")
+		return
+	}
+
+	posts, err := getPosts(&rollCardGuildConfig, poolNames, tagID, count, excludeTags, postRepo)
 	if err != nil {
 		log.Printf("Error getting posts for guild %s: %v", guildID, err)
 		sendEphemeralResponse(s, i, err.Error())
@@ -140,21 +149,14 @@ func rollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, 
 }
 
 // getPosts retrieves random posts from the database based on the pools, tag, and count.
-// TODO: This is a temporary implementation. In the complete integration phase,
-// we will use the Repository pattern with connection pooling for database access.
-func getPosts(config *model.RollCardGuildConfig, poolNames []string, tagID string, count int, excludeTags []string) ([]model.Post, error) {
-	db, err := database.InitDB(config.Database)
-	if err != nil {
-		return nil, fmt.Errorf("error accessing card database")
-	}
-	defer db.Close()
-
+// Uses the Repository pattern with connection pooling for secure database access.
+func getPosts(config *model.RollCardGuildConfig, poolNames []string, tagID string, count int, excludeTags []string, postRepo repository.PostRepository) ([]model.Post, error) {
 	// Handle the special case for "all-server-roll"
 	if len(poolNames) == 1 && poolNames[0] == "all-server-roll" {
 		if tagID != "" || len(excludeTags) > 0 {
-			return database.GetRandomPostsByTagFromAllTables(db, tagID, count, excludeTags)
+			return postRepo.GetRandomFromAllTablesByTag(config.GuildID, tagID, count, excludeTags)
 		}
-		return database.GetRandomPostsFromAllTables(db, count)
+		return postRepo.GetRandomFromAllTables(config.GuildID, count)
 	}
 
 	var tableNames []string
@@ -179,13 +181,11 @@ func getPosts(config *model.RollCardGuildConfig, poolNames []string, tagID strin
 	}
 
 	if tagID != "" || len(excludeTags) > 0 {
-		// TODO: SECURITY RISK - These functions have SQL injection vulnerabilities
-		// In the complete integration phase, we will use the Repository pattern with prepared statements
-		return database.GetRandomPostsByTagFromMultipleTables(db, tableNames, tagID, count, excludeTags)
+		// Use secure Repository pattern with prepared statements
+		return postRepo.GetRandomFromMultipleTablesByTag(config.GuildID, tableNames, tagID, count, excludeTags)
 	}
-	// TODO: SECURITY RISK - This function has SQL injection vulnerabilities
-	// In the complete integration phase, we will use the Repository pattern with prepared statements
-	return database.GetRandomPostsFromMultipleTables(db, tableNames, count)
+	// Use secure Repository pattern with prepared statements
+	return postRepo.GetRandomFromMultipleTables(config.GuildID, tableNames, count)
 }
 
 // buildEmbeds creates a slice of MessageEmbeds from the given posts.
