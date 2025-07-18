@@ -13,7 +13,8 @@ import (
 func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
 	switch i.Type {
 	case discordgo.InteractionApplicationCommand:
-		if h, ok := b.CommandHandlers[i.ApplicationCommandData().Name]; ok {
+		commandHandlers := b.GetCommandHandlers()
+		if h, ok := commandHandlers[i.ApplicationCommandData().Name]; ok {
 			h(s, i)
 		}
 	case discordgo.InteractionMessageComponent:

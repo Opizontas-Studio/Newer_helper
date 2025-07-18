@@ -92,12 +92,12 @@ type Config struct {
 	SuperAdminRoleIDs []string `mapstructure:"super_admin_role_ids"`
 
 	// 从配置文件获取
-	App      AppConfig      `mapstructure:"app"`
-	Database DatabaseConfig `mapstructure:"database"`
+	App      AppConfig              `mapstructure:"app"`
+	Database DatabaseConfig         `mapstructure:"database"`
 	Tasks    map[string]*TaskConfig `mapstructure:"tasks"`
-	Punish   PunishConfig   `mapstructure:"punish"`
-	RollCard RollCardConfig `mapstructure:"rollcard"`
-	Thread   ThreadConfig   `mapstructure:"thread"`
+	Punish   PunishConfig           `mapstructure:"punish"`
+	RollCard RollCardConfig         `mapstructure:"rollcard"`
+	Thread   ThreadConfig           `mapstructure:"thread"`
 
 	// 从数据库动态加载的服务器配置
 	ServerConfigs map[string]ServerConfig `mapstructure:"-"`

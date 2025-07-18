@@ -12,6 +12,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	internal_config "discord-bot/internal/config"
 )
 
 func startPprofServer() {
@@ -79,6 +80,16 @@ func main() {
 		log.Fatalf("Error getting cooldown service: %v", err)
 	}
 
+	configServiceInterface, err := serviceContainer.Get("config_service")
+	if err != nil {
+		log.Fatalf("Error getting config service: %v", err)
+	}
+
+	configService, ok := configServiceInterface.(*internal_config.Service)
+	if !ok {
+		log.Fatalf("Error: config service type assertion failed")
+	}
+
 	// 创建Bot实例
 	b, err := bot.NewBot(
 		discordService,
@@ -87,6 +98,7 @@ func main() {
 		cooldownService,
 		cfg,
 		db,
+		configService,
 	)
 	if err != nil {
 		log.Fatalf("Error creating bot: %v", err)
@@ -94,7 +106,7 @@ func main() {
 
 	// 注册处理器
 	handlers.Register(b)
-	
+
 	// 注册中间件处理器
 	handlers.RegisterMiddlewareHandlers(b)
 

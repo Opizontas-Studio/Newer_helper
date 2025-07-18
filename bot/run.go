@@ -11,8 +11,6 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 func (b *Bot) Run() {
@@ -54,11 +52,9 @@ func (b *Bot) Run() {
 	b.startScanScheduler()
 
 	// Start the role remover scheduler
-	kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
-	if err != nil {
-		log.Fatalf("Failed to load kick config for  scanner: %v", err)
-	}
-	timedTaskDB, err := database.InitTimedTaskDB(kickConfig.InitConfig.DBPath)
+	// Use ConfigService to get punishment configuration
+	punishConfig := b.GetConfigService().GetPunishConfig()
+	timedTaskDB, err := database.InitTimedTaskDB(punishConfig.InitConfig.DBPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize timed task DB: %v", err)
 	}
@@ -77,7 +73,7 @@ func (b *Bot) Run() {
 func (b *Bot) startScanScheduler() {
 	// 使用新的调度器服务
 	b.scheduler.Start()
-	
+
 	// Schedule a cooldown cleanup every hour
 	b.scheduler.AddJob("cooldown_cleanup", 1*time.Hour, func() {
 		log.Println("Cleaning up preset cooldowns...")

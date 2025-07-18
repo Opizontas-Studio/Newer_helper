@@ -154,7 +154,7 @@ func (m *CustomCooldownMiddleware) Process(ctx *CommandContext, next HandlerFunc
 	// 检查是否在冷却期
 	if m.cooldownService.IsOnCooldown(cooldownKey) {
 		remaining := m.cooldownService.GetCooldownRemaining(cooldownKey)
-		
+
 		response := &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -162,7 +162,7 @@ func (m *CustomCooldownMiddleware) Process(ctx *CommandContext, next HandlerFunc
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		}
-		
+
 		return ctx.Session.InteractionRespond(ctx.Interaction.Interaction, response)
 	}
 

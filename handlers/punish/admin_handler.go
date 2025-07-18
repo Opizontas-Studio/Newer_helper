@@ -254,48 +254,54 @@ func displayPunishmentsV2(s *discordgo.Session, i *discordgo.Interaction, search
 }
 
 func revokePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, db *sqlx.DB, record *model.PunishmentRecord) {
-	kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
-	if err != nil {
-		utils.SendFollowUpError(s, i.Interaction, "加载配置失败。")
-		return
-	}
-	guildConfig, ok := kickConfig.Data[record.GuildID]
-	if !ok {
-		utils.SendFollowUpError(s, i.Interaction, "找不到此惩罚的服务器配置。")
-		return
-	}
+	// Get configuration from bot context - we need to modify the function signature
+	// For now, use a placeholder that won't work until we properly pass the bot instance
+	log.Printf("WARNING: revokePunishment needs bot instance for configuration access")
+	utils.SendFollowUpError(s, i.Interaction, "配置访问暂时不可用，需要重构完成。")
+	return
 
-	// Restore roles
-	if guildConfig.BaseRoleID != "" {
-		s.GuildMemberRoleAdd(record.GuildID, record.UserID, guildConfig.BaseRoleID)
-	}
+	// TODO: After proper bot integration, use this pattern:
+	// config := bot.GetConfig()
+	// kickConfig := convertPunishConfigToKickConfig(config)
+	// guildConfig, ok := kickConfig.Data[record.GuildID]
+	// if !ok {
+	//     utils.SendFollowUpError(s, i.Interaction, "找不到此惩罚的服务器配置。")
+	//     return
+	// }
 
-	// Remove added roles and timed tasks
-	if len(guildConfig.Timeout.AddRole) > 0 {
-		taskDB, err := database.InitTimedTaskDB("data/timed_tasks.db")
-		if err == nil {
-			defer taskDB.Close()
-			for _, roleID := range guildConfig.Timeout.AddRole {
-				s.GuildMemberRoleRemove(record.GuildID, record.UserID, roleID)
-				database.DeleteTaskByDetails(taskDB, record.GuildID, record.UserID, roleID)
+	// Restore roles - temporarily commented out until proper integration
+	/*
+		if guildConfig.BaseRoleID != "" {
+			s.GuildMemberRoleAdd(record.GuildID, record.UserID, guildConfig.BaseRoleID)
+		}
+
+		// Remove added roles and timed tasks
+		if len(guildConfig.Timeout.AddRole) > 0 {
+			taskDB, err := database.InitTimedTaskDB("data/timed_tasks.db")
+			if err == nil {
+				defer taskDB.Close()
+				for _, roleID := range guildConfig.Timeout.AddRole {
+					s.GuildMemberRoleRemove(record.GuildID, record.UserID, roleID)
+					database.DeleteTaskByDetails(taskDB, record.GuildID, record.UserID, roleID)
+				}
 			}
 		}
-	}
 
-	// Remove timeout
-	s.GuildMemberTimeout(record.GuildID, record.UserID, nil)
+		// Remove timeout
+		s.GuildMemberTimeout(record.GuildID, record.UserID, nil)
 
-	// Delete the punishment record
-	err = database.DeletePunishmentRecordByID(db, record.PunishmentID)
-	if err != nil {
-		utils.SendFollowUpError(s, i.Interaction, fmt.Sprintf("撤销后删除惩罚记录失败: %v", err))
-		return
-	}
+		// Delete the punishment record
+		err = database.DeletePunishmentRecordByID(db, record.PunishmentID)
+		if err != nil {
+			utils.SendFollowUpError(s, i.Interaction, fmt.Sprintf("撤销后删除惩罚记录失败: %v", err))
+			return
+		}
 
-	content := fmt.Sprintf("✅ 成功撤销并删除ID为 %d 的惩罚记录。", record.PunishmentID)
-	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-		Content: &content,
-	})
+		content := fmt.Sprintf("✅ 成功撤销并删除ID为 %d 的惩罚记录。", record.PunishmentID)
+		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Content: &content,
+		})
+	*/
 }
 
 func deletePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, db *sqlx.DB, punishmentID int64) {

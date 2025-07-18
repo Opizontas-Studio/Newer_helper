@@ -29,12 +29,12 @@ func (m *loggingMiddleware) WithLogger(logger Logger) LoggingMiddleware {
 // Process 处理日志记录
 func (m *loggingMiddleware) Process(ctx *CommandContext, next HandlerFunc) error {
 	start := time.Now()
-	
+
 	// 记录命令开始执行
 	m.logger.Info("命令开始执行", map[string]interface{}{
-		"command":  ctx.Interaction.ApplicationCommandData().Name,
-		"guild_id": ctx.GuildID,
-		"user_id":  ctx.UserID,
+		"command":    ctx.Interaction.ApplicationCommandData().Name,
+		"guild_id":   ctx.GuildID,
+		"user_id":    ctx.UserID,
 		"start_time": start,
 	})
 
@@ -109,7 +109,7 @@ func (m *ErrorHandlingMiddleware) Process(ctx *CommandContext, next HandlerFunc)
 				"guild_id": ctx.GuildID,
 				"user_id":  ctx.UserID,
 			})
-			
+
 			// 发送错误响应
 			ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -152,7 +152,7 @@ func (m *CooldownMiddleware) Process(ctx *CommandContext, next HandlerFunc) erro
 	// 检查是否在冷却期
 	if m.cooldownService.IsOnCooldown(cooldownKey) {
 		remaining := m.cooldownService.GetCooldownRemaining(cooldownKey)
-		
+
 		response := &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -160,7 +160,7 @@ func (m *CooldownMiddleware) Process(ctx *CommandContext, next HandlerFunc) erro
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		}
-		
+
 		return ctx.Session.InteractionRespond(ctx.Interaction.Interaction, response)
 	}
 
@@ -177,10 +177,10 @@ func (m *CooldownMiddleware) Process(ctx *CommandContext, next HandlerFunc) erro
 // getCooldownDuration 获取命令的冷却时间
 func (m *CooldownMiddleware) getCooldownDuration(commandName string) time.Duration {
 	cooldownMap := map[string]time.Duration{
-		"rollcard":        3 * time.Second,
-		"punish":          5 * time.Second,
-		"preset-message":  2 * time.Second,
-		"start-scan":      30 * time.Second,
+		"rollcard":       3 * time.Second,
+		"punish":         5 * time.Second,
+		"preset-message": 2 * time.Second,
+		"start-scan":     30 * time.Second,
 	}
 
 	if duration, exists := cooldownMap[commandName]; exists {

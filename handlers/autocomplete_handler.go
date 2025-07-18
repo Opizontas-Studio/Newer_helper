@@ -33,6 +33,8 @@ func handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, co
 			inputValue := inputField.StringValue()
 
 			if searchBy == "punishment_id" {
+				// TODO: This needs to be updated to use ConfigService once bot instance is available
+				// For now, loading the config directly 
 				kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
 				if err != nil {
 					log.Printf("Autocomplete: failed to load kick config: %v", err)

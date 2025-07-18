@@ -21,7 +21,7 @@ type Manager struct {
 func NewManager(session *discordgo.Session, config *model.Config, cooldownService services.CooldownService) *Manager {
 	logger := middleware.NewDefaultLogger()
 	factory := middleware.NewFactory(logger, cooldownService)
-	
+
 	return &Manager{
 		middlewareFactory: factory,
 		commands:          make(map[string]*middleware.CommandHandler),
@@ -96,7 +96,7 @@ func (m *Manager) RegisterCustomCommand(name string, builder *middleware.Command
 // HandleInteraction 处理交互
 func (m *Manager) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	commandName := i.ApplicationCommandData().Name
-	
+
 	handler, exists := m.commands[commandName]
 	if !exists {
 		log.Printf("未找到命令处理器: %s", commandName)

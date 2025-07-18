@@ -36,26 +36,26 @@ func NewSchedulerService() SchedulerService {
 func (s *schedulerService) AddJob(name string, interval time.Duration, job func()) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// 如果任务已存在，先停止它
 	if existingJob, exists := s.jobs[name]; exists {
 		s.stopJob(existingJob)
 	}
-	
+
 	scheduledJob := &ScheduledJob{
 		Name:     name,
 		Interval: interval,
 		Job:      job,
 		done:     make(chan struct{}),
 	}
-	
+
 	s.jobs[name] = scheduledJob
-	
+
 	// 如果调度器已启动，立即启动这个任务
 	if s.started {
 		s.startJob(scheduledJob)
 	}
-	
+
 	log.Printf("Added scheduled job: %s (interval: %v)", name, interval)
 }
 
@@ -63,7 +63,7 @@ func (s *schedulerService) AddJob(name string, interval time.Duration, job func(
 func (s *schedulerService) RemoveJob(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if job, exists := s.jobs[name]; exists {
 		s.stopJob(job)
 		delete(s.jobs, name)
@@ -75,15 +75,15 @@ func (s *schedulerService) RemoveJob(name string) {
 func (s *schedulerService) Start() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if s.started {
 		log.Println("Scheduler already started")
 		return
 	}
-	
+
 	s.started = true
 	log.Printf("Starting scheduler with %d jobs", len(s.jobs))
-	
+
 	// 启动所有任务
 	for _, job := range s.jobs {
 		s.startJob(job)
@@ -94,22 +94,22 @@ func (s *schedulerService) Start() {
 func (s *schedulerService) Stop() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if !s.started {
 		return
 	}
-	
+
 	log.Println("Stopping scheduler...")
-	
+
 	// 停止所有任务
 	for _, job := range s.jobs {
 		s.stopJob(job)
 	}
-	
+
 	// 发送停止信号
 	close(s.done)
 	s.started = false
-	
+
 	// 等待所有goroutine完成
 	s.wg.Wait()
 	log.Println("Scheduler stopped")
@@ -118,14 +118,14 @@ func (s *schedulerService) Stop() {
 // startJob 启动单个任务
 func (s *schedulerService) startJob(job *ScheduledJob) {
 	job.ticker = time.NewTicker(job.Interval)
-	
+
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		defer job.ticker.Stop()
-		
+
 		log.Printf("Started job: %s", job.Name)
-		
+
 		for {
 			select {
 			case <-job.ticker.C:
@@ -155,7 +155,7 @@ func (s *schedulerService) stopJob(job *ScheduledJob) {
 		job.ticker.Stop()
 		job.ticker = nil
 	}
-	
+
 	select {
 	case <-job.done:
 		// 已经关闭
@@ -175,7 +175,7 @@ func (s *schedulerService) GetJobCount() int {
 func (s *schedulerService) GetJobNames() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	names := make([]string, 0, len(s.jobs))
 	for name := range s.jobs {
 		names = append(names, name)

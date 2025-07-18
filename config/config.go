@@ -194,4 +194,3 @@ func Reload() error {
 	}
 	return Initialize()
 }
-

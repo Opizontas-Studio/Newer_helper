@@ -8,29 +8,34 @@ import (
 )
 
 func Register(b *bot.Bot) {
-	b.CommandHandlers = commandHandlers(b)
+	// TODO: This is a temporary bridge to use the new middleware system
+	// In the complete integration phase, we will remove the old commandHandlers entirely
+	// and use the new middleware system directly in the interaction handler
+	b.SetCommandHandlers(CreateLegacyCommandHandlers(b))
 	addHandlers(b)
 }
 
 func addHandlers(b *bot.Bot) {
-	b.Session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
+	session := b.GetSession()
+
+	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
 		log.Printf("Logged in as: %v#%v", s.State.User.Username, s.State.User.Discriminator)
 	})
 
-	b.Session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleInteractionCreate(s, i, b)
 	})
 
-	b.Session.AddHandler(func(s *discordgo.Session, t *discordgo.ThreadCreate) {
+	session.AddHandler(func(s *discordgo.Session, t *discordgo.ThreadCreate) {
 		// Pass the bot's config to the handler
 		HandleThreadCreate(s, t, b.GetConfig())
 	})
 
-	b.Session.AddHandler(func(s *discordgo.Session, t *discordgo.ThreadDelete) {
+	session.AddHandler(func(s *discordgo.Session, t *discordgo.ThreadDelete) {
 		HandleThreadDelete(s, t, b.GetConfig())
 	})
 
-	b.Session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
+	session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		HandleMessageCreate(s, m, b)
 	})
 }

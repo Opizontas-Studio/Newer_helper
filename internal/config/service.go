@@ -24,7 +24,7 @@ func (s *Service) Load() error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-	
+
 	s.config.Store(config)
 	log.Println("Configuration loaded successfully")
 	return nil
@@ -41,19 +41,19 @@ func (s *Service) Get() *Config {
 // Reload 重新加载配置
 func (s *Service) Reload() error {
 	log.Println("Reloading configuration...")
-	
+
 	newConfig, err := Load()
 	if err != nil {
 		log.Printf("Failed to reload config: %v", err)
 		return fmt.Errorf("failed to reload config: %w", err)
 	}
-	
+
 	// 保留现有的服务器配置
 	oldConfig := s.Get()
 	if oldConfig != nil {
 		newConfig.ServerConfigs = oldConfig.ServerConfigs
 	}
-	
+
 	s.config.Store(newConfig)
 	log.Println("Configuration reloaded successfully")
 	return nil
@@ -63,7 +63,7 @@ func (s *Service) Reload() error {
 func (s *Service) UpdateServerConfig(guildID string, serverConfig ServerConfig) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	config := s.Get()
 	if config != nil {
 		config.ServerConfigs[guildID] = serverConfig
@@ -74,12 +74,12 @@ func (s *Service) UpdateServerConfig(guildID string, serverConfig ServerConfig) 
 func (s *Service) GetServerConfig(guildID string) (ServerConfig, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	config := s.Get()
 	if config == nil {
 		return ServerConfig{}, false
 	}
-	
+
 	serverConfig, exists := config.ServerConfigs[guildID]
 	return serverConfig, exists
 }
@@ -88,12 +88,12 @@ func (s *Service) GetServerConfig(guildID string) (ServerConfig, bool) {
 func (s *Service) GetAllServerConfigs() map[string]ServerConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	config := s.Get()
 	if config == nil {
 		return make(map[string]ServerConfig)
 	}
-	
+
 	// 返回副本以防止外部修改
 	configs := make(map[string]ServerConfig)
 	for k, v := range config.ServerConfigs {

@@ -149,7 +149,7 @@ func (a *LegacyToSafeDBAdapter) AdaptCountPostsInTimeRange(db *sql.DB, tableName
 func (a *LegacyToSafeDBAdapter) inferGuildIDFromDB(db *sql.DB) string {
 	// TODO: 实现从数据库连接中推断guildID的逻辑
 	// 这可能需要查询数据库的元数据或使用其他方法
-	
+
 	// 暂时返回一个默认值
 	return "default_guild"
 }
@@ -158,19 +158,19 @@ func (a *LegacyToSafeDBAdapter) inferGuildIDFromDB(db *sql.DB) string {
 func ReplaceUnsafeDatabaseFunctions(dbService *database.Service) {
 	// 初始化安全的数据库访问层
 	InitializeSafeDBAccess(dbService)
-	
+
 	log.Println("Unsafe database functions have been replaced with safe Repository-based implementations")
 	log.Println("Please update your code to use the new SafeDBAccess methods")
-	
+
 	// 在这里可以记录哪些函数被替换了
 	replacedFunctions := []string{
 		"GetAllPosts",
-		"GetRandomPosts", 
+		"GetRandomPosts",
 		"CountPostsInTimeRange",
 		"GetPostsByAuthor",
 		"GetPostsByTag",
 		"CountPosts",
 	}
-	
+
 	log.Printf("Replaced functions: %v", replacedFunctions)
 }

@@ -2,7 +2,6 @@ package bot
 
 import (
 	"database/sql"
-	"discord-bot/commands"
 	"discord-bot/config"
 	"discord-bot/handlers/leaderboard"
 	"discord-bot/internal/services"
@@ -16,24 +15,26 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	configSvc "discord-bot/internal/config"
 )
 
 // Bot 重构后的Bot结构，移除上帝对象特征
 type Bot struct {
 	// 核心服务依赖
-	discord     services.DiscordService
-	command     services.CommandService
-	scheduler   services.SchedulerService
-	cooldown    services.CooldownService
-	
+	discord   services.DiscordService
+	command   services.CommandService
+	scheduler services.SchedulerService
+	cooldown  services.CooldownService
+
 	// 基础配置和数据库
-	config      atomic.Value // *model.Config
-	database    *sql.DB
-	
+	config       atomic.Value // *model.Config
+	configService *configSvc.Service // 新的配置服务
+	database     *sql.DB
+
 	// 扫描相关状态
 	ActiveScanCount int
 	done            chan struct{}
-	
+
 	// 向后兼容的方法
 	commandHandlers map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)
 	mu              sync.RWMutex
@@ -43,12 +44,29 @@ func (b *Bot) GetConfig() *model.Config {
 	return b.config.Load().(*model.Config)
 }
 
+func (b *Bot) GetConfigService() *configSvc.Service {
+	return b.configService
+}
+
 func (b *Bot) GetDB() *sql.DB {
 	return b.database
 }
 
 func (b *Bot) GetSession() *discordgo.Session {
 	return b.discord.GetSession()
+}
+
+// CommandHandlers 访问器（向后兼容）
+func (b *Bot) GetCommandHandlers() map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.commandHandlers
+}
+
+func (b *Bot) SetCommandHandlers(handlers map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.commandHandlers = handlers
 }
 
 // 服务访问器
@@ -82,34 +100,35 @@ func (b *Bot) GetCooldownMutex() *sync.Mutex {
 }
 
 // NewBot 创建新的Bot实例，使用依赖注入
-func NewBot(discord interface{}, command interface{}, scheduler interface{}, cooldown interface{}, cfg *model.Config, db *sql.DB) (*Bot, error) {
+func NewBot(discord interface{}, command interface{}, scheduler interface{}, cooldown interface{}, cfg *model.Config, db *sql.DB, configService *configSvc.Service) (*Bot, error) {
 	// 类型断言
 	discordSvc, ok := discord.(services.DiscordService)
 	if !ok {
 		return nil, fmt.Errorf("discord service type assertion failed")
 	}
-	
+
 	commandSvc, ok := command.(services.CommandService)
 	if !ok {
 		return nil, fmt.Errorf("command service type assertion failed")
 	}
-	
+
 	schedulerSvc, ok := scheduler.(services.SchedulerService)
 	if !ok {
 		return nil, fmt.Errorf("scheduler service type assertion failed")
 	}
-	
+
 	cooldownSvc, ok := cooldown.(services.CooldownService)
 	if !ok {
 		return nil, fmt.Errorf("cooldown service type assertion failed")
 	}
-	
+
 	b := &Bot{
 		discord:         discordSvc,
 		command:         commandSvc,
 		scheduler:       schedulerSvc,
 		cooldown:        cooldownSvc,
 		database:        db,
+		configService:   configService,
 		ActiveScanCount: 0,
 		done:            make(chan struct{}),
 		commandHandlers: make(map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)),
@@ -125,16 +144,22 @@ func New(cfg *model.Config, db *sql.DB) (*Bot, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	command, err := services.NewCommandService(discord, cfg)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	scheduler := services.NewSchedulerService()
 	cooldown := services.NewCooldownService()
 	
-	return NewBot(discord, command, scheduler, cooldown, cfg, db)
+	// 创建配置服务
+	configService := configSvc.NewService()
+	if err := configService.Load(); err != nil {
+		return nil, fmt.Errorf("failed to load config service: %w", err)
+	}
+
+	return NewBot(discord, command, scheduler, cooldown, cfg, db, configService)
 }
 
 func (b *Bot) Close() {
@@ -145,7 +170,7 @@ func (b *Bot) Close() {
 	if b.scheduler != nil {
 		b.scheduler.Stop()
 	}
-	
+
 	// 关闭Discord连接
 	if b.discord != nil {
 		b.discord.Close()

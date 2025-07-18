@@ -9,7 +9,7 @@ import (
 // repositoryManager 仓库管理器实现
 type repositoryManager struct {
 	dbService *database.Service
-	
+
 	// 仓库实例缓存
 	postRepo        PostRepository
 	userRepo        UserRepository
@@ -92,14 +92,14 @@ func (m *repositoryManager) Ping() error {
 // GetStats 获取连接池统计信息
 func (m *repositoryManager) GetStats() map[string]interface{} {
 	stats := make(map[string]interface{})
-	
+
 	// 获取连接池统计
 	dbStats := m.dbService.GetStats()
 	stats["database"] = dbStats
-	
+
 	// 可以添加其他统计信息
 	stats["repository_count"] = m.getRepositoryCount()
-	
+
 	return stats
 }
 
@@ -129,9 +129,9 @@ func (m *repositoryManager) getRepositoryCount() int {
 
 // transaction 事务实现
 type transaction struct {
-	tx *sql.Tx
+	tx        *sql.Tx
 	dbService *database.Service
-	
+
 	// 事务中的仓库实例
 	postRepo        PostRepository
 	userRepo        UserRepository
@@ -149,12 +149,12 @@ func NewTransaction(dbService *database.Service) (Transaction, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database for transaction: %w", err)
 	}
-	
+
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	
+
 	return &transaction{
 		tx:        tx,
 		dbService: dbService,

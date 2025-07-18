@@ -140,6 +140,8 @@ func rollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, 
 }
 
 // getPosts retrieves random posts from the database based on the pools, tag, and count.
+// TODO: This is a temporary implementation. In the complete integration phase,
+// we will use the Repository pattern with connection pooling for database access.
 func getPosts(config *model.RollCardGuildConfig, poolNames []string, tagID string, count int, excludeTags []string) ([]model.Post, error) {
 	db, err := database.InitDB(config.Database)
 	if err != nil {
@@ -177,8 +179,12 @@ func getPosts(config *model.RollCardGuildConfig, poolNames []string, tagID strin
 	}
 
 	if tagID != "" || len(excludeTags) > 0 {
+		// TODO: SECURITY RISK - These functions have SQL injection vulnerabilities
+		// In the complete integration phase, we will use the Repository pattern with prepared statements
 		return database.GetRandomPostsByTagFromMultipleTables(db, tableNames, tagID, count, excludeTags)
 	}
+	// TODO: SECURITY RISK - This function has SQL injection vulnerabilities
+	// In the complete integration phase, we will use the Repository pattern with prepared statements
 	return database.GetRandomPostsFromMultipleTables(db, tableNames, count)
 }
 

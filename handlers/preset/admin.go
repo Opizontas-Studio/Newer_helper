@@ -47,7 +47,7 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 			for idx, p := range serverConfig.PresetMessages {
 				if p.ID == id {
 					serverConfig.PresetMessages[idx].Name = input
-					db := b.DB
+					db := b.GetDB()
 					if err := database.UpdatePreset(db, i.GuildID, serverConfig.PresetMessages[idx]); err != nil {
 						responseContent = "无法更新预设 "
 						utils.LogError(s, b.GetConfig().LogChannelID, "预设管理", "更新预设失败", err.Error())
@@ -136,7 +136,7 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 					if p.ID == id {
 						serverConfig.PresetMessages[idx].Value = strings.Join(messages, "\n")
 						serverConfig.PresetMessages[idx].Type = "text" // Or parse from original message
-						db := b.DB
+						db := b.GetDB()
 						if err := database.UpdatePreset(db, i.GuildID, serverConfig.PresetMessages[idx]); err != nil {
 							responseContent = "无法更新预设 "
 							utils.LogError(s, b.GetConfig().LogChannelID, "预设管理", "更新预设失败", err.Error())
@@ -227,7 +227,7 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 			serverConfig.PresetMessages = append(serverConfig.PresetMessages, newPreset)
 			b.GetConfig().ServerConfigs[i.GuildID] = serverConfig
 
-			db := b.DB
+			db := b.GetDB()
 			if err := database.AddPreset(db, i.GuildID, newPreset); err != nil {
 				log.Printf("Error saving preset: %v", err)
 				errorContent := "Error processing preset: could not save to database."

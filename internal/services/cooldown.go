@@ -22,7 +22,7 @@ func NewCooldownService() CooldownService {
 func (c *cooldownService) SetCooldown(key string, duration time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	expireTime := time.Now().Add(duration)
 	c.cooldowns[key] = &CooldownEntry{
 		ExpireTime: expireTime,
@@ -33,12 +33,12 @@ func (c *cooldownService) SetCooldown(key string, duration time.Duration) {
 func (c *cooldownService) IsOnCooldown(key string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	entry, exists := c.cooldowns[key]
 	if !exists {
 		return false
 	}
-	
+
 	return !entry.IsExpired()
 }
 
@@ -46,12 +46,12 @@ func (c *cooldownService) IsOnCooldown(key string) bool {
 func (c *cooldownService) GetCooldownRemaining(key string) time.Duration {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	entry, exists := c.cooldowns[key]
 	if !exists {
 		return 0
 	}
-	
+
 	return entry.GetRemainingTime()
 }
 
@@ -59,17 +59,17 @@ func (c *cooldownService) GetCooldownRemaining(key string) time.Duration {
 func (c *cooldownService) CleanupExpired() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	now := time.Now()
 	cleanedCount := 0
-	
+
 	for key, entry := range c.cooldowns {
 		if now.After(entry.ExpireTime) {
 			delete(c.cooldowns, key)
 			cleanedCount++
 		}
 	}
-	
+
 	if cleanedCount > 0 {
 		// 这里可以添加日志，但为了避免频繁日志，我们只记录清理的数量
 		// log.Printf("Cleaned up %d expired cooldown entries", cleanedCount)
@@ -87,7 +87,7 @@ func (c *cooldownService) GetCooldownCount() int {
 func (c *cooldownService) GetAllCooldowns() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	keys := make([]string, 0, len(c.cooldowns))
 	for key := range c.cooldowns {
 		keys = append(keys, key)

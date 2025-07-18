@@ -95,12 +95,12 @@ type Container interface {
 
 // ServiceDependencies 服务依赖结构
 type ServiceDependencies struct {
-	Config     *model.Config
-	Database   *sql.DB
-	Discord    DiscordService
-	Command    CommandService
-	Cooldown   CooldownService
-	Scheduler  SchedulerService
+	Config      *model.Config
+	Database    *sql.DB
+	Discord     DiscordService
+	Command     CommandService
+	Cooldown    CooldownService
+	Scheduler   SchedulerService
 	Leaderboard LeaderboardService
 }
 

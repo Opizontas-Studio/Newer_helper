@@ -2,7 +2,8 @@ package punish
 
 import (
 	"discord-bot/bot"
-	"discord-bot/utils"
+	"discord-bot/internal/config"
+	"discord-bot/model"
 	"discord-bot/utils/database"
 	"log"
 
@@ -19,18 +20,27 @@ func HandlePunishCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b
 		return
 	}
 
-	// 2. Load configuration
-	kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
-	if err != nil {
-		log.Printf("Error loading kick config: %v", err)
-		sendErrorResponse(s, i, "Failed to load kick configuration.")
-		return
-	}
-	configEntry, ok := kickConfig.Data[i.GuildID]
+	// 2. Load configuration from ConfigService
+	punishConfig := b.GetConfigService().GetPunishConfig()
+	punishGuildConfig, ok := punishConfig.Guilds[i.GuildID]
 	if !ok {
 		sendErrorResponse(s, i, "❓ 此服务器未找到可用配置文件")
 		return
 	}
+	
+	// Convert new config structure to old interface for compatibility
+	configEntry := convertPunishGuildConfig(punishGuildConfig)
+	
+	// Create a temporary kickConfig for backward compatibility
+	kickConfig := &model.KickConfig{
+		InitConfig: struct {
+			DBPath string `json:"dbpath"`
+		}{
+			DBPath: punishConfig.InitConfig.DBPath,
+		},
+		Data: make(map[string]model.KickConfigEntry),
+	}
+	kickConfig.Data[i.GuildID] = configEntry
 
 	// 3. Parse command options
 	cmdOptions := parsePunishOptions(s, i)
@@ -61,6 +71,8 @@ func HandlePunishCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b
 	}
 
 	// 7. Connect to the database
+	// TODO: This is a temporary implementation. In the complete integration phase,
+	// we will use the Repository pattern with connection pooling for database access.
 	db, err := database.InitPunishmentDB(kickConfig.InitConfig.DBPath)
 	if err != nil {
 		log.Printf("Error connecting to punishment DB: %v", err)
@@ -97,4 +109,21 @@ func HandlePunishCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b
 
 	// 12. Log the punishment
 	logPunishment(s, i, configEntry, targetUser, cmdOptions.MessageLinks, punishmentMessage, timeoutApplied, timeoutDurationStr)
+}
+
+// convertPunishGuildConfig converts new config structure to old interface for compatibility
+func convertPunishGuildConfig(newConfig *config.PunishGuildConfig) model.KickConfigEntry {
+	return model.KickConfigEntry{
+		Name:            newConfig.Name,
+		BaseRoleID:      newConfig.BaseRoleID,
+		RemoveRoleID:    newConfig.RemoveRoleIDs,
+		WhitelistRoleID: newConfig.WhitelistRoleIDs,
+		Timeout: model.TimeoutConfig{
+			Frequency:          newConfig.Timeout.Frequency,
+			Time:               newConfig.Timeout.Time,
+			TimeoutTime:        newConfig.Timeout.TimeoutTime,
+			AddRole:            newConfig.Timeout.AddRoles,
+			AddRoleTimeoutTime: newConfig.Timeout.AddRoleTimeoutTime,
+		},
+	}
 }

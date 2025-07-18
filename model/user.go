@@ -26,23 +26,23 @@ type UserStats struct {
 
 // UserRanking 用户排名信息
 type UserRanking struct {
-	UserID      string `json:"user_id"`
-	GuildID     string `json:"guild_id"`
-	PostRank    int    `json:"post_rank"`
-	PostCount   int    `json:"post_count"`
-	RollRank    int    `json:"roll_rank"`
-	RollCount   int    `json:"roll_count"`
-	TotalRank   int    `json:"total_rank"`
-	TotalScore  int    `json:"total_score"`
+	UserID     string `json:"user_id"`
+	GuildID    string `json:"guild_id"`
+	PostRank   int    `json:"post_rank"`
+	PostCount  int    `json:"post_count"`
+	RollRank   int    `json:"roll_rank"`
+	RollCount  int    `json:"roll_count"`
+	TotalRank  int    `json:"total_rank"`
+	TotalScore int    `json:"total_score"`
 }
 
 // LeaderboardEntry 排行榜条目
 type LeaderboardEntry struct {
-	UserID    string `json:"user_id"`
-	Username  string `json:"username"`
-	GuildID   string `json:"guild_id"`
-	Count     int    `json:"count"`
-	Rank      int    `json:"rank"`
-	Score     int    `json:"score"`
+	UserID    string    `json:"user_id"`
+	Username  string    `json:"username"`
+	GuildID   string    `json:"guild_id"`
+	Count     int       `json:"count"`
+	Rank      int       `json:"rank"`
+	Score     int       `json:"score"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

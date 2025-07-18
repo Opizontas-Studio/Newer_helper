@@ -18,11 +18,11 @@ func NewDiscordService(token string) (DiscordService, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// 设置必要的意图
 	session.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
 	session.StateEnabled = false
-	
+
 	return &discordService{
 		session: session,
 		token:   token,

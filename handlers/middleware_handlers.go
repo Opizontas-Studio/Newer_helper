@@ -139,7 +139,7 @@ func CreateLegacyCommandHandlers(b *bot.Bot) map[string]func(s *discordgo.Sessio
 				middleware.NewDefaultLogger(),
 				b.GetCooldownService(),
 			)
-			
+
 			handler := middleware.NewCommandBuilder(factory).
 				WithErrorHandling().
 				WithLogging().
@@ -147,7 +147,7 @@ func CreateLegacyCommandHandlers(b *bot.Bot) map[string]func(s *discordgo.Sessio
 				Build(func(ctx *middleware.CommandContext) {
 					punish.HandlePunishCommand(ctx.Session, ctx.Interaction, b)
 				})
-			
+
 			handler.Handle(s, i, b.GetConfig())
 		},
 		"rollcard": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -155,7 +155,7 @@ func CreateLegacyCommandHandlers(b *bot.Bot) map[string]func(s *discordgo.Sessio
 				middleware.NewDefaultLogger(),
 				b.GetCooldownService(),
 			)
-			
+
 			handler := middleware.NewCommandBuilder(factory).
 				WithErrorHandling().
 				WithLogging().
@@ -164,7 +164,7 @@ func CreateLegacyCommandHandlers(b *bot.Bot) map[string]func(s *discordgo.Sessio
 				Build(func(ctx *middleware.CommandContext) {
 					rollcard.HandleRollCardInteraction(ctx.Session, ctx.Interaction, b)
 				})
-			
+
 			handler.Handle(s, i, b.GetConfig())
 		},
 		// 可以继续添加其他命令的中间件版本...
