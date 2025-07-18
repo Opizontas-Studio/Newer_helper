@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"discord-bot/internal/database"
 	"fmt"
-	"log"
 )
 
 // repositoryManager 仓库管理器实现
@@ -226,70 +225,48 @@ func (t *transaction) LeaderboardRepository() LeaderboardRepository {
 	return t.leaderboardRepo
 }
 
-// 占位符函数，需要实现各个仓库的构造函数
+// 仓库构造函数 - 当前只实现了PostRepository，其他返回nil
 func NewUserRepository(dbService *database.Service) UserRepository {
-	// TODO: 实现用户仓库
-	log.Println("UserRepository not implemented yet")
-	return nil
+	return nil // 暂未实现
 }
 
 func NewPunishmentRepository(dbService *database.Service) PunishmentRepository {
-	// TODO: 实现惩罚仓库
-	log.Println("PunishmentRepository not implemented yet")
-	return nil
+	return nil // 暂未实现
 }
 
 func NewGuildRepository(dbService *database.Service) GuildRepository {
-	// TODO: 实现服务器仓库
-	log.Println("GuildRepository not implemented yet")
-	return nil
+	return nil // 暂未实现
 }
 
 func NewTimedTaskRepository(dbService *database.Service) TimedTaskRepository {
-	// TODO: 实现定时任务仓库
-	log.Println("TimedTaskRepository not implemented yet")
-	return nil
+	return nil // 暂未实现
 }
 
 func NewLeaderboardRepository(dbService *database.Service) LeaderboardRepository {
-	// TODO: 实现排行榜仓库
-	log.Println("LeaderboardRepository not implemented yet")
-	return nil
+	return nil // 暂未实现
 }
 
-// 事务版本的仓库构造函数占位符
+// 事务版本的仓库构造函数 - 暂未实现
 func NewTransactionalPostRepository(tx *sql.Tx, dbService *database.Service) PostRepository {
-	// TODO: 实现事务版本的帖子仓库
-	log.Println("TransactionalPostRepository not implemented yet")
-	return nil
+	return nil // 暂未实现
 }
 
 func NewTransactionalUserRepository(tx *sql.Tx, dbService *database.Service) UserRepository {
-	// TODO: 实现事务版本的用户仓库
-	log.Println("TransactionalUserRepository not implemented yet")
-	return nil
+	return nil // 暂未实现
 }
 
 func NewTransactionalPunishmentRepository(tx *sql.Tx, dbService *database.Service) PunishmentRepository {
-	// TODO: 实现事务版本的惩罚仓库
-	log.Println("TransactionalPunishmentRepository not implemented yet")
-	return nil
+	return nil // 暂未实现
 }
 
 func NewTransactionalGuildRepository(tx *sql.Tx, dbService *database.Service) GuildRepository {
-	// TODO: 实现事务版本的服务器仓库
-	log.Println("TransactionalGuildRepository not implemented yet")
-	return nil
+	return nil // 暂未实现
 }
 
 func NewTransactionalTimedTaskRepository(tx *sql.Tx, dbService *database.Service) TimedTaskRepository {
-	// TODO: 实现事务版本的定时任务仓库
-	log.Println("TransactionalTimedTaskRepository not implemented yet")
-	return nil
+	return nil // 暂未实现
 }
 
 func NewTransactionalLeaderboardRepository(tx *sql.Tx, dbService *database.Service) LeaderboardRepository {
-	// TODO: 实现事务版本的排行榜仓库
-	log.Println("TransactionalLeaderboardRepository not implemented yet")
-	return nil
+	return nil // 暂未实现
 }

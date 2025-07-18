@@ -16,13 +16,12 @@ import (
 )
 
 func (b *Bot) Run() {
-	err := b.Session.Open()
+	err := b.discord.Connect()
 	if err != nil {
 		log.Fatalf("Error opening connection: %v", err)
 	}
 
 	log.Println("Adding commands...")
-	b.RegisteredCommands = make([]*discordgo.ApplicationCommand, 0)
 	for _, serverCfg := range b.GetConfig().ServerConfigs {
 		b.RefreshCommands(serverCfg.GuildID)
 	}
@@ -47,7 +46,7 @@ func (b *Bot) Run() {
 				}
 			}
 		}
-		go scanner.Scan(b.Session, b.GetConfig().LogChannelID, scanMode, "", b.done)
+		go scanner.Scan(b.GetSession(), b.GetConfig().LogChannelID, scanMode, "", b.done)
 	} else {
 		log.Println("Initial scan is disabled by environment variable.")
 	}
@@ -63,60 +62,39 @@ func (b *Bot) Run() {
 	if err != nil {
 		log.Fatalf("Failed to initialize timed task DB: %v", err)
 	}
-	scanner.StartRoleRemover(b.Session, timedTaskDB)
+	scanner.StartRoleRemover(b.GetSession(), timedTaskDB)
 
 	// Start the channel cleaner scheduler
-	go scanner.StartChannelCleaner(b.Session, b.GetConfig(), b.done)
+	go scanner.StartChannelCleaner(b.GetSession(), b.GetConfig(), b.done)
 
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
-	utils.LogInfo(b.Session, b.GetConfig().LogChannelID, "System", "Startup", "Bot has started successfully.")
+	utils.LogInfo(b.GetSession(), b.GetConfig().LogChannelID, "System", "Startup", "Bot has started successfully.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
 }
 
 func (b *Bot) startScanScheduler() {
+	// 使用新的调度器服务
+	b.scheduler.Start()
+	
 	// Schedule a cooldown cleanup every hour
-	b.CooldownTicker = time.NewTicker(1 * time.Hour)
-	go func() {
-		for {
-			select {
-			case <-b.CooldownTicker.C:
-				log.Println("Cleaning up preset cooldowns...")
-				b.CleanupCooldowns()
-			case <-b.done:
-				return
-			}
-		}
-	}()
+	b.scheduler.AddJob("cooldown_cleanup", 1*time.Hour, func() {
+		log.Println("Cleaning up preset cooldowns...")
+		b.CleanupCooldowns()
+	})
 
 	// Schedule leaderboard update every 10 minutes
-	b.LeaderboardUpdateTicker = time.NewTicker(10 * time.Minute)
-	go func() {
-		for {
-			select {
-			case <-b.LeaderboardUpdateTicker.C:
-				log.Println("Updating leaderboard...")
-				b.UpdateLeaderboard()
-			case <-b.done:
-				return
-			}
-		}
-	}()
+	b.scheduler.AddJob("leaderboard_update", 10*time.Minute, func() {
+		log.Println("Updating leaderboard...")
+		b.UpdateLeaderboard()
+	})
 
 	// Schedule post deletion checks
-	b.PostScanTicker = time.NewTicker(30 * time.Minute)
-	go func() {
-		for {
-			select {
-			case <-b.PostScanTicker.C:
-				log.Println("Running post deletion scan...")
-				scanner.CheckDeletedPosts(b.Session, b.GetConfig().LogChannelID)
-			case <-b.done:
-				return
-			}
-		}
-	}()
+	b.scheduler.AddJob("post_scan", 30*time.Minute, func() {
+		log.Println("Running post deletion scan...")
+		scanner.CheckDeletedPosts(b.GetSession(), b.GetConfig().LogChannelID)
+	})
 
 	// Schedule daily tasks at 5:00, 13:00, and 21:00
 	go func() {
@@ -147,14 +125,14 @@ func (b *Bot) startScanScheduler() {
 			case <-time.After(next.Sub(now)):
 				// Run the tasks
 				log.Println("Starting scheduled active forum scan...")
-				scanner.Scan(b.Session, b.GetConfig().LogChannelID, "active", "", b.done)
+				scanner.Scan(b.GetSession(), b.GetConfig().LogChannelID, "active", "", b.done)
 
 				b.ActiveScanCount++
 				log.Printf("Active scan count: %d", b.ActiveScanCount)
 
 				if b.ActiveScanCount >= 21 { // 3 scans/day * 7 days
 					log.Println("Active scan count reached 21. Starting full scan...")
-					scanner.Scan(b.Session, b.GetConfig().LogChannelID, "full", "", b.done)
+					scanner.Scan(b.GetSession(), b.GetConfig().LogChannelID, "full", "", b.done)
 					b.ActiveScanCount = 0
 				}
 
@@ -171,7 +149,7 @@ func (b *Bot) startScanScheduler() {
 				}
 
 				log.Println("Cleaning up old posts...")
-				scanner.CleanOldPosts(b.Session, b.GetConfig(), b.done)
+				scanner.CleanOldPosts(b.GetSession(), b.GetConfig(), b.done)
 			case <-b.done:
 				return
 			}

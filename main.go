@@ -6,6 +6,7 @@ import (
 	"discord-bot/bot"
 	"discord-bot/config"
 	"discord-bot/handlers"
+	"discord-bot/internal/container"
 	"discord-bot/utils/database"
 	"log"
 	"net/http"
@@ -27,11 +28,13 @@ func startPprofServer() {
 func main() {
 	startPprofServer()
 
+	// 加载配置
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Error loading config: %v", err)
 	}
 
+	// 初始化数据库
 	db, err := database.InitDB("./data/guilds.db")
 	if err != nil {
 		log.Fatalf("Error setting up database: %v", err)
@@ -48,13 +51,54 @@ func main() {
 		log.Fatalf("Error loading config from database: %v", err)
 	}
 
-	b, err := bot.New(cfg, db)
+	// 使用依赖注入容器构建服务
+	serviceBuilder := container.NewServiceBuilder()
+	serviceContainer, err := serviceBuilder.Build(cfg, db)
+	if err != nil {
+		log.Fatalf("Error building service container: %v", err)
+	}
+
+	// 从容器获取服务并创建Bot
+	discordService, err := serviceContainer.Get("discord")
+	if err != nil {
+		log.Fatalf("Error getting discord service: %v", err)
+	}
+
+	commandService, err := serviceContainer.Get("command")
+	if err != nil {
+		log.Fatalf("Error getting command service: %v", err)
+	}
+
+	schedulerService, err := serviceContainer.Get("scheduler")
+	if err != nil {
+		log.Fatalf("Error getting scheduler service: %v", err)
+	}
+
+	cooldownService, err := serviceContainer.Get("cooldown")
+	if err != nil {
+		log.Fatalf("Error getting cooldown service: %v", err)
+	}
+
+	// 创建Bot实例
+	b, err := bot.NewBot(
+		discordService,
+		commandService,
+		schedulerService,
+		cooldownService,
+		cfg,
+		db,
+	)
 	if err != nil {
 		log.Fatalf("Error creating bot: %v", err)
 	}
 
+	// 注册处理器
 	handlers.Register(b)
+	
+	// 注册中间件处理器
+	handlers.RegisterMiddlewareHandlers(b)
 
+	// 运行Bot
 	b.Run()
 
 	defer b.Close()

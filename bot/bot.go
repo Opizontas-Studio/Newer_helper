@@ -5,9 +5,11 @@ import (
 	"discord-bot/commands"
 	"discord-bot/config"
 	"discord-bot/handlers/leaderboard"
+	"discord-bot/internal/services"
 	"discord-bot/model"
 	"discord-bot/utils"
 	"discord-bot/utils/database"
+	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -16,90 +18,138 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+// Bot 重构后的Bot结构，移除上帝对象特征
 type Bot struct {
-	Session                 *discordgo.Session
-	RegisteredCommands      []*discordgo.ApplicationCommand
-	config                  atomic.Value // *model.Config
-	CommandHandlers         map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)
-	PresetCooldowns         map[string]time.Time
-	CooldownMutex           sync.Mutex
-	FullScanTicker          *time.Ticker
-	ActiveScanTicker        *time.Ticker
-	CooldownTicker          *time.Ticker
-	PostCleanupTicker       *time.Ticker
-	LeaderboardUpdateTicker *time.Ticker
-	PostScanTicker          *time.Ticker
-	DegradedPostScanTicker  *time.Ticker
-	DB                      *sql.DB
-	ActiveScanCount         int
-	done                    chan struct{}
+	// 核心服务依赖
+	discord     services.DiscordService
+	command     services.CommandService
+	scheduler   services.SchedulerService
+	cooldown    services.CooldownService
+	
+	// 基础配置和数据库
+	config      atomic.Value // *model.Config
+	database    *sql.DB
+	
+	// 扫描相关状态
+	ActiveScanCount int
+	done            chan struct{}
+	
+	// 向后兼容的方法
+	commandHandlers map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)
+	mu              sync.RWMutex
 }
 
 func (b *Bot) GetConfig() *model.Config {
 	return b.config.Load().(*model.Config)
 }
 
-func (b *Bot) GetPresetCooldowns() map[string]time.Time {
-	return b.PresetCooldowns
-}
-
-func (b *Bot) GetCooldownMutex() *sync.Mutex {
-	return &b.CooldownMutex
-}
-
 func (b *Bot) GetDB() *sql.DB {
-	return b.DB
+	return b.database
 }
 
 func (b *Bot) GetSession() *discordgo.Session {
-	return b.Session
+	return b.discord.GetSession()
 }
 
-func New(cfg *model.Config, db *sql.DB) (*Bot, error) {
-	dg, err := discordgo.New("Bot " + cfg.BotToken)
-	if err != nil {
-		return nil, err
-	}
-	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
-	dg.StateEnabled = false
+// 服务访问器
+func (b *Bot) GetDiscordService() services.DiscordService {
+	return b.discord
+}
 
+func (b *Bot) GetCommandService() services.CommandService {
+	return b.command
+}
+
+func (b *Bot) GetSchedulerService() services.SchedulerService {
+	return b.scheduler
+}
+
+func (b *Bot) GetCooldownService() services.CooldownService {
+	return b.cooldown
+}
+
+// 向后兼容的方法
+func (b *Bot) GetPresetCooldowns() map[string]time.Time {
+	// 为向后兼容，我们返回一个空map
+	// 新的冷却逻辑通过CooldownService处理
+	return make(map[string]time.Time)
+}
+
+func (b *Bot) GetCooldownMutex() *sync.Mutex {
+	// 为向后兼容，返回一个虚拟的mutex
+	// 新的冷却逻辑通过CooldownService处理
+	return &sync.Mutex{}
+}
+
+// NewBot 创建新的Bot实例，使用依赖注入
+func NewBot(discord interface{}, command interface{}, scheduler interface{}, cooldown interface{}, cfg *model.Config, db *sql.DB) (*Bot, error) {
+	// 类型断言
+	discordSvc, ok := discord.(services.DiscordService)
+	if !ok {
+		return nil, fmt.Errorf("discord service type assertion failed")
+	}
+	
+	commandSvc, ok := command.(services.CommandService)
+	if !ok {
+		return nil, fmt.Errorf("command service type assertion failed")
+	}
+	
+	schedulerSvc, ok := scheduler.(services.SchedulerService)
+	if !ok {
+		return nil, fmt.Errorf("scheduler service type assertion failed")
+	}
+	
+	cooldownSvc, ok := cooldown.(services.CooldownService)
+	if !ok {
+		return nil, fmt.Errorf("cooldown service type assertion failed")
+	}
+	
 	b := &Bot{
-		Session:         dg,
-		PresetCooldowns: make(map[string]time.Time),
-		DB:              db,
+		discord:         discordSvc,
+		command:         commandSvc,
+		scheduler:       schedulerSvc,
+		cooldown:        cooldownSvc,
+		database:        db,
 		ActiveScanCount: 0,
 		done:            make(chan struct{}),
+		commandHandlers: make(map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)),
 	}
 	b.config.Store(cfg)
 	return b, nil
+}
+
+// New 保持向后兼容的构造函数
+func New(cfg *model.Config, db *sql.DB) (*Bot, error) {
+	// 创建服务
+	discord, err := services.NewDiscordService(cfg.BotToken)
+	if err != nil {
+		return nil, err
+	}
+	
+	command, err := services.NewCommandService(discord, cfg)
+	if err != nil {
+		return nil, err
+	}
+	
+	scheduler := services.NewSchedulerService()
+	cooldown := services.NewCooldownService()
+	
+	return NewBot(discord, command, scheduler, cooldown, cfg, db)
 }
 
 func (b *Bot) Close() {
 	log.Println("Gracefully shutting down.")
 	close(b.done) // Signal all goroutines to stop
 
-	if b.FullScanTicker != nil {
-		b.FullScanTicker.Stop()
+	// 停止调度器
+	if b.scheduler != nil {
+		b.scheduler.Stop()
 	}
-	if b.ActiveScanTicker != nil {
-		b.ActiveScanTicker.Stop()
+	
+	// 关闭Discord连接
+	if b.discord != nil {
+		b.discord.Close()
 	}
-	if b.CooldownTicker != nil {
-		b.CooldownTicker.Stop()
-	}
-	if b.PostCleanupTicker != nil {
-		b.PostCleanupTicker.Stop()
-	}
-	if b.LeaderboardUpdateTicker != nil {
-		b.LeaderboardUpdateTicker.Stop()
-	}
-	if b.PostScanTicker != nil {
-		b.PostScanTicker.Stop()
-	}
-	if b.DegradedPostScanTicker != nil {
-		b.DegradedPostScanTicker.Stop()
-	}
-	b.Session.Close()
 }
 
 func (b *Bot) UpdateLeaderboard() {
@@ -131,32 +181,13 @@ func (b *Bot) UpdateLeaderboard() {
 }
 
 func (b *Bot) RefreshCommands(guildID string) {
-	serverCfg, ok := b.GetConfig().ServerConfigs[guildID]
-	if !ok {
-		log.Printf("Could not find server config for guild: %s", guildID)
-		return
+	if err := b.command.RefreshCommands(guildID); err != nil {
+		log.Printf("Failed to refresh commands for guild %s: %v", guildID, err)
 	}
-	log.Printf("Updating commands for guild %s", serverCfg.GuildID)
-
-	cmds := commands.GenerateCommands(&serverCfg)
-	log.Printf("Registering %d new commands for guild %s...", len(cmds), serverCfg.GuildID)
-	registeredCmds, err := b.Session.ApplicationCommandBulkOverwrite(b.Session.State.User.ID, serverCfg.GuildID, cmds)
-	if err != nil {
-		log.Printf("cannot update commands for guild '%s': %v", serverCfg.GuildID, err)
-		return
-	}
-	b.RegisteredCommands = append(b.RegisteredCommands, registeredCmds...)
 }
 
 func (b *Bot) CleanupCooldowns() {
-	b.CooldownMutex.Lock()
-	defer b.CooldownMutex.Unlock()
-
-	for id, t := range b.PresetCooldowns {
-		if time.Since(t) > 1*time.Hour {
-			delete(b.PresetCooldowns, id)
-		}
-	}
+	b.cooldown.CleanupExpired()
 }
 
 func (b *Bot) ReloadConfig() error {
@@ -168,7 +199,7 @@ func (b *Bot) ReloadConfig() error {
 	}
 
 	// Load server-specific configs from DB
-	if err := database.LoadConfigFromDB(b.DB, newCfg); err != nil {
+	if err := database.LoadConfigFromDB(b.database, newCfg); err != nil {
 		log.Printf("Error loading config from database during reload: %v", err)
 		return err
 	}
