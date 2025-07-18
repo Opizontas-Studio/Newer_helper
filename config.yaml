@@ -1,0 +1,170 @@
+# Discord Bot 统一配置文件
+# 这个文件整合了所有原来分散的配置信息
+
+# 基础配置
+app:
+  name: "Discord Bot"
+  version: "2.0.0"
+  disable_initial_scan: false
+
+# 数据库配置
+database:
+  guilds_db_path: "./data/guilds.db"
+  user_db_path: "./data/user.db"
+  kick_user_db_path: "./data/kick_user.db"
+  timed_tasks_db_path: "./data/timed_tasks.db"
+
+# 任务扫描配置
+tasks:
+  "1134557553011998840":
+    name: "类脑自动扫描任务配置"
+    guild_id: "1134557553011998840"
+    channels:
+      女性向:
+        channel_id: "1374488912143061114"
+        thread_ids: []
+      男性向:
+        channel_id: "1374481342825238821"
+        thread_ids: []
+      纯净区:
+        channel_id: "1374474903981527082"
+        thread_ids: []
+      全性向:
+        channel_id: "1374491326308946071"
+        thread_ids: []
+      其他区:
+        channel_id: "1374491950161330277"
+        thread_ids: []
+      深渊区:
+        channel_id: "1374594860316885054"
+        thread_ids: []
+      世界书:
+        channel_id: "1233691226507575367"
+        thread_ids: []
+      工具区:
+        channel_id: "1376208053212545107"
+        thread_ids: []
+  "1291925535324110879":
+    name: "旅程自动扫描任务配置"
+    guild_id: "1291925535324110879"
+    channels:
+      女性向:
+        channel_id: "1337472547234517052"
+        thread_ids: []
+      男性向:
+        channel_id: "1337465200609202318"
+        thread_ids: []
+      纯净区:
+        channel_id: "1337464937068494849"
+        thread_ids: []
+      全性向:
+        channel_id: "1337465571628810252"
+        thread_ids: []
+      小众区:
+        channel_id: "1337465614997917736"
+        thread_ids: []
+      深渊区:
+        channel_id: "1337465711479754762"
+        thread_ids: []
+      世界书:
+        channel_id: "1337465998894301254"
+        thread_ids: []
+      工具区:
+        channel_id: "1337465519799926794"
+        thread_ids: []
+  "1379304008157499423":
+    name: "尾巴镇自动扫描任务配置"
+    guild_id: "1379304008157499423"
+    channels:
+      宝藏安利:
+        channel_id: "1380935069937434827"
+        thread_ids: []
+      美化区:
+        channel_id: "1379316683856150561"
+        thread_ids: []
+      女性向:
+        channel_id: "1379317325018435665"
+        thread_ids: []
+
+# 惩罚系统配置
+punish:
+  init_config:
+    db_path: "data/kick_user.db"
+  guilds:
+    "1291925535324110879":
+      name: "旅程"
+      base_role_id: "1337007077264064512"
+      remove_role_ids:
+        - "1338097075593678912"
+        - "1337007077264064512"
+      whitelist_role_ids:
+        - "1337451654705971330"
+        - "1354048449099599962"
+      timeout:
+        frequency: 1
+        time: "30d"
+        timeout_time: "3d"
+        add_roles:
+          - "1337763869925445736"
+        add_role_timeout_time: "30d"
+    "1134557553011998840":
+      name: "类脑"
+      base_role_id: "1335363403870502912"
+      remove_role_ids:
+        - "1335363403870502912"
+        - "1338193342889984123"
+      whitelist_role_ids:
+        - "1354043091757305911"
+        - "1337450755791261766"
+        - "1289224017789583453"
+        - "1387461232738439238"
+      timeout:
+        frequency: 1
+        time: "30d"
+        timeout_time: "3d"
+        add_roles:
+          - "1271383429346365450"
+        add_role_timeout_time: "30d"
+
+# 抽卡系统配置
+rollcard:
+  "1134557553011998840":
+    name: ""
+    guild_id: "1134557553011998840"
+    database: "data/1134557553011998840.db"
+    tag_mapping_file: "data/tag_mapping/1134557553011998840_config.json"
+    table_name_mapping:
+      "男性向_8821": "男性向"
+      "女性向_1114": "女性向"
+      "纯净区_7082": "纯净区"
+      "其他区_0277": "其他区"
+      "深渊区_5054": "深渊区"
+      "世界书_5367": "世界书"
+      "工具区_5107": "工具区"
+      "全性向_6071": "全性向"
+  "1291925535324110879":
+    name: ""
+    guild_id: "1291925535324110879"
+    database: "data/1291925535324110879.db"
+    tag_mapping_file: "data/tag_mapping/1291925535324110879_config.json"
+    table_name_mapping:
+      "纯净区_4849": "纯净区"
+      "工具区_6794": "工具区"
+      "男性向_2318": "男性向"
+      "女性向_7052": "女性向"
+      "全性向_0252": "全性向"
+      "深渊区_4762": "深渊区"
+      "世界书_1254": "世界书"
+      "小众区_7736": "小众区"
+
+# 线程配置
+thread:
+  "1134557553011998840":
+    database: "data/new_post/1134557553011998840.db"
+    table_name: "all_posts"
+  "1291925535324110879":
+    database: "data/new_post/1291925535324110879.db"
+    table_name: "all_posts"
+  "1379304008157499423":
+    database: "data/new_post/1379304008157499423.db"
+    table_name: "all_posts"
