@@ -100,25 +100,13 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 			})
 			if err != nil {
 				responseContent = "无法发送确认消息 "
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: responseContent,
-						Flags:   discordgo.MessageFlagsEphemeral,
-					},
-				})
+				utils.SendErrorResponse(s, i, responseContent)
 				return
 			}
 			return // The response will be handled asynchronously
 		} else {
 			responseContent = "找不到具有该 ID 的预设 "
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: responseContent,
-					Flags:   discordgo.MessageFlagsEphemeral,
-				},
-			})
+			utils.SendErrorResponse(s, i, responseContent)
 		}
 	case "overwrite":
 		if input == "" {
@@ -163,23 +151,11 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 		responseContent = "未知的操作 "
 	}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: responseContent,
-			Flags:   discordgo.MessageFlagsEphemeral,
-		},
-	})
+	utils.SendSimpleResponse(s, i, responseContent)
 }
 
 func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Flags: discordgo.MessageFlagsEphemeral,
-		},
-	})
-	if err != nil {
+	if err := utils.DeferResponse(s, i, true); err != nil {
 		log.Printf("Error sending deferred response: %v", err)
 		return
 	}
@@ -209,10 +185,7 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 
 		parsedMessages, err := utils.ParseMessageLinks(s, messageLinks)
 		if err != nil {
-			errorContent := err.Error()
-			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-				Content: &errorContent,
-			})
+			utils.SendFollowUpError(s, i.Interaction, err.Error())
 			return
 		}
 
@@ -239,10 +212,7 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 			db := b.DB
 			if err := database.AddPreset(db, i.GuildID, newPreset); err != nil {
 				log.Printf("Error saving preset: %v", err)
-				errorContent := "Error processing preset: could not save to database."
-				s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-					Content: &errorContent,
-				})
+				utils.SendFollowUpError(s, i.Interaction, "Error processing preset: could not save to database.")
 				return
 			}
 

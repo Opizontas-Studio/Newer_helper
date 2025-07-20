@@ -415,10 +415,3 @@ func logPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, configE
 		log.Printf("Failed to send punish log: %v", err)
 	}
 }
-
-// sendErrorResponse is a utility to send a standardized error message response.
-func sendErrorResponse(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
-	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-		Content: &message,
-	})
-}

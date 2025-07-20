@@ -2,6 +2,7 @@ package rollcard
 
 import (
 	"discord-bot/bot"
+	"discord-bot/utils"
 	"log"
 	"strings"
 
@@ -52,7 +53,7 @@ func HandleSetupRollPanel(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	} else {
 		guildID := i.GuildID
 		if _, ok := b.GetConfig().RollCardConfigs[guildID]; !ok {
-			sendEphemeralResponse(s, i, "This server is not configured for rollcard.")
+			utils.SendErrorResponse(s, i, "This server is not configured for rollcard.")
 			return
 		}
 		components = []discordgo.MessageComponent{
@@ -96,11 +97,11 @@ func HandleSetupRollPanel(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 	if err != nil {
 		log.Printf("Error sending persistent roll panel: %v", err)
-		sendEphemeralResponse(s, i, "创建面板时发生错误 ")
+		utils.SendErrorResponse(s, i, "创建面板时发生错误 ")
 		return
 	}
 
-	sendEphemeralResponse(s, i, "✅ 快速抽卡面板已成功创建！")
+	utils.SendSimpleResponse(s, i, "✅ 快速抽卡面板已成功创建！")
 }
 
 func HandlePersistentRoll(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, customID string) {

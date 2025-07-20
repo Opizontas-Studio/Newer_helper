@@ -15,22 +15,15 @@ import (
 )
 
 type Bot struct {
-	Session                 *discordgo.Session
-	RegisteredCommands      []*discordgo.ApplicationCommand
-	config                  atomic.Value // *model.Config
-	CommandHandlers         map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)
-	PresetCooldowns         map[string]time.Time
-	CooldownMutex           sync.Mutex
-	FullScanTicker          *time.Ticker
-	ActiveScanTicker        *time.Ticker
-	CooldownTicker          *time.Ticker
-	PostCleanupTicker       *time.Ticker
-	LeaderboardUpdateTicker *time.Ticker
-	PostScanTicker          *time.Ticker
-	DegradedPostScanTicker  *time.Ticker
-	DB                      *sql.DB
-	ActiveScanCount         int
-	done                    chan struct{}
+	Session            *discordgo.Session
+	RegisteredCommands []*discordgo.ApplicationCommand
+	config             atomic.Value // *model.Config
+	CommandHandlers    map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)
+	PresetCooldowns    map[string]time.Time
+	CooldownMutex      sync.Mutex
+	DB                 *sql.DB
+	activeScanCount    int
+	scheduler          *Scheduler
 }
 
 func (b *Bot) GetConfig() *model.Config {
@@ -53,6 +46,10 @@ func (b *Bot) GetSession() *discordgo.Session {
 	return b.Session
 }
 
+func (b *Bot) ActiveScanCount() *int {
+	return &b.activeScanCount
+}
+
 func New(cfg *model.Config, db *sql.DB) (*Bot, error) {
 	dg, err := discordgo.New("Bot " + cfg.BotToken)
 	if err != nil {
@@ -65,37 +62,17 @@ func New(cfg *model.Config, db *sql.DB) (*Bot, error) {
 		Session:         dg,
 		PresetCooldowns: make(map[string]time.Time),
 		DB:              db,
-		ActiveScanCount: 0,
-		done:            make(chan struct{}),
+		activeScanCount: 0,
 	}
 	b.config.Store(cfg)
+	b.scheduler = NewScheduler(b)
 	return b, nil
 }
 
 func (b *Bot) Close() {
 	log.Println("Gracefully shutting down.")
-	close(b.done) // Signal all goroutines to stop
-
-	if b.FullScanTicker != nil {
-		b.FullScanTicker.Stop()
-	}
-	if b.ActiveScanTicker != nil {
-		b.ActiveScanTicker.Stop()
-	}
-	if b.CooldownTicker != nil {
-		b.CooldownTicker.Stop()
-	}
-	if b.PostCleanupTicker != nil {
-		b.PostCleanupTicker.Stop()
-	}
-	if b.LeaderboardUpdateTicker != nil {
-		b.LeaderboardUpdateTicker.Stop()
-	}
-	if b.PostScanTicker != nil {
-		b.PostScanTicker.Stop()
-	}
-	if b.DegradedPostScanTicker != nil {
-		b.DegradedPostScanTicker.Stop()
+	if b.scheduler != nil {
+		b.scheduler.Stop()
 	}
 	b.Session.Close()
 }
@@ -118,15 +95,8 @@ func (b *Bot) RefreshCommands(guildID string) {
 	b.RegisteredCommands = append(b.RegisteredCommands, registeredCmds...)
 }
 
-func (b *Bot) CleanupCooldowns() {
-	b.CooldownMutex.Lock()
-	defer b.CooldownMutex.Unlock()
-
-	for id, t := range b.PresetCooldowns {
-		if time.Since(t) > 1*time.Hour {
-			delete(b.PresetCooldowns, id)
-		}
-	}
+func (b *Bot) GetScheduler() *Scheduler {
+	return b.scheduler
 }
 
 func (b *Bot) ReloadConfig() error {

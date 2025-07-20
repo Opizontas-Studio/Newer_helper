@@ -47,7 +47,7 @@ func HandleAdsBoardAdminCommand(s *discordgo.Session, i *discordgo.InteractionCr
 		db, err := database.InitDB("data/guilds.db")
 		if err != nil {
 			log.Printf("Failed to connect to database: %v", err)
-			utils.EditErrorResponse(s, i, "数据库连接失败")
+			utils.SendFollowUpError(s, i.Interaction, "数据库连接失败")
 			return
 		}
 		defer db.Close()
@@ -55,17 +55,17 @@ func HandleAdsBoardAdminCommand(s *discordgo.Session, i *discordgo.InteractionCr
 		switch action {
 		case "add":
 			if input == "" {
-				utils.EditErrorResponse(s, i, "请输入包含广告内容的消息链接")
+				utils.SendFollowUpError(s, i.Interaction, "请输入包含广告内容的消息链接")
 				return
 			}
 
 			parsedMessages, err := utils.ParseMessageLinks(s, input)
 			if err != nil {
-				utils.EditErrorResponse(s, i, "解析消息链接失败: "+err.Error())
+				utils.SendFollowUpError(s, i.Interaction, "解析消息链接失败: "+err.Error())
 				return
 			}
 			if len(parsedMessages) == 0 {
-				utils.EditErrorResponse(s, i, "没有找到有效的消息链接")
+				utils.SendFollowUpError(s, i.Interaction, "没有找到有效的消息链接")
 				return
 			}
 
@@ -84,7 +84,7 @@ func HandleAdsBoardAdminCommand(s *discordgo.Session, i *discordgo.InteractionCr
 				embedData, err := json.Marshal(msg.Embeds[0])
 				if err != nil {
 					log.Printf("Failed to marshal embed: %v", err)
-					utils.EditErrorResponse(s, i, "序列化 Embed 内容失败")
+					utils.SendFollowUpError(s, i.Interaction, "序列化 Embed 内容失败")
 					return
 				}
 				adContent = string(embedData)
@@ -94,54 +94,45 @@ func HandleAdsBoardAdminCommand(s *discordgo.Session, i *discordgo.InteractionCr
 			}
 
 			if adContent == "" && imageURL == "" {
-				utils.EditErrorResponse(s, i, "消息内容和图片均为空，无法添加为广告")
+				utils.SendFollowUpError(s, i.Interaction, "消息内容和图片均为空，无法添加为广告")
 				return
 			}
 
 			err = database.AddLeaderboardAd(db, i.GuildID, adContent, imageURL)
 			if err != nil {
 				log.Printf("Failed to add leaderboard ad: %v", err)
-				utils.EditErrorResponse(s, i, "添加广告失败")
+				utils.SendFollowUpError(s, i.Interaction, "添加广告失败")
 				return
 			}
-			content := "广告已成功添加！"
-			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-				Content: &content,
-			})
+			utils.SendFollowUp(s, i.Interaction, "广告已成功添加！")
 
 		case "delete":
 			if input == "" {
-				utils.EditErrorResponse(s, i, "请输入要删除的广告 ID")
+				utils.SendFollowUpError(s, i.Interaction, "请输入要删除的广告 ID")
 				return
 			}
 			adID, err := strconv.Atoi(input)
 			if err != nil {
-				utils.EditErrorResponse(s, i, "无效的广告 ID")
+				utils.SendFollowUpError(s, i.Interaction, "无效的广告 ID")
 				return
 			}
 			err = database.DeleteLeaderboardAd(db, adID, i.GuildID)
 			if err != nil {
 				log.Printf("Failed to delete leaderboard ad: %v", err)
-				utils.EditErrorResponse(s, i, "删除广告失败")
+				utils.SendFollowUpError(s, i.Interaction, "删除广告失败")
 				return
 			}
-			content := fmt.Sprintf("广告 #%d 已成功删除！", adID)
-			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-				Content: &content,
-			})
+			utils.SendFollowUp(s, i.Interaction, fmt.Sprintf("广告 #%d 已成功删除！", adID))
 
 		case "list":
 			ads, err := database.ListLeaderboardAds(db, i.GuildID)
 			if err != nil {
 				log.Printf("Failed to list leaderboard ads: %v", err)
-				utils.EditErrorResponse(s, i, "获取广告列表失败")
+				utils.SendFollowUpError(s, i.Interaction, "获取广告列表失败")
 				return
 			}
 			if len(ads) == 0 {
-				content := "当前没有广告。"
-				s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-					Content: &content,
-				})
+				utils.SendFollowUp(s, i.Interaction, "当前没有广告。")
 				return
 			}
 
@@ -159,25 +150,22 @@ func HandleAdsBoardAdminCommand(s *discordgo.Session, i *discordgo.InteractionCr
 				}
 				builder.WriteString(fmt.Sprintf("`%d`: %s (%s)\n", ad.ID, displayContent, status))
 			}
-			content := builder.String()
-			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-				Content: &content,
-			})
+			utils.SendFollowUp(s, i.Interaction, builder.String())
 
 		case "toggle":
 			if input == "" {
-				utils.EditErrorResponse(s, i, "请输入要切换状态的广告 ID")
+				utils.SendFollowUpError(s, i.Interaction, "请输入要切换状态的广告 ID")
 				return
 			}
 			adID, err := strconv.Atoi(input)
 			if err != nil {
-				utils.EditErrorResponse(s, i, "无效的广告 ID")
+				utils.SendFollowUpError(s, i.Interaction, "无效的广告 ID")
 				return
 			}
 
 			ads, err := database.ListLeaderboardAds(db, i.GuildID)
 			if err != nil {
-				utils.EditErrorResponse(s, i, "无法获取广告信息")
+				utils.SendFollowUpError(s, i.Interaction, "无法获取广告信息")
 				return
 			}
 
@@ -190,14 +178,14 @@ func HandleAdsBoardAdminCommand(s *discordgo.Session, i *discordgo.InteractionCr
 			}
 
 			if currentAd == nil {
-				utils.EditErrorResponse(s, i, "找不到指定的广告 ID")
+				utils.SendFollowUpError(s, i.Interaction, "找不到指定的广告 ID")
 				return
 			}
 
 			err = database.ToggleLeaderboardAd(db, adID, i.GuildID, !currentAd.Enabled)
 			if err != nil {
 				log.Printf("Failed to toggle leaderboard ad: %v", err)
-				utils.EditErrorResponse(s, i, "切换广告状态失败")
+				utils.SendFollowUpError(s, i.Interaction, "切换广告状态失败")
 				return
 			}
 
@@ -205,10 +193,7 @@ func HandleAdsBoardAdminCommand(s *discordgo.Session, i *discordgo.InteractionCr
 			if currentAd.Enabled { // Note: we check the state *before* toggling
 				newState = "禁用"
 			}
-			content := fmt.Sprintf("广告 #%d 的状态已成功切换为 **%s**！", adID, newState)
-			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-				Content: &content,
-			})
+			utils.SendFollowUp(s, i.Interaction, fmt.Sprintf("广告 #%d 的状态已成功切换为 **%s**！", adID, newState))
 		}
 	}()
 }

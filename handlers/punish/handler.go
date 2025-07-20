@@ -11,10 +11,7 @@ import (
 
 func HandlePunishCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
 	// 1. Defer initial response
-	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
-	}); err != nil {
+	if err := utils.DeferResponse(s, i, true); err != nil {
 		log.Printf("Failed to defer interaction: %v", err)
 		return
 	}
@@ -23,12 +20,12 @@ func HandlePunishCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b
 	kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
 	if err != nil {
 		log.Printf("Error loading kick config: %v", err)
-		sendErrorResponse(s, i, "Failed to load kick configuration.")
+		utils.SendFollowUpError(s, i.Interaction, "Failed to load kick configuration.")
 		return
 	}
 	configEntry, ok := kickConfig.Data[i.GuildID]
 	if !ok {
-		sendErrorResponse(s, i, "❓ 此服务器未找到可用配置文件")
+		utils.SendFollowUpError(s, i.Interaction, "❓ 此服务器未找到可用配置文件")
 		return
 	}
 
@@ -41,11 +38,11 @@ func HandlePunishCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b
 	targetMember, err := s.GuildMember(i.GuildID, targetUser.ID)
 	if err != nil {
 		log.Printf("Error getting member details: %v", err)
-		sendErrorResponse(s, i, "Could not retrieve member details.")
+		utils.SendFollowUpError(s, i.Interaction, "Could not retrieve member details.")
 		return
 	}
 	if isUserWhitelisted(targetMember, configEntry) {
-		sendErrorResponse(s, i, "This user is on the whitelist and cannot be punished.")
+		utils.SendFollowUpError(s, i.Interaction, "This user is on the whitelist and cannot be punished.")
 		return
 	}
 
@@ -56,7 +53,7 @@ func HandlePunishCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b
 	evidenceJSON, allEvidence, err := processEvidence(s, cmdOptions.MessageLinks, targetUser)
 	if err != nil {
 		log.Printf("Error processing evidence: %v", err)
-		sendErrorResponse(s, i, "Failed to process evidence.")
+		utils.SendFollowUpError(s, i.Interaction, "Failed to process evidence.")
 		return
 	}
 
@@ -64,7 +61,7 @@ func HandlePunishCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b
 	db, err := database.InitPunishmentDB(kickConfig.InitConfig.DBPath)
 	if err != nil {
 		log.Printf("Error connecting to punishment DB: %v", err)
-		sendErrorResponse(s, i, "Failed to connect to the punishment database.")
+		utils.SendFollowUpError(s, i.Interaction, "Failed to connect to the punishment database.")
 		return
 	}
 	defer db.Close()
@@ -80,7 +77,7 @@ func HandlePunishCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b
 	punishmentID, err := addPunishmentRecord(db, i, targetUser, reason, evidenceJSON)
 	if err != nil {
 		log.Printf("Error saving punishment record: %v", err)
-		sendErrorResponse(s, i, "Failed to save the punishment record.")
+		utils.SendFollowUpError(s, i.Interaction, "Failed to save the punishment record.")
 		return
 	}
 

@@ -23,13 +23,7 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 	}
 
 	// Defer the response ephemerally
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Flags: discordgo.MessageFlagsEphemeral,
-		},
-	})
-	if err != nil {
+	if err := utils.DeferResponse(s, i, true); err != nil {
 		log.Printf("Failed to defer interaction response: %v", err)
 		return
 	}

@@ -75,13 +75,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
 			if permissionLevel != utils.AdminPermission {
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "You do not have permission to use this command.",
-						Flags:   discordgo.MessageFlagsEphemeral,
-					},
-				})
+				utils.SendErrorResponse(s, i, "You do not have permission to use this command.")
 				return
 			}
 			preset.HandlePresetMessageUpdateInteraction(s, i, b)
@@ -94,13 +88,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
 			if permissionLevel != utils.AdminPermission {
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "You do not have permission to use this command.",
-						Flags:   discordgo.MessageFlagsEphemeral,
-					},
-				})
+				utils.SendErrorResponse(s, i, "You do not have permission to use this command.")
 				return
 			}
 			preset.HandlePresetMessageAdminInteraction(s, i, b)
@@ -108,13 +96,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 		"start-scan": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, nil, nil, b.GetConfig().DeveloperUserIDs, nil)
 			if permissionLevel != utils.DeveloperPermission {
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "You do not have permission to use this command.",
-						Flags:   discordgo.MessageFlagsEphemeral,
-					},
-				})
+				utils.SendErrorResponse(s, i, "You do not have permission to use this command.")
 				return
 			}
 
@@ -135,24 +117,12 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 
 			if scanMode == "clean" {
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "Channel cleanup started.",
-						Flags:   discordgo.MessageFlagsEphemeral,
-					},
-				})
+				utils.SendSimpleResponse(s, i, "Channel cleanup started.")
 				go scanner.CleanAllChannels(s, b.GetConfig())
 				return
 			}
 
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: fmt.Sprintf("Scan started with mode: %s. Target guild: %s", scanMode, targetGuildID),
-					Flags:   discordgo.MessageFlagsEphemeral,
-				},
-			})
+			utils.SendSimpleResponse(s, i, fmt.Sprintf("Scan started with mode: %s. Target guild: %s", scanMode, targetGuildID))
 
 			go scanner.Scan(s, b.GetConfig().LogChannelID, scanMode, targetGuildID, nil)
 		},
@@ -164,13 +134,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
 			if permissionLevel != utils.DeveloperPermission && permissionLevel != utils.SuperAdminPermission {
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "You do not have permission to use this command.",
-						Flags:   discordgo.MessageFlagsEphemeral,
-					},
-				})
+				utils.SendErrorResponse(s, i, "You do not have permission to use this command.")
 				return
 			}
 			rollcard.HandleSetupRollPanel(s, i, b)

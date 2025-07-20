@@ -32,11 +32,11 @@ func HandleRollCardInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 		preferredPools, err := database.GetUserPreferredPools(userID, guildID)
 		if err != nil {
 			log.Printf("Error getting user preferred pools for user %s in guild %s: %v", userID, guildID, err)
-			sendEphemeralResponse(s, i, "获取您的偏好卡池时出错 ")
+			utils.SendErrorResponse(s, i, "获取您的偏好卡池时出错 ")
 			return
 		}
 		if len(preferredPools) == 0 {
-			sendEphemeralResponse(s, i, "您没有指定卡池，也没有设置默认卡池。请使用 `/set-default-roll` 设置或在抽卡时指定一个卡池。")
+			utils.SendErrorResponse(s, i, "您没有指定卡池，也没有设置默认卡池。请使用 `/set-default-roll` 设置或在抽卡时指定一个卡池。")
 			return
 		}
 		poolNames = preferredPools
@@ -70,7 +70,7 @@ func HandleRollCardInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 	if tagID != "" {
 		for _, excludedTag := range excludeTags {
 			if tagID == excludedTag {
-				sendEphemeralResponse(s, i, "错误：您不能在包含和排除中选择同一个标签 ")
+				utils.SendErrorResponse(s, i, "错误：您不能在包含和排除中选择同一个标签 ")
 				return
 			}
 		}
@@ -93,19 +93,19 @@ func rollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, 
 	rollCardGuildConfig, ok := b.GetConfig().RollCardConfigs[guildID]
 	if !ok {
 		log.Printf("Could not find roll card config for guild: %s", guildID)
-		sendEphemeralResponse(s, i, "This server is not configured for rollcard.")
+		utils.SendErrorResponse(s, i, "This server is not configured for rollcard.")
 		return
 	}
 
 	posts, err := getPosts(&rollCardGuildConfig, poolNames, tagID, count, excludeTags)
 	if err != nil {
 		log.Printf("Error getting posts for guild %s: %v", guildID, err)
-		sendEphemeralResponse(s, i, err.Error())
+		utils.SendErrorResponse(s, i, err.Error())
 		return
 	}
 
 	if len(posts) == 0 {
-		sendEphemeralResponse(s, i, "卡池为空，或未找到符合条件的卡片 ")
+		utils.SendErrorResponse(s, i, "卡池为空，或未找到符合条件的卡片 ")
 		return
 	}
 
@@ -210,17 +210,6 @@ func buildEmbeds(posts []model.Post, tagMapping map[string]map[string]string, us
 		embeds = append(embeds, embed)
 	}
 	return embeds
-}
-
-// sendEphemeralResponse sends a simple, ephemeral message back to the user.
-func sendEphemeralResponse(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: content,
-			Flags:   discordgo.MessageFlagsEphemeral,
-		},
-	})
 }
 
 // getTagNames converts a comma-separated string of tag IDs to a string of tag names.
