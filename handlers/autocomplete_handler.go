@@ -70,6 +70,49 @@ func handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, co
 				}
 			}
 		}
+	case "ads_board_admin":
+		var focusedOption *discordgo.ApplicationCommandInteractionDataOption
+		for _, opt := range data.Options {
+			if opt.Focused {
+				focusedOption = opt
+				break
+			}
+		}
+
+		if focusedOption != nil && focusedOption.Name == "ad_id" {
+			// Temporarily remove action check to debug if action value is missing in payload
+			db, err := database.InitDB("data/guilds.db")
+			if err != nil {
+				log.Printf("Autocomplete: failed to connect to db: %v", err)
+				return
+			}
+			defer db.Close()
+
+			ads, err := database.ListLeaderboardAds(db, i.GuildID)
+			if err != nil {
+				log.Printf("Autocomplete: failed to list ads: %v", err)
+				return
+			}
+
+			inputValue := focusedOption.StringValue()
+			for _, ad := range ads {
+				adIDStr := fmt.Sprintf("%d", ad.ID)
+				// Fuzzy match against ad content or ID
+				matchContent := strings.Contains(strings.ToLower(ad.Content), strings.ToLower(inputValue))
+				matchID := strings.Contains(adIDStr, inputValue)
+
+				if matchContent || matchID {
+					choiceName := fmt.Sprintf("ID: %d - %s", ad.ID, ad.Content)
+					if len(choiceName) > 100 {
+						choiceName = choiceName[:97] + "..."
+					}
+					choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+						Name:  choiceName,
+						Value: adIDStr,
+					})
+				}
+			}
+		}
 	case "preset-message", "preset-message_admin":
 		if serverConfig, ok := config.ServerConfigs[i.GuildID]; ok {
 			for _, p := range serverConfig.PresetMessages {

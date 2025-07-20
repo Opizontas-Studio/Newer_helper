@@ -37,13 +37,22 @@ var AdsBoardAdmin = &discordgo.ApplicationCommand{
 				{Name: "删除广告 (delete)", Value: "delete"},
 				{Name: "列出广告 (list)", Value: "list"},
 				{Name: "切换状态 (toggle)", Value: "toggle"},
+				{Name: "修改广告 (modify)", Value: "modify"},
+				{Name: "打印广告 (print)", Value: "print"},
 			},
 		},
 		{
 			Type:        discordgo.ApplicationCommandOptionString,
 			Name:        "input",
-			Description: "Content for 'add', or Ad ID for 'delete'/'toggle'",
+			Description: "Content for 'add' or 'modify'",
 			Required:    false,
+		},
+		{
+			Type:         discordgo.ApplicationCommandOptionString,
+			Name:         "ad_id",
+			Description:  "Ad ID for 'delete'/'toggle'/'modify'/'print'",
+			Autocomplete: true,
+			Required:     false,
 		},
 	},
 }

@@ -12,3 +12,8 @@ type Bot interface {
 	GetSession() *discordgo.Session
 	GetDB() *sql.DB
 }
+
+// BotConfigProvider provides an interface to get the bot's configuration.
+type BotConfigProvider interface {
+	GetConfig() *Config
+}

@@ -55,7 +55,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 				return
 			}
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, config.DeveloperUserIDs, config.SuperAdminRoleIDs)
-			if permissionLevel != utils.SuperAdminPermission && permissionLevel != utils.DeveloperPermission {
+			if permissionLevel != utils.SuperAdminPermission && permissionLevel != utils.DeveloperPermission && permissionLevel != utils.AdminPermission {
 				utils.SendEphemeralResponse(s, i, "您没有权限使用此命令")
 				return
 			}

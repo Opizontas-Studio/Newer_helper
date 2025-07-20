@@ -227,24 +227,7 @@ func displayPunishmentsV2(s *discordgo.Session, i *discordgo.Interaction, search
 
 	var components []discordgo.MessageComponent
 	if totalPages > 1 {
-		components = []discordgo.MessageComponent{
-			discordgo.ActionsRow{
-				Components: []discordgo.MessageComponent{
-					discordgo.Button{
-						Label:    "上一页",
-						Style:    discordgo.PrimaryButton,
-						Disabled: page == 1,
-						CustomID: fmt.Sprintf("punish_page_v2:%d:%s:%s", page-1, searchBy, input),
-					},
-					discordgo.Button{
-						Label:    "下一页",
-						Style:    discordgo.PrimaryButton,
-						Disabled: page == totalPages,
-						CustomID: fmt.Sprintf("punish_page_v2:%d:%s:%s", page+1, searchBy, input),
-					},
-				},
-			},
-		}
+		components = utils.CreatePaginationComponents(page, totalPages, "punish_page_v2", searchBy, input)
 	}
 
 	s.InteractionResponseEdit(i, &discordgo.WebhookEdit{
@@ -312,10 +295,7 @@ func deletePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, db *
 
 func HandlePunishPaginationV2(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Flags: discordgo.MessageFlagsEphemeral,
-		},
+		Type: discordgo.InteractionResponseDeferredMessageUpdate,
 	})
 	if err != nil {
 		log.Printf("Failed to defer pagination interaction: %v", err)

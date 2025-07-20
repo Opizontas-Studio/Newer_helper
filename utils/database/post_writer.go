@@ -72,3 +72,15 @@ func DeletePostsOlderThan(db *sql.DB, tableName string, timestamp int64) (int64,
 
 	return rowsAffected, nil
 }
+
+func UpdateLeaderboardAd(db *sql.DB, adID int, guildID, content, imageURL string) error {
+	updateSQL := `UPDATE leaderboard_ads SET content = ?, image_url = ? WHERE id = ? AND guild_id = ?`
+	stmt, err := db.Prepare(updateSQL)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(content, imageURL, adID, guildID)
+	return err
+}
