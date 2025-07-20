@@ -14,7 +14,7 @@ import (
 )
 
 const maxPartitionConcurrency = 45          // 每个服务器内最大并发分区扫描数
-const maxThreadConcurrencyPerPartition = 16 // 每个分区内最大并发线程处理数
+const maxThreadConcurrencyPerPartition = 24 // 每个分区内最大并发线程处理数
 
 // processThreadsChunk 处理线程分片的函数
 func processThreadsChunk(s *discordgo.Session, chunk ThreadChunk, existingThreads map[string]bool, existingThreadsMutex *sync.RWMutex, task PartitionTask, tableName string, done <-chan struct{}) {
@@ -23,6 +23,12 @@ func processThreadsChunk(s *discordgo.Session, chunk ThreadChunk, existingThread
 		case <-done:
 			return
 		default:
+		}
+
+		// 如果帖子被锁定，则跳过
+		if thread.ThreadMetadata != nil && thread.ThreadMetadata.Locked {
+			log.Println("Thread is locked, skipping:", thread.ID)
+			continue
 		}
 
 		// 线程安全检查是否已存在
@@ -36,7 +42,14 @@ func processThreadsChunk(s *discordgo.Session, chunk ThreadChunk, existingThread
 
 		firstMessage, err := s.ChannelMessage(thread.ID, thread.ID)
 		if err != nil {
-			log.Printf("Error getting first message for thread %s: %v", thread.ID, err)
+			if restErr, ok := err.(*discordgo.RESTError); ok && restErr.Response.StatusCode == 404 {
+				log.Printf("Thread %s not found (404), adding to exclusion list.", thread.ID)
+				if err := AddThreadToExclusionList(task.GuildConfig.GuildsID, task.Key, thread.ID); err != nil {
+					log.Printf("Error adding thread %s to exclusion list: %v", thread.ID, err)
+				}
+			} else {
+				log.Printf("Error getting first message for thread %s: %v", thread.ID, err)
+			}
 			continue
 		}
 

@@ -16,6 +16,59 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+var (
+	configMutex = &sync.Mutex{}
+)
+
+// AddThreadToExclusionList 将 threadID 添加到指定 guild 和 channel 的排除列表
+func AddThreadToExclusionList(guildID, channelKey, threadID string) error {
+	configMutex.Lock()
+	defer configMutex.Unlock()
+
+	filePath := "data/task_config.json"
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("无法读取配置文件: %w", err)
+	}
+
+	var allConfigs map[string]GuildConfig
+	if err := json.Unmarshal(file, &allConfigs); err != nil {
+		return fmt.Errorf("无法解析配置文件: %w", err)
+	}
+
+	guildConfig, ok := allConfigs[guildID]
+	if !ok {
+		return fmt.Errorf("未找到 Guild ID: %s", guildID)
+	}
+
+	channelConfig, ok := guildConfig.Data[channelKey]
+	if !ok {
+		return fmt.Errorf("未找到 Channel Key: %s", channelKey)
+	}
+
+	// 检查 threadID 是否已存在
+	for _, id := range channelConfig.ThreadIDs {
+		if id == threadID {
+			return nil
+		}
+	}
+
+	channelConfig.ThreadIDs = append(channelConfig.ThreadIDs, threadID)
+	guildConfig.Data[channelKey] = channelConfig
+	allConfigs[guildID] = guildConfig
+
+	updatedData, err := json.MarshalIndent(allConfigs, "", "  ")
+	if err != nil {
+		return fmt.Errorf("无法序列化配置文件: %w", err)
+	}
+
+	if err := os.WriteFile(filePath, updatedData, 0644); err != nil {
+		return fmt.Errorf("无法写入配置文件: %w", err)
+	}
+
+	return nil
+}
+
 // worker 是工作池中的工作单元
 func Scan(s *discordgo.Session, logChannelID string, scanMode string, targetGuildID string, done <-chan struct{}) {
 	targetServer := "所有服务器"
