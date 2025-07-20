@@ -338,7 +338,7 @@ func HandlePunishPaginationV2(s *discordgo.Session, i *discordgo.InteractionCrea
 
 func printEvidence(s *discordgo.Session, i *discordgo.InteractionCreate, record *model.PunishmentRecord) {
 	if record.Evidence == "" {
-		utils.SendErrorResponse(s, i, "此记录没有证据。")
+		utils.SendEphemeralResponse(s, i, "此记录没有证据。")
 		return
 	}
 

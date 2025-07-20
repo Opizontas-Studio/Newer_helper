@@ -33,7 +33,7 @@ func HandleGlobalRoll(s *discordgo.Session, i *discordgo.InteractionCreate, b *b
 
 func globalRollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, count int, tagID string, excludeTags []string) {
 	if tagID != "" || len(excludeTags) > 0 {
-		utils.SendErrorResponse(s, i, "全局抽卡模式不支持使用标签。")
+		utils.SendEphemeralResponse(s, i, "全局抽卡模式不支持使用标签。")
 		return
 	}
 
@@ -43,12 +43,12 @@ func globalRollCard(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot
 	posts, err := getGlobalPosts(b.GetConfig(), count)
 	if err != nil {
 		log.Printf("Error getting global posts: %v", err)
-		utils.SendErrorResponse(s, i, err.Error())
+		utils.SendEphemeralResponse(s, i, err.Error())
 		return
 	}
 
 	if len(posts) == 0 {
-		utils.SendErrorResponse(s, i, "卡池为空，或未找到符合条件的卡片 ")
+		utils.SendEphemeralResponse(s, i, "卡池为空，或未找到符合条件的卡片 ")
 		return
 	}
 

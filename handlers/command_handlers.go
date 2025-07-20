@@ -25,7 +25,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
 			if permissionLevel != utils.AdminPermission && permissionLevel != utils.SuperAdminPermission && permissionLevel != utils.DeveloperPermission {
-				utils.SendErrorResponse(s, i, "You do not have permission to use this command.")
+				utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
 				return
 			}
 			punish.HandlePunishCommand(s, i, b)
@@ -38,7 +38,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
 			if permissionLevel != utils.AdminPermission && permissionLevel != utils.SuperAdminPermission && permissionLevel != utils.DeveloperPermission {
-				utils.SendErrorResponse(s, i, "You do not have permission to use this command.")
+				utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
 				return
 			}
 			punish.HandlePunishAdminCommandV2(s, i, b)
@@ -51,12 +51,12 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			serverConfig, ok := config.ServerConfigs[i.GuildID]
 			if !ok {
 				log.Printf("Guild config not found for guild ID: %s", i.GuildID)
-				utils.SendErrorResponse(s, i, "服务器配置未找到")
+				utils.SendEphemeralResponse(s, i, "服务器配置未找到")
 				return
 			}
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, config.DeveloperUserIDs, config.SuperAdminRoleIDs)
 			if permissionLevel != utils.SuperAdminPermission && permissionLevel != utils.DeveloperPermission {
-				utils.SendErrorResponse(s, i, "您没有权限使用此命令")
+				utils.SendEphemeralResponse(s, i, "您没有权限使用此命令")
 				return
 			}
 			leaderboard.HandleAdsBoardAdminCommand(s, i, b)
@@ -75,7 +75,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
 			if permissionLevel != utils.AdminPermission {
-				utils.SendErrorResponse(s, i, "You do not have permission to use this command.")
+				utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
 				return
 			}
 			preset.HandlePresetMessageUpdateInteraction(s, i, b)
@@ -88,7 +88,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
 			if permissionLevel != utils.AdminPermission {
-				utils.SendErrorResponse(s, i, "You do not have permission to use this command.")
+				utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
 				return
 			}
 			preset.HandlePresetMessageAdminInteraction(s, i, b)
@@ -96,7 +96,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 		"start-scan": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, nil, nil, b.GetConfig().DeveloperUserIDs, nil)
 			if permissionLevel != utils.DeveloperPermission {
-				utils.SendErrorResponse(s, i, "You do not have permission to use this command.")
+				utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
 				return
 			}
 
@@ -117,12 +117,12 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 
 			if scanMode == "clean" {
-				utils.SendSimpleResponse(s, i, "Channel cleanup started.")
+				utils.SendEphemeralResponse(s, i, "Channel cleanup started.")
 				go scanner.CleanAllChannels(s, b.GetConfig())
 				return
 			}
 
-			utils.SendSimpleResponse(s, i, fmt.Sprintf("Scan started with mode: %s. Target guild: %s", scanMode, targetGuildID))
+			utils.SendEphemeralResponse(s, i, fmt.Sprintf("Scan started with mode: %s. Target guild: %s", scanMode, targetGuildID))
 
 			go scanner.Scan(s, b.GetConfig().LogChannelID, scanMode, targetGuildID, nil)
 		},
@@ -134,7 +134,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
 			if permissionLevel != utils.DeveloperPermission && permissionLevel != utils.SuperAdminPermission {
-				utils.SendErrorResponse(s, i, "You do not have permission to use this command.")
+				utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
 				return
 			}
 			rollcard.HandleSetupRollPanel(s, i, b)
@@ -156,7 +156,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
 			if permissionLevel != utils.SuperAdminPermission && permissionLevel != utils.DeveloperPermission {
-				utils.SendErrorResponse(s, i, "You do not have permission to use this command.")
+				utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
 				return
 			}
 			HandleRegisterTopChannel(s, i, b)

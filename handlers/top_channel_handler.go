@@ -16,7 +16,7 @@ import (
 func HandleRegisterTopChannel(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
 	if _, ok := b.GetConfig().ServerConfigs[i.GuildID]; !ok {
 		log.Printf("Could not find server config for guild: %s", i.GuildID)
-		utils.SendErrorResponse(s, i, "Server config not found.")
+		utils.SendEphemeralResponse(s, i, "Server config not found.")
 		return
 	}
 
@@ -49,13 +49,13 @@ func HandleRegisterTopChannel(s *discordgo.Session, i *discordgo.InteractionCrea
 	// Save the new config to the database
 	if err := database.SaveTopChannelConfig(b.GetDB(), i.GuildID, topChannelConfig); err != nil {
 		log.Printf("Error saving top channel config for guild %s: %v", i.GuildID, err)
-		utils.SendErrorResponse(s, i, "Failed to save configuration to the database.")
+		utils.SendEphemeralResponse(s, i, "Failed to save configuration to the database.")
 		return
 	}
 
 	if err := b.ReloadConfig(); err != nil {
 		log.Printf("Error reloading config after saving top channel for guild %s: %v", i.GuildID, err)
-		utils.SendErrorResponse(s, i, "Configuration saved, but failed to reload the config. Please use /reload-config.")
+		utils.SendEphemeralResponse(s, i, "Configuration saved, but failed to reload the config. Please use /reload-config.")
 		return
 	}
 

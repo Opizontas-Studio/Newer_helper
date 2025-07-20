@@ -17,12 +17,12 @@ import (
 func HandleCustomRoll(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, customID string) {
 	parts := strings.Split(customID, ":")
 	if len(parts) != 2 {
-		utils.SendErrorResponse(s, i, "无效的按钮ID ")
+		utils.SendEphemeralResponse(s, i, "无效的按钮ID ")
 		return
 	}
 	count, err := strconv.Atoi(parts[1])
 	if err != nil {
-		utils.SendErrorResponse(s, i, "无效的抽卡数量 ")
+		utils.SendEphemeralResponse(s, i, "无效的抽卡数量 ")
 		return
 	}
 
@@ -31,7 +31,7 @@ func HandleCustomRoll(s *discordgo.Session, i *discordgo.InteractionCreate, b *b
 	preferredPools, err := database.GetUserPreferredPools(userID, guildID)
 	if err != nil {
 		log.Printf("Error getting user preferred pools for %s in guild %s: %v", userID, guildID, err)
-		utils.SendErrorResponse(s, i, "获取用户偏好时出错。")
+		utils.SendEphemeralResponse(s, i, "获取用户偏好时出错。")
 		return
 	}
 
@@ -55,7 +55,7 @@ func SendPoolSelectionMenu(s *discordgo.Session, i *discordgo.InteractionCreate,
 	guildID := i.GuildID
 	rollCardGuildConfig, ok := b.GetConfig().RollCardConfigs[guildID]
 	if !ok {
-		utils.SendErrorResponse(s, i, "此服务器未配置抽卡功能 ")
+		utils.SendEphemeralResponse(s, i, "此服务器未配置抽卡功能 ")
 		return
 	}
 
@@ -68,7 +68,7 @@ func SendPoolSelectionMenu(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 
 	if len(options) == 0 {
-		utils.SendErrorResponse(s, i, "没有可用的卡池")
+		utils.SendEphemeralResponse(s, i, "没有可用的卡池")
 		return
 	}
 
@@ -131,7 +131,7 @@ func HandlePoolSelectionResponse(s *discordgo.Session, i *discordgo.InteractionC
 
 	if err := database.SetUserPreferredPools(userID, guildID, selectedPools); err != nil {
 		log.Printf("Error setting user preferred pools for %s in guild %s: %v", userID, guildID, err)
-		utils.SendErrorResponse(s, i, "保存您的偏好时发生错误。")
+		utils.SendEphemeralResponse(s, i, "保存您的偏好时发生错误。")
 		return
 	}
 

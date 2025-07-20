@@ -20,19 +20,19 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 	serverConfig, ok := config.ServerConfigs[i.GuildID]
 	if !ok {
 		log.Printf("Guild config not found for guild ID: %s", i.GuildID)
-		utils.SendErrorResponse(s, i, "服务器配置未找到 ")
+		utils.SendEphemeralResponse(s, i, "服务器配置未找到 ")
 		return
 	}
 	permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, config.DeveloperUserIDs, config.SuperAdminRoleIDs)
 	if permissionLevel != utils.SuperAdminPermission && permissionLevel != utils.DeveloperPermission {
-		utils.SendErrorResponse(s, i, "您没有权限使用此命令 ")
+		utils.SendEphemeralResponse(s, i, "您没有权限使用此命令 ")
 		return
 	}
 
 	// 检查是否已存在排行榜
 	states, err := utils.LoadLeaderboardState()
 	if err != nil {
-		utils.SendErrorResponse(s, i, "加载排行榜状态时出错 ")
+		utils.SendEphemeralResponse(s, i, "加载排行榜状态时出错 ")
 		log.Printf("Error loading leaderboard states: %v", err)
 		return
 	}
@@ -40,7 +40,7 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 	if state, ok := states[i.GuildID]; ok && state.MessageID != "" {
 		// 如果当前服务器的排行榜已存在，则更新
 		UpdateLeaderboard(b, i.GuildID)
-		utils.SendSimpleResponse(s, i, "已更新现有的排行榜 ")
+		utils.SendEphemeralResponse(s, i, "已更新现有的排行榜 ")
 		return
 	}
 
@@ -48,7 +48,7 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 	config = b.GetConfig()
 	embeds := buildLeaderboardEmbeds(i.GuildID, config)
 	if len(embeds) == 0 {
-		utils.SendErrorResponse(s, i, "创建排行榜时出错, 无法生成 embeds ")
+		utils.SendEphemeralResponse(s, i, "创建排行榜时出错, 无法生成 embeds ")
 		return
 	}
 
@@ -57,7 +57,7 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 	})
 	if err != nil {
 		log.Printf("Error sending leaderboard message: %v", err)
-		utils.SendErrorResponse(s, i, "创建排行榜时出错 ")
+		utils.SendEphemeralResponse(s, i, "创建排行榜时出错 ")
 		return
 	}
 	// 保存排行榜状态
@@ -70,7 +70,7 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 		log.Printf("Error saving leaderboard state: %v", err)
 	}
 
-	utils.SendSimpleResponse(s, i, "已成功创建排行榜，将每 10 分钟自动更新 ")
+	utils.SendEphemeralResponse(s, i, "已成功创建排行榜，将每 10 分钟自动更新 ")
 }
 
 func UpdateLeaderboard(b model.Bot, guildID string) {

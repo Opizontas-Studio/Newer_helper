@@ -6,19 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// SendErrorResponse sends an ephemeral error message.
-func SendErrorResponse(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: message,
-			Flags:   discordgo.MessageFlagsEphemeral,
-		},
-	})
-	if err != nil {
-		log.Printf("Error sending error response: %v", err)
-	}
-}
+// SendPublicResponse sends a public response to an interaction.
 func SendPublicResponse(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -31,8 +19,8 @@ func SendPublicResponse(s *discordgo.Session, i *discordgo.InteractionCreate, me
 	}
 }
 
-// SendSimpleResponse sends a simple ephemeral message.
-func SendSimpleResponse(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
+// SendEphemeralResponse sends an ephemeral message.
+func SendEphemeralResponse(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -41,7 +29,7 @@ func SendSimpleResponse(s *discordgo.Session, i *discordgo.InteractionCreate, me
 		},
 	})
 	if err != nil {
-		log.Printf("Error sending simple response: %v", err)
+		log.Printf("Error sending ephemeral response: %v", err)
 	}
 }
 

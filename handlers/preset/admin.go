@@ -100,13 +100,13 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 			})
 			if err != nil {
 				responseContent = "无法发送确认消息 "
-				utils.SendErrorResponse(s, i, responseContent)
+				utils.SendEphemeralResponse(s, i, responseContent)
 				return
 			}
 			return // The response will be handled asynchronously
 		} else {
 			responseContent = "找不到具有该 ID 的预设 "
-			utils.SendErrorResponse(s, i, responseContent)
+			utils.SendEphemeralResponse(s, i, responseContent)
 		}
 	case "overwrite":
 		if input == "" {
@@ -151,7 +151,7 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 		responseContent = "未知的操作 "
 	}
 
-	utils.SendSimpleResponse(s, i, responseContent)
+	utils.SendEphemeralResponse(s, i, responseContent)
 }
 
 func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
