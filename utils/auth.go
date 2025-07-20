@@ -19,8 +19,11 @@ func contains(slice []string, item string) bool {
 	return false
 }
 
-// CheckPermission checks the highest permission level for a given list of group IDs against the configured roles.
 func CheckPermission(userRoleIDs []string, userID string, adminRoleIDs, userRoleIDsConfig, developerUserIDs, superAdminRoleIDs []string) string {
+	if userID == "" {
+		return GuestPermission
+	}
+
 	if contains(developerUserIDs, userID) {
 		return DeveloperPermission
 	}
