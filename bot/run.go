@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"discord-bot/handlers/leaderboard"
 	"discord-bot/scanner"
 	"discord-bot/utils"
 	"discord-bot/utils/database"
@@ -9,6 +10,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -97,7 +99,31 @@ func (b *Bot) startScanScheduler() {
 			select {
 			case <-b.LeaderboardUpdateTicker.C:
 				log.Println("Updating leaderboard...")
-				b.UpdateLeaderboard()
+				states, err := utils.LoadLeaderboardState()
+				if err != nil {
+					log.Printf("Error loading leaderboard state for update: %v", err)
+					return
+				}
+
+				var wg sync.WaitGroup
+				workerLimit := 5 // Limit to 5 concurrent workers
+				guard := make(chan struct{}, workerLimit)
+
+				for guildID := range states {
+					wg.Add(1)
+					guard <- struct{}{} // Acquire a worker slot
+
+					go func(guildID string) {
+						defer func() {
+							<-guard // Release the worker slot
+							wg.Done()
+						}()
+						log.Printf("Updating leaderboard for guild: %s", guildID)
+						leaderboard.UpdateLeaderboard(b, guildID)
+					}(guildID)
+				}
+
+				wg.Wait()
 			case <-b.done:
 				return
 			}

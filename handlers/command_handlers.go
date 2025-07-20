@@ -46,6 +46,21 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 		"new-cards": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			leaderboard.HandleNewCardsInteraction(s, i, b)
 		},
+		"ads_board_admin": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			config := b.GetConfig()
+			serverConfig, ok := config.ServerConfigs[i.GuildID]
+			if !ok {
+				log.Printf("Guild config not found for guild ID: %s", i.GuildID)
+				utils.SendErrorResponse(s, i, "服务器配置未找到")
+				return
+			}
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, config.DeveloperUserIDs, config.SuperAdminRoleIDs)
+			if permissionLevel != utils.SuperAdminPermission && permissionLevel != utils.DeveloperPermission {
+				utils.SendErrorResponse(s, i, "您没有权限使用此命令")
+				return
+			}
+			leaderboard.HandleAdsBoardAdminCommand(s, i, b)
+		},
 		"rollcard": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			rollcard.HandleRollCardInteraction(s, i, b)
 		},

@@ -65,3 +65,14 @@ func SendFollowUpError(s *discordgo.Session, i *discordgo.Interaction, message s
 		log.Printf("Error sending follow-up error message: %v", err)
 	}
 }
+
+// EditErrorResponse edits an interaction to show an error message.
+func EditErrorResponse(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
+	errorMsg := "❌ " + message
+	_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Content: &errorMsg,
+	})
+	if err != nil {
+		log.Printf("Error sending edit error response: %v", err)
+	}
+}

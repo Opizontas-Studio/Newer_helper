@@ -12,3 +12,12 @@ type GuildMapping struct {
 	Database                 string            `json:"database"`
 	DataBaseTableNameMapping map[string]string `json:"database_table_name_mapping"`
 }
+
+// LeaderboardAd 定义了排行榜广告的结构
+type LeaderboardAd struct {
+	ID       int    `json:"id"`
+	GuildID  string `json:"guild_id"`
+	Content  string `json:"content"`
+	ImageURL string `json:"image_url,omitempty"`
+	Enabled  bool   `json:"enabled"`
+}

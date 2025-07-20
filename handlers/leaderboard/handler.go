@@ -104,6 +104,8 @@ func UpdateLeaderboard(b model.Bot, guildID string) {
 }
 
 func buildLeaderboardEmbeds(guildID string, cfg *model.Config) []*discordgo.MessageEmbed {
+	var embeds []*discordgo.MessageEmbed
+
 	// 1. 从配置中获取数据库路径
 	threadGuildConfig, ok := cfg.ThreadConfig[guildID]
 	if !ok || threadGuildConfig.Database == "" {
@@ -151,6 +153,36 @@ func buildLeaderboardEmbeds(guildID string, cfg *model.Config) []*discordgo.Mess
 		return []*discordgo.MessageEmbed{{Title: "错误", Description: "无法连接到服务器的数据库 ", Color: 0xff0000}}
 	}
 	defer db.Close()
+
+	// Open guilds.db to get ad
+	guildsDB, err := database.InitDB("data/guilds.db")
+	if err != nil {
+		log.Printf("Could not open guilds.db: %v", err)
+	} else {
+		defer guildsDB.Close()
+		ad, err := database.GetRandomEnabledLeaderboardAd(guildsDB, guildID)
+		if err != nil {
+			log.Printf("Error getting leaderboard ad for guild %s: %v", guildID, err)
+		}
+		if ad != nil {
+			var adEmbed discordgo.MessageEmbed
+			// Try to unmarshal as an embed first
+			err := json.Unmarshal([]byte(ad.Content), &adEmbed)
+			if err != nil {
+				adEmbed = discordgo.MessageEmbed{
+					Title:       "📜 服务器内广告",
+					Description: ad.Content,
+					Color:       0x7289DA, // Discord Blurple
+				}
+			}
+			if ad.ImageURL != "" {
+				adEmbed.Image = &discordgo.MessageEmbedImage{
+					URL: ad.ImageURL,
+				}
+			}
+			embeds = append(embeds, &adEmbed)
+		}
+	}
 
 	// 4. 获取统计数据
 	now := time.Now()
@@ -218,7 +250,8 @@ func buildLeaderboardEmbeds(guildID string, cfg *model.Config) []*discordgo.Mess
 		},
 	}
 
-	embeds := []*discordgo.MessageEmbed{leaderboardEmbed}
+	// Add the main leaderboard embed
+	embeds = append(embeds, leaderboardEmbed)
 
 	// Embed 2: 最新卡片列表
 	latestPostsEmbed, err := latest_posts.CreateLatestPostsEmbed(guildID)

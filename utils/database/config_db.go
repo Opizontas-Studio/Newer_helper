@@ -44,6 +44,19 @@ func CreateGuildTables(db *sql.DB) error {
 		return err
 	}
 
+	createLeaderboardAdsTableSQL := `CREATE TABLE IF NOT EXISTS leaderboard_ads (
+		"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+		"guild_id" TEXT NOT NULL,
+		"content" TEXT NOT NULL,
+		"image_url" TEXT,
+		"enabled" BOOLEAN NOT NULL DEFAULT TRUE,
+		FOREIGN KEY(guild_id) REFERENCES guild_configs(guild_id)
+	);`
+	_, err = db.Exec(createLeaderboardAdsTableSQL)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -173,6 +186,92 @@ func UpdatePreset(db *sql.DB, guildID string, preset model.PresetMessage) error 
 	}
 
 	return tx.Commit()
+}
+
+func AddLeaderboardAd(db *sql.DB, guildID string, content string, imageURL string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("INSERT INTO leaderboard_ads (guild_id, content, image_url, enabled) VALUES (?, ?, ?, ?)",
+		guildID, content, imageURL, true)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func DeleteLeaderboardAd(db *sql.DB, adID int, guildID string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("DELETE FROM leaderboard_ads WHERE id = ? AND guild_id = ?", adID, guildID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func ListLeaderboardAds(db *sql.DB, guildID string) ([]model.LeaderboardAd, error) {
+	rows, err := db.Query("SELECT id, guild_id, content, image_url, enabled FROM leaderboard_ads WHERE guild_id = ? ORDER BY id ASC", guildID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ads []model.LeaderboardAd
+	for rows.Next() {
+		var ad model.LeaderboardAd
+		var imageURL sql.NullString
+		if err := rows.Scan(&ad.ID, &ad.GuildID, &ad.Content, &imageURL, &ad.Enabled); err != nil {
+			return nil, err
+		}
+		if imageURL.Valid {
+			ad.ImageURL = imageURL.String
+		}
+		ads = append(ads, ad)
+	}
+	return ads, nil
+}
+
+func ToggleLeaderboardAd(db *sql.DB, adID int, guildID string, enabled bool) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("UPDATE leaderboard_ads SET enabled = ? WHERE id = ? AND guild_id = ?", enabled, adID, guildID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func GetRandomEnabledLeaderboardAd(db *sql.DB, guildID string) (*model.LeaderboardAd, error) {
+	row := db.QueryRow("SELECT id, guild_id, content, image_url, enabled FROM leaderboard_ads WHERE guild_id = ? AND enabled = TRUE ORDER BY RANDOM() LIMIT 1", guildID)
+
+	var ad model.LeaderboardAd
+	var imageURL sql.NullString
+	err := row.Scan(&ad.ID, &ad.GuildID, &ad.Content, &imageURL, &ad.Enabled)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // No ad found is not an error
+		}
+		return nil, err
+	}
+	if imageURL.Valid {
+		ad.ImageURL = imageURL.String
+	}
+	return &ad, nil
 }
 
 func DeletePreset(db *sql.DB, guildID string, presetID string) error {

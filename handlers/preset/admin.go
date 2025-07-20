@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -125,16 +124,21 @@ func HandlePresetMessageAdminInteraction(s *discordgo.Session, i *discordgo.Inte
 		if input == "" {
 			responseContent = "覆盖操作需要 'input' 参数 "
 		} else {
-			messages, err := ParseMessageLinks(s, input)
+			parsedMessages, err := utils.ParseMessageLinks(s, input)
 			if err != nil {
 				responseContent = "解析消息链接时出错: " + err.Error()
-			} else if len(messages) == 0 {
+			} else if len(parsedMessages) == 0 {
 				responseContent = "在输入中找不到有效的消息链接 "
 			} else {
+				var messageContents []string
+				for _, msg := range parsedMessages {
+					messageContents = append(messageContents, msg.Content)
+				}
+
 				found := false
 				for idx, p := range serverConfig.PresetMessages {
 					if p.ID == id {
-						serverConfig.PresetMessages[idx].Value = strings.Join(messages, "\n")
+						serverConfig.PresetMessages[idx].Value = strings.Join(messageContents, "\n")
 						serverConfig.PresetMessages[idx].Type = "text" // Or parse from original message
 						db := b.DB
 						if err := database.UpdatePreset(db, i.GuildID, serverConfig.PresetMessages[idx]); err != nil {
@@ -203,7 +207,7 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 			customName = option.StringValue()
 		}
 
-		messages, err := ParseMessageLinks(s, messageLinks)
+		parsedMessages, err := utils.ParseMessageLinks(s, messageLinks)
 		if err != nil {
 			errorContent := err.Error()
 			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
@@ -213,7 +217,12 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 		}
 
 		var presetName string
-		if len(messages) > 0 {
+		if len(parsedMessages) > 0 {
+			var messageContents []string
+			for _, msg := range parsedMessages {
+				messageContents = append(messageContents, msg.Content)
+			}
+
 			presetName = customName
 			if presetName == "" {
 				presetName = fmt.Sprintf("New Preset %d", len(serverConfig.PresetMessages)+1)
@@ -221,7 +230,7 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 			newPreset := model.PresetMessage{
 				ID:    generateUniqueID(),
 				Name:  presetName,
-				Value: strings.Join(messages, "\n"),
+				Value: strings.Join(messageContents, "\n"),
 				Type:  "text",
 			}
 			serverConfig.PresetMessages = append(serverConfig.PresetMessages, newPreset)
@@ -251,16 +260,20 @@ func HandlePresetMessageUpdateInteraction(s *discordgo.Session, i *discordgo.Int
 		b.RefreshCommands(i.GuildID)
 
 		var webhookEdit discordgo.WebhookEdit
-		if len(messages) == 0 {
+		if len(parsedMessages) == 0 {
 			response := "未找到或解析任何消息链接 没有预设被创建或更新 "
 			webhookEdit = discordgo.WebhookEdit{
 				Content: &response,
 			}
 		} else {
+			var messageContents []string
+			for _, msg := range parsedMessages {
+				messageContents = append(messageContents, msg.Content)
+			}
 			description := fmt.Sprintf(
 				"已成功为您保存预设 `%s` \n\n**预设内容预览:**\n```\n%s\n```",
 				presetName,
-				strings.Join(messages, "\n---\n"),
+				strings.Join(messageContents, "\n---\n"),
 			)
 			embed := &discordgo.MessageEmbed{
 				Title:       "✅ 预设创建/更新成功",
@@ -285,23 +298,4 @@ func generateUniqueID() string {
 		return fmt.Sprintf("%x", os.Getpid())
 	}
 	return hex.EncodeToString(bytes)
-}
-
-func ParseMessageLinks(s *discordgo.Session, messageLinks string) ([]string, error) {
-	re := regexp.MustCompile(`https://discord.com/channels/(\d+)/(\d+)/(\d+)`)
-	matches := re.FindAllStringSubmatch(messageLinks, -1)
-
-	var messages []string
-	for _, match := range matches {
-		if len(match) == 4 {
-			channelID := match[2]
-			messageID := match[3]
-			msg, err := s.ChannelMessage(channelID, messageID)
-			if err != nil {
-				return nil, fmt.Errorf("error fetching message %s: %w", match[0], err)
-			}
-			messages = append(messages, msg.Content)
-		}
-	}
-	return messages, nil
 }
