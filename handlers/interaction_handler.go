@@ -13,8 +13,13 @@ import (
 func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
 	switch i.Type {
 	case discordgo.InteractionApplicationCommand:
-		if h, ok := b.CommandHandlers[i.ApplicationCommandData().Name]; ok {
-			h(s, i)
+		switch i.ApplicationCommandData().Name {
+		case "快速处罚":
+			punish.HandleQuickPunishCommand(s, i, b)
+		default:
+			if h, ok := b.CommandHandlers[i.ApplicationCommandData().Name]; ok {
+				h(s, i)
+			}
 		}
 	case discordgo.InteractionMessageComponent:
 		customID := i.MessageComponentData().CustomID
@@ -34,6 +39,11 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 			rollcard.HandleEditPools(s, i, b)
 		} else if customID == "select_pools_menu" {
 			rollcard.HandlePoolSelectionResponse(s, i, b)
+		}
+	case discordgo.InteractionModalSubmit:
+		customID := i.ModalSubmitData().CustomID
+		if strings.HasPrefix(customID, "punish_modal_") {
+			punish.HandlePunishModalSubmit(s, i, b)
 		}
 	case discordgo.InteractionApplicationCommandAutocomplete:
 		if i.ApplicationCommandData().Name == "rollcard" {

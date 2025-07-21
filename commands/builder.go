@@ -10,6 +10,7 @@ import (
 func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 	return []*discordgo.ApplicationCommand{
 		defs.Punish,
+		defs.QuickPunish,
 		defs.PresetMessage,
 		defs.PresetMessageUpd,
 		defs.PresetMessageAdmin,

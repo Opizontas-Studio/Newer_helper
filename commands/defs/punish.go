@@ -78,3 +78,8 @@ var PunishAdmin = &discordgo.ApplicationCommand{
 		},
 	},
 }
+
+var QuickPunish = &discordgo.ApplicationCommand{
+	Name: "快速处罚",
+	Type: discordgo.MessageApplicationCommand,
+}
