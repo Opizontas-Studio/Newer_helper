@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/jmoiron/sqlx"
 )
 
 type Bot struct {
@@ -22,6 +23,7 @@ type Bot struct {
 	PresetCooldowns    map[string]time.Time
 	CooldownMutex      sync.Mutex
 	DB                 *sql.DB
+	DBX                *sqlx.DB
 	activeScanCount    int
 	scheduler          *Scheduler
 }
@@ -46,11 +48,15 @@ func (b *Bot) GetSession() *discordgo.Session {
 	return b.Session
 }
 
+func (b *Bot) GetDBX() *sqlx.DB {
+	return b.DBX
+}
+
 func (b *Bot) ActiveScanCount() *int {
 	return &b.activeScanCount
 }
 
-func New(cfg *model.Config, db *sql.DB) (*Bot, error) {
+func New(cfg *model.Config, db *sql.DB, dbx *sqlx.DB) (*Bot, error) {
 	dg, err := discordgo.New("Bot " + cfg.BotToken)
 	if err != nil {
 		return nil, err
@@ -62,6 +68,7 @@ func New(cfg *model.Config, db *sql.DB) (*Bot, error) {
 		Session:         dg,
 		PresetCooldowns: make(map[string]time.Time),
 		DB:              db,
+		DBX:             dbx,
 		activeScanCount: 0,
 	}
 	b.config.Store(cfg)

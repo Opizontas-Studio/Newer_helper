@@ -93,6 +93,11 @@ func HandlePunishModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreat
 // applyAndLogPunishment is the core function that handles the punishment process.
 // It centralizes the logic for configuration loading, validation, database operations, and notifications.
 func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, targetUser *discordgo.User, reason, evidenceLinks string) {
+	if !utils.CheckAndSetPunishLock(targetUser.ID) {
+		utils.SendFollowUpError(s, i.Interaction, "对该用户的处罚操作过于频繁，请 5 分钟后再试。")
+		return
+	}
+
 	kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
 	if err != nil {
 		log.Printf("Error loading kick config: %v", err)

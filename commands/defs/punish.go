@@ -83,3 +83,35 @@ var QuickPunish = &discordgo.ApplicationCommand{
 	Name: "快速处罚",
 	Type: discordgo.MessageApplicationCommand,
 }
+
+var DailyPunishmentStats = &discordgo.ApplicationCommand{
+	Name:        "daily_punishment_stats",
+	Description: "Manage and display daily punishment statistics",
+	NameLocalizations: &map[discordgo.Locale]string{
+		discordgo.ChineseCN: "每日处罚数",
+		discordgo.ChineseTW: "每日處罰數",
+	},
+	DescriptionLocalizations: &map[discordgo.Locale]string{
+		discordgo.ChineseCN: "管理并显示每日处罚数和管理员击杀榜单",
+		discordgo.ChineseTW: "管理並顯示每日處罰數和管理員擊殺榜單",
+	},
+	Options: []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        "action",
+			Description: "Action to perform",
+			Required:    true,
+			Choices: []*discordgo.ApplicationCommandOptionChoice{
+				{Name: "注册频道 (register)", Value: "register"},
+				{Name: "删除频道 (delete)", Value: "delete"},
+				{Name: "设置服务器 (set_server)", Value: "set_server"},
+			},
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        "input",
+			Description: "输入ID (频道ID或服务器ID)",
+			Required:    false,
+		},
+	},
+}

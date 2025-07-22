@@ -130,3 +130,35 @@ func GetLatestPunishmentByUserID(db *sqlx.DB, guildID, userID string) (*model.Pu
 	}
 	return &record, nil
 }
+
+// GetAdminPunishmentStats retrieves the punishment count for each admin within a given time range.
+func GetAdminPunishmentStats(db *sqlx.DB, guildID string, since time.Time) (map[string]int, error) {
+	query := `SELECT admin_id, COUNT(*) as count FROM punishments WHERE guild_id = ? AND timestamp >= ? GROUP BY admin_id ORDER BY count DESC`
+	rows, err := db.Query(query, guildID, since.Unix())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get admin punishment stats for guild %s: %w", guildID, err)
+	}
+	defer rows.Close()
+
+	stats := make(map[string]int)
+	for rows.Next() {
+		var adminID string
+		var count int
+		if err := rows.Scan(&adminID, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan admin punishment stats row: %w", err)
+		}
+		stats[adminID] = count
+	}
+	return stats, nil
+}
+
+// GetTotalPunishmentCount retrieves the total number of punishments within a given time range.
+func GetTotalPunishmentCount(db *sqlx.DB, guildID string, since time.Time) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM punishments WHERE guild_id = ? AND timestamp >= ?`
+	err := db.Get(&count, query, guildID, since.Unix())
+	if err != nil {
+		return 0, fmt.Errorf("failed to get total punishment count for guild %s: %w", guildID, err)
+	}
+	return count, nil
+}

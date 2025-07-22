@@ -40,15 +40,16 @@ func main() {
 		log.Fatalf("Error creating guild tables: %v", err)
 	}
 
-	if _, err := database.InitUserDB(); err != nil {
-		log.Fatalf("Error setting up user database: %v", err)
+	punishDB, err := database.InitPunishmentDB(cfg.KickConfig.InitConfig.DBPath)
+	if err != nil {
+		log.Fatalf("Error setting up punishment database: %v", err)
 	}
 
 	if err := database.LoadConfigFromDB(db, cfg); err != nil {
 		log.Fatalf("Error loading config from database: %v", err)
 	}
 
-	b, err := bot.New(cfg, db)
+	b, err := bot.New(cfg, db, punishDB)
 	if err != nil {
 		log.Fatalf("Error creating bot: %v", err)
 	}

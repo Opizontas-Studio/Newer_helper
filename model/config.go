@@ -26,16 +26,25 @@ type ServerConfig struct {
 	TopChannels    map[string]*TopChannelConfig `json:"top_channels,omitempty"`
 }
 
+// PunishmentStatsChannel 定义了处罚统计频道的配置
+type PunishmentStatsChannel struct {
+	ChannelID     string `json:"channel_id"`
+	GuildID       string `json:"guild_id"`
+	MessageID     string `json:"message_id"`
+	TargetGuildID string `json:"target_guild_id"`
+}
+
 // Config 存储应用程序的配置
 type Config struct {
-	BotToken           string
-	LogChannelID       string
-	DeveloperUserIDs   []string
-	SuperAdminRoleIDs  []string
-	DisableInitialScan bool
-	ServerConfigs      map[string]ServerConfig
-	RollCardConfigs    RollCardConfig
-	TaskConfig         map[string]struct {
+	BotToken                string
+	LogChannelID            string
+	DeveloperUserIDs        []string
+	SuperAdminRoleIDs       []string
+	DisableInitialScan      bool
+	ServerConfigs           map[string]ServerConfig
+	PunishmentStatsChannels map[string]PunishmentStatsChannel
+	RollCardConfigs         RollCardConfig
+	TaskConfig              map[string]struct {
 		Data map[string]struct {
 			ChannelID string `json:"channel_id"`
 			TableName string `json:"table_name"`
@@ -48,6 +57,7 @@ type Config struct {
 			TableName string `json:"table_name"`
 		} `json:"data"`
 	}
+	KickConfig KickConfig
 }
 
 // ThreadConfig holds the configuration for thread database paths.

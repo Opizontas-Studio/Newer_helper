@@ -5,6 +5,7 @@ import (
 	"discord-bot/handlers/leaderboard"
 	"discord-bot/model"
 	"discord-bot/scanner"
+	"discord-bot/tasks"
 	"discord-bot/utils"
 	"discord-bot/utils/database"
 	"encoding/json"
@@ -28,12 +29,13 @@ type BotProvider interface {
 
 // Scheduler manages all scheduled tasks.
 type Scheduler struct {
-	bot                     BotProvider
-	done                    chan struct{}
-	wg                      sync.WaitGroup
-	cooldownTicker          *time.Ticker
-	leaderboardUpdateTicker *time.Ticker
-	postScanTicker          *time.Ticker
+	bot                         BotProvider
+	done                        chan struct{}
+	wg                          sync.WaitGroup
+	cooldownTicker              *time.Ticker
+	leaderboardUpdateTicker     *time.Ticker
+	postScanTicker              *time.Ticker
+	punishmentStatsUpdateTicker *time.Ticker
 }
 
 // NewScheduler creates a new scheduler.
@@ -135,10 +137,12 @@ func (s *Scheduler) startScheduledTasks() {
 	s.cooldownTicker = time.NewTicker(1 * time.Hour)
 	s.leaderboardUpdateTicker = time.NewTicker(10 * time.Minute)
 	s.postScanTicker = time.NewTicker(30 * time.Minute)
+	s.punishmentStatsUpdateTicker = time.NewTicker(1 * time.Hour)
 
 	defer s.cooldownTicker.Stop()
 	defer s.leaderboardUpdateTicker.Stop()
 	defer s.postScanTicker.Stop()
+	defer s.punishmentStatsUpdateTicker.Stop()
 
 	for {
 		select {
@@ -151,6 +155,9 @@ func (s *Scheduler) startScheduledTasks() {
 		case <-s.postScanTicker.C:
 			log.Println("Running post deletion scan...")
 			scanner.CheckDeletedPosts(s.bot.GetSession(), s.bot.GetConfig().LogChannelID)
+		case <-s.punishmentStatsUpdateTicker.C:
+			log.Println("Updating punishment stats...")
+			s.updatePunishmentStats()
 		case <-s.done:
 			return
 		}
@@ -210,6 +217,7 @@ func (s *Scheduler) startDailyTasks() {
 		select {
 		case <-time.After(next.Sub(now)):
 			s.runDailyScanTasks()
+			s.runDailyPunishmentReport()
 		case <-s.done:
 			return
 		}
@@ -244,4 +252,27 @@ func (s *Scheduler) runDailyScanTasks() {
 
 	log.Println("Cleaning up old posts...")
 	scanner.CleanOldPosts(s.bot.GetSession(), s.bot.GetConfig(), s.done)
+}
+
+func (s *Scheduler) updatePunishmentStats() {
+	cfg := s.bot.GetConfig()
+	if len(cfg.PunishmentStatsChannels) == 0 {
+		return
+	}
+
+	for _, channelConfig := range cfg.PunishmentStatsChannels {
+		go tasks.UpdatePunishmentStats(s.bot.GetSession(), s.bot.GetDB(), channelConfig, time.Hour)
+	}
+}
+
+func (s *Scheduler) runDailyPunishmentReport() {
+	log.Println("Running daily punishment report...")
+	cfg := s.bot.GetConfig()
+	if len(cfg.PunishmentStatsChannels) == 0 {
+		return
+	}
+
+	for _, channelConfig := range cfg.PunishmentStatsChannels {
+		go tasks.UpdatePunishmentStats(s.bot.GetSession(), s.bot.GetDB(), channelConfig, 24*time.Hour)
+	}
 }

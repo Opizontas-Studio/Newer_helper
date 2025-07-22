@@ -57,6 +57,18 @@ func CreateGuildTables(db *sql.DB) error {
 		return err
 	}
 
+	createPunishmentStatsChannelsTableSQL := `CREATE TABLE IF NOT EXISTS punishment_stats_channels (
+		"channel_id" TEXT NOT NULL PRIMARY KEY,
+		"guild_id" TEXT NOT NULL,
+		"message_id" TEXT,
+		"target_guild_id" TEXT NOT NULL,
+		FOREIGN KEY(guild_id) REFERENCES guild_configs(guild_id)
+	);`
+	_, err = db.Exec(createPunishmentStatsChannelsTableSQL)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -127,6 +139,25 @@ func LoadConfigFromDB(db *sql.DB, cfg *model.Config) error {
 			sc.TopChannels[tc.ChannelID] = &tc
 			cfg.ServerConfigs[guildID] = sc
 		}
+	}
+
+	punishmentStatsRows, err := db.Query("SELECT channel_id, guild_id, message_id, target_guild_id FROM punishment_stats_channels")
+	if err != nil {
+		return err
+	}
+	defer punishmentStatsRows.Close()
+
+	cfg.PunishmentStatsChannels = make(map[string]model.PunishmentStatsChannel)
+	for punishmentStatsRows.Next() {
+		var psc model.PunishmentStatsChannel
+		var messageID sql.NullString
+		if err := punishmentStatsRows.Scan(&psc.ChannelID, &psc.GuildID, &messageID, &psc.TargetGuildID); err != nil {
+			return err
+		}
+		if messageID.Valid {
+			psc.MessageID = messageID.String
+		}
+		cfg.PunishmentStatsChannels[psc.ChannelID] = psc
 	}
 
 	return nil
@@ -281,6 +312,67 @@ func DeletePreset(db *sql.DB, guildID string, presetID string) error {
 	}
 
 	_, err = tx.Exec("DELETE FROM preset_messages WHERE id = ? AND guild_id = ?", presetID, guildID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func AddPunishmentStatsChannel(db *sql.DB, guildID, channelID, targetGuildID string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("INSERT INTO punishment_stats_channels (guild_id, channel_id, target_guild_id) VALUES (?, ?, ?)",
+		guildID, channelID, targetGuildID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func DeletePunishmentStatsChannel(db *sql.DB, channelID string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("DELETE FROM punishment_stats_channels WHERE channel_id = ?", channelID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func UpdatePunishmentStatsTargetGuild(db *sql.DB, channelID, targetGuildID string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("UPDATE punishment_stats_channels SET target_guild_id = ? WHERE channel_id = ?", targetGuildID, channelID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func UpdatePunishmentStatsChannel(db *sql.DB, channelID, messageID string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("UPDATE punishment_stats_channels SET message_id = ? WHERE channel_id = ?", messageID, channelID)
 	if err != nil {
 		tx.Rollback()
 		return err

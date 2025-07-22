@@ -161,5 +161,18 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 			HandleRegisterTopChannel(s, i, b)
 		},
+		"daily_punishment_stats": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
+			if !ok {
+				log.Printf("Could not find server config for guild: %s", i.GuildID)
+				return
+			}
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
+			if permissionLevel != utils.SuperAdminPermission && permissionLevel != utils.DeveloperPermission {
+				utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
+				return
+			}
+			punish.HandlePunishmentStatsCommand(s, i, b)
+		},
 	}
 }
