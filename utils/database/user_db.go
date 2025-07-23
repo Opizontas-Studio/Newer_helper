@@ -46,10 +46,37 @@ func createUserTables(db *sql.DB) error {
 		return err
 	}
 
-	// Add the new column, ignoring errors if it already exists.
-	alterQuery := `ALTER TABLE user_preferences ADD COLUMN skip_preset_confirmation BOOLEAN DEFAULT FALSE;`
-	if _, err := db.Exec(alterQuery); err != nil {
-		log.Printf("Could not alter table (may already be up-to-date): %v", err)
+	// Check if the column already exists
+	rows, err := db.Query("PRAGMA table_info(user_preferences);")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var columnExists bool
+	for rows.Next() {
+		var cid int
+		var name string
+		var type_ string
+		var notnull bool
+		var dflt_value sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &type_, &notnull, &dflt_value, &pk); err != nil {
+			return err
+		}
+		if name == "skip_preset_confirmation" {
+			columnExists = true
+			break
+		}
+	}
+
+	// If the column doesn't exist, add it.
+	if !columnExists {
+		log.Println("Column 'skip_preset_confirmation' not found, adding it to 'user_preferences' table.")
+		alterQuery := `ALTER TABLE user_preferences ADD COLUMN skip_preset_confirmation BOOLEAN DEFAULT FALSE;`
+		if _, err := db.Exec(alterQuery); err != nil {
+			return fmt.Errorf("failed to add 'skip_preset_confirmation' column: %w", err)
+		}
 	}
 
 	return nil
