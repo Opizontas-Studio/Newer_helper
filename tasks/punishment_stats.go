@@ -52,9 +52,8 @@ func GeneratePunishmentStatsEmbed(dbx *sqlx.DB, targetGuildID string, duration t
 	return embed, nil
 }
 
-func UpdatePunishmentStats(s *discordgo.Session, db *sql.DB, config model.PunishmentStatsChannel, duration time.Duration) {
-	dbx := sqlx.NewDb(db, "sqlite3")
-	embed, err := GeneratePunishmentStatsEmbed(dbx, config.TargetGuildID, duration)
+func UpdatePunishmentStats(s *discordgo.Session, db *sql.DB, punishDB *sqlx.DB, config model.PunishmentStatsChannel, duration time.Duration) {
+	embed, err := GeneratePunishmentStatsEmbed(punishDB, config.TargetGuildID, duration)
 	if err != nil {
 		log.Printf("Failed to generate punishment stats embed: %v", err)
 		return

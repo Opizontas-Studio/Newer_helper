@@ -27,6 +27,12 @@ var PresetMessage = &discordgo.ApplicationCommand{
 			Description: "要提及的用户 ",
 			Required:    false,
 		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        "message_link",
+			Description: "要回复的消息链接",
+			Required:    false,
+		},
 	},
 }
 

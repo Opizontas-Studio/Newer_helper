@@ -21,7 +21,12 @@ func HandlePunishCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b
 
 	cmdOptions := parsePunishOptions(s, i)
 
-	applyAndLogPunishment(s, i, b, cmdOptions.TargetUser, cmdOptions.Reason, cmdOptions.MessageLinks)
+	reason := cmdOptions.Reason
+	if reason == "" {
+		reason = "使用第三方类型提问，违反问答规范"
+	}
+
+	applyAndLogPunishment(s, i, cmdOptions.TargetUser, reason, cmdOptions.MessageLinks)
 }
 
 // HandleQuickPunishCommand creates and displays a modal for a quick punishment.
@@ -53,7 +58,7 @@ func HandleQuickPunishCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 							Label:       "处罚原因",
 							Style:       discordgo.TextInputParagraph,
 							Placeholder: "请输入处罚原因",
-							Value:       "使用第三方 API 提问，违反问答规范",
+							Value:       "使用第三方类型提问，违反问答规范",
 							Required:    true,
 						},
 					},
@@ -87,12 +92,12 @@ func HandlePunishModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	messageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, targetMessage.ID)
-	applyAndLogPunishment(s, i, b, targetMessage.Author, reason, messageLink)
+	applyAndLogPunishment(s, i, targetMessage.Author, reason, messageLink)
 }
 
 // applyAndLogPunishment is the core function that handles the punishment process.
 // It centralizes the logic for configuration loading, validation, database operations, and notifications.
-func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, targetUser *discordgo.User, reason, evidenceLinks string) {
+func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, targetUser *discordgo.User, reason, evidenceLinks string) {
 	if !utils.CheckAndSetPunishLock(targetUser.ID) {
 		utils.SendFollowUpError(s, i.Interaction, "对该用户的处罚操作过于频繁，请 5 分钟后再试。")
 		return
@@ -140,7 +145,7 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 
 	timeoutApplied, timeoutDurationStr, err := applyTimeoutIfRequired(s, i, db, kickConfig, configEntry, targetUser)
 	if err != nil {
-		log.Printf("Error applying timeout: %v", err) // Non-fatal, just log
+		log.Printf("Error applying timeout: %v", err)
 	}
 
 	punishmentID, err := addPunishmentRecord(db, i, targetUser, reason, evidenceJSON)
@@ -152,7 +157,7 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 
 	currentGuildHistory, otherGuildsHistory, err := getPunishmentHistory(db, targetUser.ID, i.GuildID)
 	if err != nil {
-		log.Printf("Error fetching punishment history: %v", err) // Non-fatal, just log
+		log.Printf("Error fetching punishment history: %v", err)
 	}
 
 	embed := buildPunishmentEmbed(i, targetUser, reason, allEvidence, currentGuildHistory, otherGuildsHistory, kickConfig, timeoutApplied, timeoutDurationStr, punishmentID)

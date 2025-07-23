@@ -4,8 +4,10 @@ import (
 	"discord-bot/bot"
 	"discord-bot/model"
 	"discord-bot/utils"
+	"discord-bot/utils/database"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -44,6 +46,11 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 		if u != nil {
 			user = u.Mention()
 		}
+	}
+
+	var messageLink string
+	if option, ok := optionMap["message_link"]; ok {
+		messageLink = option.StringValue()
 	}
 
 	selectedPreset := FindPreset(&serverConfig, presetID)
@@ -94,36 +101,93 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 			log.Printf("Failed to send private followup message: %v", err)
 		}
 	} else {
-		// Authorized users can send the message to the channel
+		// Check user preference for skipping confirmation
+		skipConfirmation, err := database.GetUserPresetConfirmationPreference(i.Member.User.ID, i.GuildID)
+		if err != nil {
+			log.Printf("Failed to get user preference, proceeding with confirmation: %v", err)
+		}
+
 		messageSend := FormatPresetMessageSend(selectedPreset, user)
-		message, err := s.ChannelMessageSendComplex(i.ChannelID, messageSend)
-		if err == nil {
-			// Log the successful preset usage
-			if b.GetConfig().LogChannelID != "" {
-				messageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, message.ID)
-				logInfo := fmt.Sprintf("用户: `%s`\n预设名: `%s`\n[点击查看消息](%s)", i.Member.User.Username, selectedPreset.Name, messageLink)
-				err = utils.LogInfo(s, b.GetConfig().LogChannelID, "预设", "使用", logInfo)
-				if err != nil {
-					log.Printf("Failed to send log: %v", err)
+		if messageLink != "" {
+			_, _, msgID, err := utils.ParseMessageLink(messageLink)
+			if err != nil {
+				log.Printf("Invalid message link: %v", err)
+			} else {
+				messageSend.Reference = &discordgo.MessageReference{
+					MessageID: msgID,
+					ChannelID: i.ChannelID,
+					GuildID:   i.GuildID,
 				}
 			}
 		}
 
-		if err != nil {
-			log.Printf("Failed to send channel message: %v", err)
-			_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-				Content: "Failed to send the preset message.",
-			})
+		if skipConfirmation {
+			// User prefers to skip confirmation, send directly
+			message, err := s.ChannelMessageSendComplex(i.ChannelID, messageSend)
 			if err != nil {
-				log.Printf("Failed to send error followup message: %v", err)
+				log.Printf("Failed to send channel message directly: %v", err)
+				utils.SendEphemeralResponse(s, i, "发送消息失败。")
+				return
 			}
-			return
-		}
+			if b.GetConfig().LogChannelID != "" {
+				logMessageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, message.ID)
+				logInfo := fmt.Sprintf("用户: `%s`\n预设名: `%s`\n[点击查看消息](%s)", i.Member.User.Username, selectedPreset.Name, logMessageLink)
+				utils.LogInfo(s, b.GetConfig().LogChannelID, "预设", "使用", logInfo)
+			}
+			s.InteractionResponseDelete(i.Interaction)
+		} else {
+			// User requires confirmation, show preview with options
+			pendingPresets := b.GetPendingPresets()
+			pendingPresetsMutex := b.GetPendingPresetsMutex()
+			pendingPresetsMutex.Lock()
+			defer pendingPresetsMutex.Unlock()
 
-		// Delete the original deferred response ("Bot is thinking...")
-		err = s.InteractionResponseDelete(i.Interaction)
-		if err != nil {
-			log.Printf("Failed to delete interaction response: %v", err)
+			interactionID := i.Interaction.ID
+			pendingPresets[interactionID] = &bot.PendingPreset{
+				MessageSend: messageSend,
+				PresetName:  selectedPreset.Name,
+				UserID:      i.Member.User.ID,
+				Timestamp:   time.Now(),
+			}
+
+			webhookParams := &discordgo.WebhookParams{
+				Content: messageSend.Content,
+				Embeds:  messageSend.Embeds,
+				Components: []discordgo.MessageComponent{
+					discordgo.ActionsRow{
+						Components: []discordgo.MessageComponent{
+							discordgo.Button{
+								Label:    "确认发送",
+								Style:    discordgo.SuccessButton,
+								CustomID: "confirm_preset_" + interactionID,
+							},
+							discordgo.Button{
+								Label:    "取消",
+								Style:    discordgo.DangerButton,
+								CustomID: "cancel_preset_" + interactionID,
+							},
+							discordgo.Button{
+								Label:    "不再确认",
+								Style:    discordgo.SecondaryButton,
+								CustomID: "disable_confirm_preset_" + interactionID,
+							},
+						},
+					},
+				},
+				Flags: discordgo.MessageFlagsEphemeral,
+			}
+
+			if webhookParams.Content != "" {
+				webhookParams.Content = "请预览并确认发送以下消息：\n\n" + webhookParams.Content
+			} else {
+				webhookParams.Content = "请预览并确认发送以下消息："
+			}
+
+			_, err := s.FollowupMessageCreate(i.Interaction, true, webhookParams)
+			if err != nil {
+				log.Printf("Failed to send confirmation message: %v", err)
+				delete(pendingPresets, interactionID)
+			}
 		}
 	}
 }
@@ -160,4 +224,146 @@ func FormatPresetMessageSend(preset *model.PresetMessage, user string) *discordg
 		messageSend.Content = content
 	}
 	return messageSend
+}
+
+// HandlePresetConfirmationInteraction handles the confirmation or cancellation of a preset message.
+func HandlePresetConfirmationInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
+	customID := i.MessageComponentData().CustomID
+	var action, interactionID string
+
+	if strings.HasPrefix(customID, "disable_confirm_preset_") {
+		action = "disable"
+		interactionID = strings.TrimPrefix(customID, "disable_confirm_preset_")
+	} else {
+		parts := strings.Split(customID, "_")
+		if len(parts) < 3 {
+			log.Printf("Invalid custom ID for preset confirmation: %s", customID)
+			return
+		}
+		action = parts[0]
+		interactionID = parts[2]
+	}
+
+	pendingPresets := b.GetPendingPresets()
+	pendingPresetsMutex := b.GetPendingPresetsMutex()
+	pendingPresetsMutex.Lock()
+	defer pendingPresetsMutex.Unlock()
+
+	pending, ok := pendingPresets[interactionID]
+	if !ok {
+		utils.SendEphemeralResponse(s, i, "This confirmation has expired or is invalid.")
+		return
+	}
+
+	// Security check: ensure the user clicking the button is the one who initiated the command
+	if i.Member.User.ID != pending.UserID {
+		utils.SendEphemeralResponse(s, i, "You are not authorized to respond to this confirmation.")
+		return
+	}
+
+	delete(pendingPresets, interactionID) // The request is handled, remove it from pending
+
+	switch action {
+	case "cancel":
+		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+			Data: &discordgo.InteractionResponseData{
+				Content:    "操作已取消。",
+				Components: []discordgo.MessageComponent{},
+				Embeds:     []*discordgo.MessageEmbed{},
+			},
+		})
+		if err != nil {
+			log.Printf("Failed to update cancellation message: %v", err)
+		}
+		return
+	case "confirm":
+		message, err := s.ChannelMessageSendComplex(i.ChannelID, pending.MessageSend)
+		if err != nil {
+			log.Printf("Failed to send channel message after confirmation: %v", err)
+			// Try to inform the user about the failure
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseUpdateMessage,
+				Data: &discordgo.InteractionResponseData{
+					Content:    "发送消息失败。",
+					Components: []discordgo.MessageComponent{},
+					Embeds:     []*discordgo.MessageEmbed{},
+				},
+			})
+			return
+		}
+
+		// Log the successful preset usage
+		if b.GetConfig().LogChannelID != "" {
+			logMessageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, message.ID)
+			logInfo := fmt.Sprintf("用户: `%s`\n预设名: `%s`\n[点击查看消息](%s)", i.Member.User.Username, pending.PresetName, logMessageLink)
+			err = utils.LogInfo(s, b.GetConfig().LogChannelID, "预设", "使用", logInfo)
+			if err != nil {
+				log.Printf("Failed to send log: %v", err)
+			}
+		}
+
+		// Update the original interaction to show it was successful
+		err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+			Data: &discordgo.InteractionResponseData{
+				Content:    "消息已成功发送！",
+				Components: []discordgo.MessageComponent{},
+				Embeds:     []*discordgo.MessageEmbed{},
+			},
+		})
+		if err != nil {
+			log.Printf("Failed to update confirmation message: %v", err)
+		}
+	case "disable":
+		// 1. Immediately acknowledge the interaction to prevent "interaction failed" error.
+		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseDeferredMessageUpdate,
+		})
+		if err != nil {
+			log.Printf("Failed to defer update: %v", err)
+			// If we can't even defer, we probably can't do anything else.
+			return
+		}
+
+		// 2. Perform the background tasks (DB update and message sending).
+		go func() {
+			// Set the user's preference to skip confirmation in the future
+			dbErr := database.SetUserPresetConfirmationPreference(i.Member.User.ID, i.GuildID, true)
+			if dbErr != nil {
+				log.Printf("Failed to set user preference: %v", dbErr)
+			}
+
+			// Send the message
+			message, sendErr := s.ChannelMessageSendComplex(i.ChannelID, pending.MessageSend)
+			if sendErr != nil {
+				log.Printf("Failed to send channel message after disabling confirmation: %v", sendErr)
+				s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+					Content: "发送消息失败。",
+				})
+				return
+			}
+
+			// Log the usage
+			if b.GetConfig().LogChannelID != "" {
+				logMessageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, message.ID)
+				logInfo := fmt.Sprintf("用户: `%s`\n预设名: `%s`\n[点击查看消息](%s)", i.Member.User.Username, pending.PresetName, logMessageLink)
+				utils.LogInfo(s, b.GetConfig().LogChannelID, "预设", "使用", logInfo)
+			}
+
+			// 3. Edit the original interaction response with the final success message.
+			finalContent := "消息已发送，并为您保存设置：以后将不再进行二次确认。"
+			if dbErr != nil {
+				finalContent = "消息已发送，但保存您的偏好设置时出错。"
+			}
+			_, editErr := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+				Content:    &finalContent,
+				Components: &[]discordgo.MessageComponent{},
+				Embeds:     &[]*discordgo.MessageEmbed{},
+			})
+			if editErr != nil {
+				log.Printf("Failed to edit final message: %v", editErr)
+			}
+		}()
+	}
 }

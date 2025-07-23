@@ -2,6 +2,7 @@ package punish
 
 import (
 	"database/sql"
+	"discord-bot/model"
 	"discord-bot/tasks"
 	"discord-bot/utils"
 	"discord-bot/utils/database"
@@ -16,6 +17,7 @@ import (
 type botProvider interface {
 	GetDB() *sql.DB
 	GetDBX() *sqlx.DB
+	GetConfig() *model.Config
 }
 
 func HandlePunishmentStatsCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b botProvider) {
@@ -39,6 +41,8 @@ func HandlePunishmentStatsCommand(s *discordgo.Session, i *discordgo.Interaction
 		handleDelete(s, i, b, input)
 	case "set_server":
 		handleSetServer(s, i, b, input)
+	case "refresh":
+		handleRefresh(s, i, b)
 	default:
 		utils.SendEphemeralResponse(s, i, "未知的操作")
 	}
@@ -125,4 +129,28 @@ func handleSetServer(s *discordgo.Session, i *discordgo.InteractionCreate, b bot
 	}
 
 	utils.SendEphemeralResponse(s, i, fmt.Sprintf("频道 <#%s> 的处罚统计目标服务器已成功设置为 %s。", channelID, targetGuildID))
+}
+
+func handleRefresh(s *discordgo.Session, i *discordgo.InteractionCreate, b botProvider) {
+	utils.SendEphemeralResponse(s, i, "正在刷新所有已注册的排行榜...")
+
+	go func() {
+		cfg := b.GetConfig()
+		if len(cfg.PunishmentStatsChannels) == 0 {
+			content := "没有已注册的排行榜频道可供刷新。"
+			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+				Content: &content,
+			})
+			return
+		}
+
+		for _, channelConfig := range cfg.PunishmentStatsChannels {
+			go tasks.UpdatePunishmentStats(s, b.GetDB(), b.GetDBX(), channelConfig, 24*time.Hour)
+		}
+
+		content := fmt.Sprintf("已向 %d 个排行榜频道发送刷新请求。", len(cfg.PunishmentStatsChannels))
+		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Content: &content,
+		})
+	}()
 }

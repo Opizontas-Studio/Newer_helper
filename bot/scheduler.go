@@ -15,12 +15,14 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/jmoiron/sqlx"
 )
 
 // BotProvider defines the methods the scheduler needs from the Bot.
 type BotProvider interface {
 	GetConfig() *model.Config
 	GetDB() *sql.DB
+	GetDBX() *sqlx.DB
 	GetSession() *discordgo.Session
 	GetPresetCooldowns() map[string]time.Time
 	GetCooldownMutex() *sync.Mutex
@@ -261,7 +263,7 @@ func (s *Scheduler) updatePunishmentStats() {
 	}
 
 	for _, channelConfig := range cfg.PunishmentStatsChannels {
-		go tasks.UpdatePunishmentStats(s.bot.GetSession(), s.bot.GetDB(), channelConfig, time.Hour)
+		go tasks.UpdatePunishmentStats(s.bot.GetSession(), s.bot.GetDB(), s.bot.GetDBX(), channelConfig, time.Hour)
 	}
 }
 
@@ -273,6 +275,6 @@ func (s *Scheduler) runDailyPunishmentReport() {
 	}
 
 	for _, channelConfig := range cfg.PunishmentStatsChannels {
-		go tasks.UpdatePunishmentStats(s.bot.GetSession(), s.bot.GetDB(), channelConfig, 24*time.Hour)
+		go tasks.UpdatePunishmentStats(s.bot.GetSession(), s.bot.GetDB(), s.bot.GetDBX(), channelConfig, 24*time.Hour)
 	}
 }

@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -32,7 +33,7 @@ func InitUserDB() (*sql.DB, error) {
 	return db, nil
 }
 
-// createUserTables creates the necessary tables in the user database.
+// createUserTables creates and alters the necessary tables in the user database.
 func createUserTables(db *sql.DB) error {
 	query := `
     CREATE TABLE IF NOT EXISTS user_preferences (
@@ -41,8 +42,17 @@ func createUserTables(db *sql.DB) error {
         preferred_pools TEXT,
         PRIMARY KEY(user_id, guild_id)
     );`
-	_, err := db.Exec(query)
-	return err
+	if _, err := db.Exec(query); err != nil {
+		return err
+	}
+
+	// Add the new column, ignoring errors if it already exists.
+	alterQuery := `ALTER TABLE user_preferences ADD COLUMN skip_preset_confirmation BOOLEAN DEFAULT FALSE;`
+	if _, err := db.Exec(alterQuery); err != nil {
+		log.Printf("Could not alter table (may already be up-to-date): %v", err)
+	}
+
+	return nil
 }
 
 // GetUserPreferredPools retrieves the preferred pools for a given user in a specific guild.
@@ -53,7 +63,7 @@ func GetUserPreferredPools(userID, guildID string) ([]string, error) {
 	}
 	defer db.Close()
 
-	var preferredPoolsStr string
+	var preferredPoolsStr sql.NullString
 	query := "SELECT preferred_pools FROM user_preferences WHERE user_id = ? AND guild_id = ?"
 	err = db.QueryRow(query, userID, guildID).Scan(&preferredPoolsStr)
 
@@ -64,11 +74,11 @@ func GetUserPreferredPools(userID, guildID string) ([]string, error) {
 		return nil, fmt.Errorf("failed to query user preferences for guild %s: %w", guildID, err)
 	}
 
-	if preferredPoolsStr == "" {
+	if !preferredPoolsStr.Valid || preferredPoolsStr.String == "" {
 		return []string{}, nil
 	}
 
-	return strings.Split(preferredPoolsStr, ","), nil
+	return strings.Split(preferredPoolsStr.String, ","), nil
 }
 
 // SetUserPreferredPools sets or updates the preferred pools for a given user in a specific guild.
@@ -109,4 +119,47 @@ func GetTotalUserCount() (int, error) {
 	}
 
 	return count, nil
+}
+
+// GetUserPresetConfirmationPreference retrieves the user's preference for skipping preset confirmation.
+func GetUserPresetConfirmationPreference(userID, guildID string) (bool, error) {
+	db, err := InitUserDB()
+	if err != nil {
+		return false, fmt.Errorf("failed to initialize user db: %w", err)
+	}
+	defer db.Close()
+
+	var skipConfirmation sql.NullBool
+	query := "SELECT skip_preset_confirmation FROM user_preferences WHERE user_id = ? AND guild_id = ?"
+	err = db.QueryRow(query, userID, guildID).Scan(&skipConfirmation)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil // Default to not skipping
+		}
+		return false, fmt.Errorf("failed to query user preference: %w", err)
+	}
+
+	return skipConfirmation.Valid && skipConfirmation.Bool, nil
+}
+
+// SetUserPresetConfirmationPreference sets the user's preference for skipping preset confirmation.
+func SetUserPresetConfirmationPreference(userID, guildID string, skip bool) error {
+	db, err := InitUserDB()
+	if err != nil {
+		return fmt.Errorf("failed to initialize user db: %w", err)
+	}
+	defer db.Close()
+
+	query := `
+    INSERT INTO user_preferences (user_id, guild_id, skip_preset_confirmation)
+    VALUES (?, ?, ?)
+    ON CONFLICT(user_id, guild_id) DO UPDATE SET skip_preset_confirmation = excluded.skip_preset_confirmation;`
+
+	_, err = db.Exec(query, userID, guildID, skip)
+	if err != nil {
+		return fmt.Errorf("failed to set user preference: %w", err)
+	}
+
+	return nil
 }

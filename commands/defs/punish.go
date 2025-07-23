@@ -23,8 +23,8 @@ var Punish = &discordgo.ApplicationCommand{
 		{
 			Type:        discordgo.ApplicationCommandOptionString,
 			Name:        "reason",
-			Description: "处罚原因",
-			Required:    true,
+			Description: "处罚原因 (留空使用默认原因)",
+			Required:    false,
 		},
 		{
 			Type:        discordgo.ApplicationCommandOptionString,
@@ -105,6 +105,7 @@ var DailyPunishmentStats = &discordgo.ApplicationCommand{
 				{Name: "注册频道 (register)", Value: "register"},
 				{Name: "删除频道 (delete)", Value: "delete"},
 				{Name: "设置服务器 (set_server)", Value: "set_server"},
+				{Name: "立即刷新 (refresh)", Value: "refresh"},
 			},
 		},
 		{

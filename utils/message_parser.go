@@ -26,3 +26,15 @@ func ParseMessageLinks(s *discordgo.Session, messageLinks string) ([]*discordgo.
 	}
 	return messages, nil
 }
+
+// ParseMessageLink parses a single Discord message link and returns the guild ID, channel ID, and message ID.
+func ParseMessageLink(link string) (guildID, channelID, messageID string, err error) {
+	re := regexp.MustCompile(`https://discord.com/channels/(\d+)/(\d+)/(\d+)`)
+	matches := re.FindStringSubmatch(link)
+
+	if len(matches) != 4 {
+		return "", "", "", fmt.Errorf("invalid message link format")
+	}
+
+	return matches[1], matches[2], matches[3], nil
+}

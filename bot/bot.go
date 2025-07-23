@@ -15,17 +15,28 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// PendingPreset holds the data for a preset message awaiting confirmation.
+type PendingPreset struct {
+	MessageSend *discordgo.MessageSend
+	LogInfo     string
+	PresetName  string
+	UserID      string
+	Timestamp   time.Time
+}
+
 type Bot struct {
-	Session            *discordgo.Session
-	RegisteredCommands []*discordgo.ApplicationCommand
-	config             atomic.Value // *model.Config
-	CommandHandlers    map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)
-	PresetCooldowns    map[string]time.Time
-	CooldownMutex      sync.Mutex
-	DB                 *sql.DB
-	DBX                *sqlx.DB
-	activeScanCount    int
-	scheduler          *Scheduler
+	Session             *discordgo.Session
+	RegisteredCommands  []*discordgo.ApplicationCommand
+	config              atomic.Value // *model.Config
+	CommandHandlers     map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)
+	PresetCooldowns     map[string]time.Time
+	CooldownMutex       sync.Mutex
+	PendingPresets      map[string]*PendingPreset
+	PendingPresetsMutex sync.Mutex
+	DB                  *sql.DB
+	DBX                 *sqlx.DB
+	activeScanCount     int
+	scheduler           *Scheduler
 }
 
 func (b *Bot) GetConfig() *model.Config {
@@ -67,12 +78,16 @@ func New(cfg *model.Config, db *sql.DB, dbx *sqlx.DB) (*Bot, error) {
 	b := &Bot{
 		Session:         dg,
 		PresetCooldowns: make(map[string]time.Time),
+		PendingPresets:  make(map[string]*PendingPreset),
 		DB:              db,
 		DBX:             dbx,
 		activeScanCount: 0,
 	}
 	b.config.Store(cfg)
 	b.scheduler = NewScheduler(b)
+
+	go b.cleanupExpiredPresets()
+
 	return b, nil
 }
 
@@ -106,6 +121,14 @@ func (b *Bot) GetScheduler() *Scheduler {
 	return b.scheduler
 }
 
+func (b *Bot) GetPendingPresets() map[string]*PendingPreset {
+	return b.PendingPresets
+}
+
+func (b *Bot) GetPendingPresetsMutex() *sync.Mutex {
+	return &b.PendingPresetsMutex
+}
+
 func (b *Bot) ReloadConfig() error {
 	log.Println("Reloading configuration...")
 	newCfg, err := config.Load()
@@ -129,4 +152,20 @@ func (b *Bot) ReloadConfig() error {
 	}
 
 	return nil
+}
+
+func (b *Bot) cleanupExpiredPresets() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		b.PendingPresetsMutex.Lock()
+		for id, preset := range b.PendingPresets {
+			if time.Since(preset.Timestamp) > 5*time.Minute {
+				log.Printf("Removing expired pending preset: %s", id)
+				delete(b.PendingPresets, id)
+			}
+		}
+		b.PendingPresetsMutex.Unlock()
+	}
 }
