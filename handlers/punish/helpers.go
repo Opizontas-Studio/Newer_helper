@@ -46,9 +46,14 @@ func parsePunishOptions(s *discordgo.Session, i *discordgo.InteractionCreate) Pa
 		messageLinks = messageLinksOpt.StringValue()
 	}
 
+	var reason string
+	if reasonOpt, ok := optionMap["reason"]; ok {
+		reason = reasonOpt.StringValue()
+	}
+
 	return ParsedOptions{
 		TargetUser:   optionMap["user"].UserValue(s),
-		Reason:       optionMap["reason"].StringValue(),
+		Reason:       reason,
 		MessageLinks: messageLinks,
 		OptionMap:    optionMap,
 	}
