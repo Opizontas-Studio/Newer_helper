@@ -13,6 +13,38 @@ var NewCards = &discordgo.ApplicationCommand{
 		discordgo.ChineseCN: "显示最新的卡片榜单",
 		discordgo.ChineseTW: "顯示最新的卡片榜單",
 	},
+	Options: []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        "scope",
+			Description: "Scope of the leaderboard",
+			Required:    false,
+			Choices: []*discordgo.ApplicationCommandOptionChoice{
+				{
+					Name: "当前服务器 (Current Server)",
+					NameLocalizations: map[discordgo.Locale]string{
+						discordgo.ChineseCN: "当前服务器",
+						discordgo.ChineseTW: "當前伺服器",
+					},
+					Value: "current",
+				},
+				{
+					Name: "全局所有服务器 (Global)",
+					NameLocalizations: map[discordgo.Locale]string{
+						discordgo.ChineseCN: "全局所有服务器",
+						discordgo.ChineseTW: "全局所有伺服器",
+					},
+					Value: "global",
+				},
+			},
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        "server_id",
+			Description: "Specific server ID to view (requires permission)",
+			Required:    false,
+		},
+	},
 }
 
 var AdsBoardAdmin = &discordgo.ApplicationCommand{

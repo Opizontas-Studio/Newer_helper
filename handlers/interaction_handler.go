@@ -16,6 +16,8 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 		switch i.ApplicationCommandData().Name {
 		case "快速处罚":
 			punish.HandleQuickPunishCommand(s, i, b)
+		case "以消息文本搜索预设":
+			preset.HandleSearchPresetByMessage(s, i, b)
 		default:
 			if h, ok := b.CommandHandlers[i.ApplicationCommandData().Name]; ok {
 				h(s, i)
@@ -27,6 +29,8 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 			preset.HandlePresetDeleteInteraction(s, i, b)
 		} else if strings.HasPrefix(customID, "confirm_preset_") || strings.HasPrefix(customID, "cancel_preset_") || strings.HasPrefix(customID, "disable_confirm_preset_") {
 			preset.HandlePresetConfirmationInteraction(s, i, b)
+		} else if strings.HasPrefix(customID, "search_preset_reply_") {
+			preset.HandleSearchPresetReply(s, i, b)
 		} else if strings.HasPrefix(customID, "punish_page_v2:") {
 			punish.HandlePunishPaginationV2(s, i, b)
 		} else if strings.HasPrefix(customID, "roll_again:") {

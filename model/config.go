@@ -16,6 +16,13 @@ type TopChannelConfig struct {
 	ExcludedMessageIDs []string `json:"excluded_message_ids"`
 }
 
+// AutoTriggerConfig 定义了自动触发的配置
+type AutoTriggerConfig struct {
+	Keyword   string `json:"keyword"`
+	PresetID  string `json:"preset_id"`
+	ChannelID string `json:"channel_id"`
+}
+
 // ServerConfig 定义了每个服务器的配置
 type ServerConfig struct {
 	Name           string                       `json:"name"`
@@ -24,6 +31,7 @@ type ServerConfig struct {
 	UserRoleIDs    []string                     `json:"user_role_ids"`
 	PresetMessages []PresetMessage              `json:"preset_messages"`
 	TopChannels    map[string]*TopChannelConfig `json:"top_channels,omitempty"`
+	AutoTriggers   []AutoTriggerConfig          `json:"auto_triggers,omitempty"`
 }
 
 // PunishmentStatsChannel 定义了处罚统计频道的配置

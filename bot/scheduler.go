@@ -177,6 +177,18 @@ func (s *Scheduler) updateLeaderboard() {
 	workerLimit := 5 // Limit to 5 concurrent workers
 	guard := make(chan struct{}, workerLimit)
 
+	// Add global leaderboard update
+	wg.Add(1)
+	guard <- struct{}{}
+	go func() {
+		defer func() {
+			<-guard
+			wg.Done()
+		}()
+		log.Println("Updating global leaderboard...")
+		leaderboard.UpdateLeaderboard(s.bot, "global")
+	}()
+
 	for guildID := range states {
 		wg.Add(1)
 		guard <- struct{}{} // Acquire a worker slot

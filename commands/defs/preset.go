@@ -101,3 +101,8 @@ var PresetMessageAdmin = &discordgo.ApplicationCommand{
 		},
 	},
 }
+
+var SearchPresetByMessage = &discordgo.ApplicationCommand{
+	Name: "以消息文本搜索预设",
+	Type: discordgo.MessageApplicationCommand,
+}

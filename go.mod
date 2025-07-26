@@ -7,6 +7,7 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
 	github.com/shirou/gopsutil/v3 v3.24.5
+	github.com/yanyiwu/gojieba v1.4.6
 )
 
 require (

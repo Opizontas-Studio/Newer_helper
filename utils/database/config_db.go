@@ -69,6 +69,18 @@ func CreateGuildTables(db *sql.DB) error {
 		return err
 	}
 
+	createAutoTriggersTableSQL := `CREATE TABLE IF NOT EXISTS auto_triggers (
+		"guild_id" TEXT NOT NULL,
+		"keyword" TEXT NOT NULL,
+		"preset_id" TEXT NOT NULL,
+		"channel_id" TEXT NOT NULL,
+		PRIMARY KEY (guild_id, keyword, channel_id),
+		FOREIGN KEY(guild_id) REFERENCES guild_configs(guild_id)
+	);`
+	_, err = db.Exec(createAutoTriggersTableSQL)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -148,6 +160,23 @@ func LoadConfigFromDB(db *sql.DB, cfg *model.Config) error {
 	defer punishmentStatsRows.Close()
 
 	cfg.PunishmentStatsChannels = make(map[string]model.PunishmentStatsChannel)
+	autoTriggerRows, err := db.Query("SELECT guild_id, keyword, preset_id, channel_id FROM auto_triggers")
+	if err != nil {
+		return err
+	}
+	defer autoTriggerRows.Close()
+
+	for autoTriggerRows.Next() {
+		var at model.AutoTriggerConfig
+		var guildID string
+		if err := autoTriggerRows.Scan(&guildID, &at.Keyword, &at.PresetID, &at.ChannelID); err != nil {
+			return err
+		}
+		if sc, ok := cfg.ServerConfigs[guildID]; ok {
+			sc.AutoTriggers = append(sc.AutoTriggers, at)
+			cfg.ServerConfigs[guildID] = sc
+		}
+	}
 	for punishmentStatsRows.Next() {
 		var psc model.PunishmentStatsChannel
 		var messageID sql.NullString
@@ -373,6 +402,52 @@ func UpdatePunishmentStatsChannel(db *sql.DB, channelID, messageID string) error
 	}
 
 	_, err = tx.Exec("UPDATE punishment_stats_channels SET message_id = ? WHERE channel_id = ?", messageID, channelID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func AddAutoTrigger(db *sql.DB, guildID, keyword, presetID, channelID string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("INSERT INTO auto_triggers (guild_id, keyword, preset_id, channel_id) VALUES (?, ?, ?, ?)",
+		guildID, keyword, presetID, channelID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func DeleteAutoTrigger(db *sql.DB, guildID, keyword, channelID string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("DELETE FROM auto_triggers WHERE guild_id = ? AND keyword = ? AND channel_id = ?", guildID, keyword, channelID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func OverwriteAutoTrigger(db *sql.DB, guildID, keyword, presetID, channelID string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("UPDATE auto_triggers SET preset_id = ? WHERE guild_id = ? AND keyword = ? AND channel_id = ?", presetID, guildID, keyword, channelID)
 	if err != nil {
 		tx.Rollback()
 		return err

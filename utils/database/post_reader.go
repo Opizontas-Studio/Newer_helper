@@ -6,6 +6,28 @@ import (
 	"strings"
 )
 
+// GetAllTableNames retrieves all user-defined table names from the database.
+func GetAllTableNames(db *sql.DB) ([]string, error) {
+	rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tableNames []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		tableNames = append(tableNames, name)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return tableNames, nil
+}
+
 func GetAllPosts(db *sql.DB, tableName string) ([]model.Post, error) {
 	rows, err := db.Query(`SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM "` + tableName + `"`)
 	if err != nil {

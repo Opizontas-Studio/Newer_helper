@@ -3,6 +3,7 @@ package handlers
 import (
 	"discord-bot/bot"
 	"discord-bot/handlers/admin"
+	"discord-bot/handlers/auto_trigger"
 	"discord-bot/handlers/leaderboard"
 	"discord-bot/handlers/preset"
 	"discord-bot/handlers/punish"
@@ -173,6 +174,9 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 				return
 			}
 			punish.HandlePunishmentStatsCommand(s, i, b)
+		},
+		"manage-auto-trigger": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			auto_trigger.HandleManageAutoTriggerCommand(s, i, b)
 		},
 	}
 }

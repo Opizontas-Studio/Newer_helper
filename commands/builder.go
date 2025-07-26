@@ -9,6 +9,7 @@ import (
 
 func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 	return []*discordgo.ApplicationCommand{
+		defs.ManageAutoTrigger,
 		defs.Punish,
 		defs.QuickPunish,
 		defs.PresetMessage,
@@ -25,5 +26,6 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 		defs.RegisterTopChannel,
 		defs.AdsBoardAdmin,
 		defs.DailyPunishmentStats,
+		defs.SearchPresetByMessage,
 	}
 }

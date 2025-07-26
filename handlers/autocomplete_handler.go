@@ -113,18 +113,28 @@ func handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, co
 				}
 			}
 		}
-	case "preset-message", "preset-message_admin":
-		if serverConfig, ok := config.ServerConfigs[i.GuildID]; ok {
-			for _, p := range serverConfig.PresetMessages {
-				if strings.Contains(strings.ToLower(p.Name), strings.ToLower(data.Options[0].StringValue())) {
-					name := p.Name
-					if len(name) > 80 {
-						name = name[:80]
+	case "preset-message", "preset-message_admin", "manage-auto-trigger":
+		var focusedOption *discordgo.ApplicationCommandInteractionDataOption
+		for _, opt := range data.Options {
+			if opt.Focused {
+				focusedOption = opt
+				break
+			}
+		}
+
+		if focusedOption != nil && focusedOption.Name == "id" {
+			if serverConfig, ok := config.ServerConfigs[i.GuildID]; ok {
+				for _, p := range serverConfig.PresetMessages {
+					if strings.Contains(strings.ToLower(p.Name), strings.ToLower(focusedOption.StringValue())) {
+						name := p.Name
+						if len(name) > 80 {
+							name = name[:80]
+						}
+						choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+							Name:  fmt.Sprintf("(%s) %s", p.ID[:4], name),
+							Value: p.ID,
+						})
 					}
-					choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
-						Name:  fmt.Sprintf("(%s) %s", p.ID[:4], name),
-						Value: p.ID,
-					})
 				}
 			}
 		}
