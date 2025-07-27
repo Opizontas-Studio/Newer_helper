@@ -73,6 +73,7 @@ type ThreadConfig map[string]ThreadGuildConfig
 
 // ThreadGuildConfig holds the database path and table name for a single guild.
 type ThreadGuildConfig struct {
+	Name      string `json:"name"`
 	Database  string `json:"database"`
 	TableName string `json:"tableName"`
 }

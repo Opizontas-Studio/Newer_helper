@@ -51,13 +51,32 @@ func LoadLeaderboardState() (map[string]model.LeaderboardState, error) {
 }
 
 func LoadDatabaseMapping() (map[string]model.GuildMapping, error) {
-	var mapping map[string]model.GuildMapping
-	data, err := os.ReadFile("data/databaseMapping.json")
+	var threadConfig map[string]model.ThreadGuildConfig
+	data, err := os.ReadFile("data/thread_config.json")
 	if err != nil {
+		if os.IsNotExist(err) {
+			return make(map[string]model.GuildMapping), nil // Return empty map if file doesn't exist
+		}
 		return nil, err
 	}
-	err = json.Unmarshal(data, &mapping)
-	return mapping, err
+
+	if err := json.Unmarshal(data, &threadConfig); err != nil {
+		return nil, err
+	}
+
+	// Convert to the expected format
+	mapping := make(map[string]model.GuildMapping)
+	for guildID, config := range threadConfig {
+		mapping[guildID] = model.GuildMapping{
+			GuildsID: guildID,
+			Database: config.Database,
+			DataBaseTableNameMapping: map[string]string{
+				config.TableName: config.TableName,
+			},
+		}
+	}
+
+	return mapping, nil
 }
 
 // ListDBFiles lists all files with .db extension in the data directory.

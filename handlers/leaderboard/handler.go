@@ -36,13 +36,14 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 	config := b.GetConfig()
 	permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, nil, nil, config.DeveloperUserIDs, config.SuperAdminRoleIDs)
 
-	if scope == "global" {
+	switch scope {
+	case "global":
 		if permissionLevel != utils.DeveloperPermission {
 			utils.SendEphemeralResponse(s, i, "您没有权限查看全局排行榜。")
 			return
 		}
 		targetGuildID = "global" // 特殊ID用于全局排行榜
-	} else if scope == "server" {
+	case "server":
 		// 检查是否有权查看特定服务器
 		targetServerConfig, ok := config.ServerConfigs[targetGuildID]
 		if !ok {
@@ -65,7 +66,7 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 			utils.SendEphemeralResponse(s, i, "您没有权限查看该服务器的排行榜。")
 			return
 		}
-	} else { // current scope
+	default: // current scope
 		currentServerConfig, ok := config.ServerConfigs[i.GuildID]
 		if !ok {
 			utils.SendEphemeralResponse(s, i, "当前服务器配置未找到。")
@@ -194,8 +195,12 @@ func buildSingleGuildLeaderboardEmbeds(guildID string, cfg *model.Config) ([]*di
 	}
 
 	// 2. 构建主-embed
+	guildName := guildID
+	if threadConfig, ok := cfg.ThreadConfig[guildID]; ok && threadConfig.Name != "" {
+		guildName = threadConfig.Name
+	}
 	leaderboardEmbed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("🏆 %s - 新卡速递排行榜", guildID),
+		Title:       fmt.Sprintf("🏆 %s - 新卡速递排行榜", guildName),
 		Description: fmt.Sprintf("最后更新于 <t:%d:R>", now.Unix()),
 		Color:       0x00ff00,
 		Timestamp:   now.Format(time.RFC3339),
@@ -225,7 +230,6 @@ func buildSingleGuildLeaderboardEmbeds(guildID string, cfg *model.Config) ([]*di
 		embeds = append(embeds, latestPostsEmbed)
 	}
 
-	// 4. (可选) 添加广告-embed
 	guildsDB, err := database.InitDB("data/guilds.db")
 	if err != nil {
 		log.Printf("Could not open guilds.db: %v", err)
