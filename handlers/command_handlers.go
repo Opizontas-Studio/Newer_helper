@@ -178,5 +178,8 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 		"manage-auto-trigger": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			auto_trigger.HandleManageAutoTriggerCommand(s, i, b)
 		},
+		"guilds_admin": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			admin.HandleGuildsAdminCommand(s, i, b.GetDB(), b.GetConfig())
+		},
 	}
 }

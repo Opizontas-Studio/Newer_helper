@@ -17,10 +17,22 @@ func (b *Bot) Run() {
 		log.Fatalf("Error opening connection: %v", err)
 	}
 
-	log.Println("Adding commands...")
+	log.Println("Unregistering all commands from all guilds...")
+	guilds, err := b.Session.UserGuilds(100, "", "", true)
+	if err != nil {
+		log.Printf("Could not fetch guilds: %v", err)
+	} else {
+		for _, guild := range guilds {
+			b.UnregisterCommands(guild.ID)
+		}
+	}
+
+	log.Println("Registering commands for enabled guilds...")
 	b.RegisteredCommands = make([]*discordgo.ApplicationCommand, 0)
 	for _, serverCfg := range b.GetConfig().ServerConfigs {
-		b.RefreshCommands(serverCfg.GuildID)
+		if serverCfg.Enable {
+			b.RefreshCommands(serverCfg.GuildID)
+		}
 	}
 
 	// Start the scheduler

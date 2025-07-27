@@ -11,7 +11,8 @@ func CreateGuildTables(db *sql.DB) error {
 		"guild_id" TEXT NOT NULL PRIMARY KEY,
 		"name" TEXT,
 		"admin_role_ids" TEXT,
-		"user_role_ids" TEXT
+		"user_role_ids" TEXT,
+		"enable" TEXT DEFAULT 'false'
 	);`
 	_, err := db.Exec(createGuildsTableSQL)
 	if err != nil {
@@ -85,7 +86,7 @@ func CreateGuildTables(db *sql.DB) error {
 }
 
 func LoadConfigFromDB(db *sql.DB, cfg *model.Config) error {
-	rows, err := db.Query("SELECT guild_id, name, admin_role_ids, user_role_ids FROM guild_configs")
+	rows, err := db.Query("SELECT guild_id, name, admin_role_ids, user_role_ids, enable FROM guild_configs")
 	if err != nil {
 		return err
 	}
@@ -94,12 +95,16 @@ func LoadConfigFromDB(db *sql.DB, cfg *model.Config) error {
 	cfg.ServerConfigs = make(map[string]model.ServerConfig)
 	for rows.Next() {
 		var sc model.ServerConfig
-		var adminRoles, userRoles string
-		if err := rows.Scan(&sc.GuildID, &sc.Name, &adminRoles, &userRoles); err != nil {
+		var adminRoles, userRoles, enableStr string
+		if err := rows.Scan(&sc.GuildID, &sc.Name, &adminRoles, &userRoles, &enableStr); err != nil {
 			return err
+		}
+		if sc.GuildID == "0" {
+			continue
 		}
 		sc.AdminRoleIDs = strings.Split(adminRoles, ",")
 		sc.UserRoleIDs = strings.Split(userRoles, ",")
+		sc.Enable = enableStr == "true"
 		sc.PresetMessages = []model.PresetMessage{} // Will be loaded separately
 		cfg.ServerConfigs[sc.GuildID] = sc
 	}
@@ -439,6 +444,93 @@ func DeleteAutoTrigger(db *sql.DB, guildID, keyword, channelID string) error {
 	}
 
 	return tx.Commit()
+}
+
+func GetGuildConfig(db *sql.DB, guildID string) (*model.ServerConfig, error) {
+	row := db.QueryRow("SELECT name, admin_role_ids, user_role_ids, enable FROM guild_configs WHERE guild_id = ?", guildID)
+
+	var sc model.ServerConfig
+	var adminRoles, userRoles, enableStr string
+	err := row.Scan(&sc.Name, &adminRoles, &userRoles, &enableStr)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // Not found is not an error
+		}
+		return nil, err
+	}
+
+	sc.GuildID = guildID
+	sc.AdminRoleIDs = strings.Split(adminRoles, ",")
+	sc.UserRoleIDs = strings.Split(userRoles, ",")
+	sc.Enable = enableStr == "true"
+
+	return &sc, nil
+}
+
+func AddGuildConfig(db *sql.DB, config model.ServerConfig) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	adminRoles := strings.Join(config.AdminRoleIDs, ",")
+	userRoles := strings.Join(config.UserRoleIDs, ",")
+	enableStr := "false"
+	if config.Enable {
+		enableStr = "true"
+	}
+
+	_, err = tx.Exec("INSERT INTO guild_configs (guild_id, name, admin_role_ids, user_role_ids, enable) VALUES (?, ?, ?, ?, ?)",
+		config.GuildID, config.Name, adminRoles, userRoles, enableStr)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func UpdateGuildConfig(db *sql.DB, config model.ServerConfig) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	adminRoles := strings.Join(config.AdminRoleIDs, ",")
+	userRoles := strings.Join(config.UserRoleIDs, ",")
+	enableStr := "false"
+	if config.Enable {
+		enableStr = "true"
+	}
+
+	_, err = tx.Exec("UPDATE guild_configs SET name = ?, admin_role_ids = ?, user_role_ids = ?, enable = ? WHERE guild_id = ?",
+		config.Name, adminRoles, userRoles, enableStr, config.GuildID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func GetAllGuilds(db *sql.DB) ([]model.ServerConfig, error) {
+	rows, err := db.Query("SELECT guild_id, name, enable FROM guild_configs")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var guilds []model.ServerConfig
+	for rows.Next() {
+		var sc model.ServerConfig
+		var enableStr string
+		if err := rows.Scan(&sc.GuildID, &sc.Name, &enableStr); err != nil {
+			return nil, err
+		}
+		sc.Enable = enableStr == "true"
+		guilds = append(guilds, sc)
+	}
+	return guilds, nil
 }
 
 func OverwriteAutoTrigger(db *sql.DB, guildID, keyword, presetID, channelID string) error {

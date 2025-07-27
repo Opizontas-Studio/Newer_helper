@@ -139,3 +139,47 @@ var RegisterTopChannel = &discordgo.ApplicationCommand{
 		},
 	},
 }
+
+var GuildsAdmin = &discordgo.ApplicationCommand{
+	Name:        "guilds_admin",
+	Description: "Manage guild configurations",
+	NameLocalizations: &map[discordgo.Locale]string{
+		discordgo.ChineseCN: "服务器管理",
+		discordgo.ChineseTW: "伺服器管理",
+	},
+	DescriptionLocalizations: &map[discordgo.Locale]string{
+		discordgo.ChineseCN: "管理服务器配置",
+		discordgo.ChineseTW: "管理伺服器配置",
+	},
+	Options: []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        "action",
+			Description: "Action to perform",
+			Required:    true,
+			Choices: []*discordgo.ApplicationCommandOptionChoice{
+				{Name: "激活服务器 (activate)", Value: "activate"},
+				{Name: "禁用服务器 (deactivate)", Value: "deactivate"},
+				{Name: "新增服务器 (add_guild)", Value: "add_guild"},
+				{Name: "新增管理员 (add_admin)", Value: "add_admin"},
+				{Name: "新增用户 (add_user)", Value: "add_user"},
+				{Name: "移除管理员 (remove_admin)", Value: "remove_admin"},
+				{Name: "移除用户 (remove_user)", Value: "remove_user"},
+				{Name: "列出配置 (list_config)", Value: "list_config"},
+			},
+		},
+		{
+			Type:         discordgo.ApplicationCommandOptionString,
+			Name:         "guild",
+			Description:  "Target guild",
+			Required:     true,
+			Autocomplete: true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionRole,
+			Name:        "role",
+			Description: "Target role (for admin/user actions)",
+			Required:    false,
+		},
+	},
+}

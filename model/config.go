@@ -29,6 +29,7 @@ type ServerConfig struct {
 	GuildID        string                       `json:"guilds_id"`
 	AdminRoleIDs   []string                     `json:"admin_role_ids"`
 	UserRoleIDs    []string                     `json:"user_role_ids"`
+	Enable         bool                         `json:"enable"`
 	PresetMessages []PresetMessage              `json:"preset_messages"`
 	TopChannels    map[string]*TopChannelConfig `json:"top_channels,omitempty"`
 	AutoTriggers   []AutoTriggerConfig          `json:"auto_triggers,omitempty"`

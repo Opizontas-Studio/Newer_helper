@@ -85,6 +85,7 @@ func New(cfg *model.Config, db *sql.DB, dbx *sqlx.DB) (*Bot, error) {
 	}
 	b.config.Store(cfg)
 	b.scheduler = NewScheduler(b)
+	// b.CommandHandlers = handlers.commandHandlers(b)
 
 	go b.cleanupExpiredPresets()
 
@@ -115,6 +116,14 @@ func (b *Bot) RefreshCommands(guildID string) {
 		return
 	}
 	b.RegisteredCommands = append(b.RegisteredCommands, registeredCmds...)
+}
+
+func (b *Bot) UnregisterCommands(guildID string) {
+	log.Printf("Unregistering all commands for guild %s", guildID)
+	_, err := b.Session.ApplicationCommandBulkOverwrite(b.Session.State.User.ID, guildID, []*discordgo.ApplicationCommand{})
+	if err != nil {
+		log.Printf("cannot unregister commands for guild '%s': %v", guildID, err)
+	}
 }
 
 func (b *Bot) GetScheduler() *Scheduler {

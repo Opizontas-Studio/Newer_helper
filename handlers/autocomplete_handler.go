@@ -169,6 +169,39 @@ func handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, co
 				}
 			}
 		}
+	case "guilds_admin":
+		var focusedOption *discordgo.ApplicationCommandInteractionDataOption
+		for _, option := range data.Options {
+			if option.Focused {
+				focusedOption = option
+				break
+			}
+		}
+
+		if focusedOption != nil && focusedOption.Name == "guild" {
+			db, err := database.InitDB("data/guilds.db")
+			if err != nil {
+				log.Printf("Autocomplete: failed to connect to db: %v", err)
+				return
+			}
+			defer db.Close()
+
+			guilds, err := database.GetAllGuilds(db)
+			if err != nil {
+				log.Printf("Autocomplete: failed to get guilds: %v", err)
+				return
+			}
+
+			inputValue := focusedOption.Value.(string)
+			for _, guild := range guilds {
+				if strings.Contains(strings.ToLower(guild.Name), strings.ToLower(inputValue)) || strings.Contains(guild.GuildID, inputValue) {
+					choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+						Name:  fmt.Sprintf("%s (%s)", guild.Name, guild.GuildID),
+						Value: guild.GuildID,
+					})
+				}
+			}
+		}
 	}
 
 	if len(choices) > 25 {
