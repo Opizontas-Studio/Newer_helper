@@ -46,6 +46,7 @@ type PunishmentStatsChannel struct {
 // Config 存储应用程序的配置
 type Config struct {
 	BotToken                string
+	AppID                   string
 	LogChannelID            string
 	DeveloperUserIDs        []string
 	SuperAdminRoleIDs       []string

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -24,14 +25,17 @@ func (b *Bot) Run() {
 	} else {
 		for _, guild := range guilds {
 			b.UnregisterCommands(guild.ID)
+			time.Sleep(1 * time.Second)
 		}
 	}
 
 	log.Println("Registering commands for enabled guilds...")
 	b.RegisteredCommands = make([]*discordgo.ApplicationCommand, 0)
+
 	for _, serverCfg := range b.GetConfig().ServerConfigs {
 		if serverCfg.Enable {
 			b.RefreshCommands(serverCfg.GuildID)
+			time.Sleep(1 * time.Second)
 		}
 	}
 
@@ -44,3 +48,4 @@ func (b *Bot) Run() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
 }
+

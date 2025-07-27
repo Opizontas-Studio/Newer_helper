@@ -22,6 +22,11 @@ func Load() (*model.Config, error) {
 		log.Fatal("Error: BOT_TOKEN environment variable not set")
 	}
 
+	appID := os.Getenv("APP_ID")
+	if appID == "" {
+		log.Fatal("Error: APP_ID environment variable not set")
+	}
+
 	logChannelID := os.Getenv("LOG_CHANNEL_ID")
 	if logChannelID == "" {
 		log.Println("Warning: LOG_CHANNEL_ID not set, logging will be disabled")
@@ -31,6 +36,7 @@ func Load() (*model.Config, error) {
 
 	cfg := &model.Config{
 		BotToken:           token,
+		AppID:              appID,
 		LogChannelID:       logChannelID,
 		DeveloperUserIDs:   strings.Split(os.Getenv("DEVELOPER_USER_IDS"), ","),
 		SuperAdminRoleIDs:  strings.Split(os.Getenv("SUPER_ADMIN_ROLE_IDS"), ","),
