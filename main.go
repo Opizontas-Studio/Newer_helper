@@ -1,5 +1,3 @@
-//go:build !migrate
-
 package main
 
 import (
@@ -11,6 +9,10 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/joho/godotenv"
 )
 
 func startPprofServer() {
@@ -25,6 +27,11 @@ func startPprofServer() {
 }
 
 func main() {
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, using environment variables")
+	}
+
 	startPprofServer()
 
 	cfg, err := config.Load()
@@ -56,7 +63,19 @@ func main() {
 
 	handlers.Register(b)
 
-	b.Run()
+	if err := b.Run(); err != nil {
+		log.Fatalf("Error running bot: %v", err)
+	}
 
-	defer b.Close()
+	log.Println("Bot is now running. Press CTRL-C to exit.")
+
+	// Wait for a shutdown signal
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+
+	// Gracefully shutdown
+	log.Println("Shutting down gracefully...")
+	b.Close()
+	log.Println("Bot has been shut down.")
 }

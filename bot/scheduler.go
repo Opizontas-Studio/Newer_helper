@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"context"
 	"database/sql"
 	"discord-bot/handlers/leaderboard"
 	"discord-bot/model"
@@ -27,24 +28,25 @@ type BotProvider interface {
 	GetPresetCooldowns() map[string]time.Time
 	GetCooldownMutex() *sync.Mutex
 	ActiveScanCount() *int
+	GetCtx() context.Context
 }
 
 // Scheduler manages all scheduled tasks.
 type Scheduler struct {
 	bot                         BotProvider
-	done                        chan struct{}
 	wg                          sync.WaitGroup
 	cooldownTicker              *time.Ticker
 	leaderboardUpdateTicker     *time.Ticker
 	postScanTicker              *time.Ticker
 	punishmentStatsUpdateTicker *time.Ticker
+	ctx                         context.Context
 }
 
 // NewScheduler creates a new scheduler.
 func NewScheduler(bot BotProvider) *Scheduler {
 	return &Scheduler{
-		bot:  bot,
-		done: make(chan struct{}),
+		bot: bot,
+		ctx: bot.GetCtx(),
 	}
 }
 
@@ -71,7 +73,6 @@ func (s *Scheduler) Start() {
 // Stop terminates all scheduled tasks gracefully.
 func (s *Scheduler) Stop() {
 	log.Println("Stopping scheduler...")
-	close(s.done)
 	s.wg.Wait()
 	log.Println("Scheduler stopped.")
 }
@@ -108,7 +109,7 @@ func (s *Scheduler) runInitialScan() {
 				}
 			}
 		}
-		scanner.Scan(s.bot.GetSession(), s.bot.GetConfig().LogChannelID, scanMode, "", s.done)
+		scanner.Scan(s.bot.GetSession(), s.bot.GetConfig().LogChannelID, scanMode, "", s.ctx)
 	} else {
 		log.Println("Initial scan is disabled by environment variable.")
 	}
@@ -131,7 +132,7 @@ func (s *Scheduler) startRoleRemover() {
 
 func (s *Scheduler) startChannelCleaner() {
 	defer s.wg.Done()
-	scanner.StartChannelCleaner(s.bot.GetSession(), s.bot.GetConfig(), s.done)
+	scanner.StartChannelCleaner(s.bot.GetSession(), s.bot.GetConfig(), s.ctx)
 }
 
 func (s *Scheduler) startScheduledTasks() {
@@ -160,7 +161,7 @@ func (s *Scheduler) startScheduledTasks() {
 		case <-s.punishmentStatsUpdateTicker.C:
 			log.Println("Updating punishment stats...")
 			s.updatePunishmentStats()
-		case <-s.done:
+		case <-s.ctx.Done():
 			return
 		}
 	}
@@ -232,7 +233,7 @@ func (s *Scheduler) startDailyTasks() {
 		case <-time.After(next.Sub(now)):
 			s.runDailyScanTasks()
 			s.runDailyPunishmentReport()
-		case <-s.done:
+		case <-s.ctx.Done():
 			return
 		}
 	}
@@ -240,7 +241,7 @@ func (s *Scheduler) startDailyTasks() {
 
 func (s *Scheduler) runDailyScanTasks() {
 	log.Println("Starting scheduled active forum scan...")
-	scanner.Scan(s.bot.GetSession(), s.bot.GetConfig().LogChannelID, "active", "", s.done)
+	scanner.Scan(s.bot.GetSession(), s.bot.GetConfig().LogChannelID, "active", "", s.ctx)
 
 	activeScanCount := s.bot.ActiveScanCount()
 	*activeScanCount++
@@ -248,7 +249,7 @@ func (s *Scheduler) runDailyScanTasks() {
 
 	if *activeScanCount >= 21 { // 3 scans/day * 7 days
 		log.Println("Active scan count reached 21. Starting full scan...")
-		scanner.Scan(s.bot.GetSession(), s.bot.GetConfig().LogChannelID, "full", "", s.done)
+		scanner.Scan(s.bot.GetSession(), s.bot.GetConfig().LogChannelID, "full", "", s.ctx)
 		*activeScanCount = 0
 	}
 
@@ -265,7 +266,7 @@ func (s *Scheduler) runDailyScanTasks() {
 	}
 
 	log.Println("Cleaning up old posts...")
-	scanner.CleanOldPosts(s.bot.GetSession(), s.bot.GetConfig(), s.done)
+	scanner.CleanOldPosts(s.bot.GetSession(), s.bot.GetConfig(), s.ctx)
 }
 
 func (s *Scheduler) updatePunishmentStats() {

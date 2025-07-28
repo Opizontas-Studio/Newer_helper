@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"context"
 	"discord-bot/model"
 	"log"
 	"time"
@@ -8,16 +9,17 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func StartChannelCleaner(s *discordgo.Session, cfg *model.Config, done <-chan struct{}) {
+func StartChannelCleaner(s *discordgo.Session, cfg *model.Config, ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Minute) // Clean every 5 minutes
 	go func() {
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				log.Println("Running scheduled channel cleanup...")
 				CleanAllChannels(s, cfg)
-			case <-done:
-				ticker.Stop()
+			case <-ctx.Done():
+				log.Println("Stopping channel cleaner.")
 				return
 			}
 		}

@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"context"
 	"discord-bot/model"
 	"discord-bot/utils/database"
 	"fmt"
@@ -17,10 +18,10 @@ const maxPartitionConcurrency = 45          // 每个服务器内最大并发分
 const maxThreadConcurrencyPerPartition = 24 // 每个分区内最大并发线程处理数
 
 // processThreadsChunk 处理线程分片的函数
-func processThreadsChunk(s *discordgo.Session, chunk ThreadChunk, existingThreads map[string]bool, existingThreadsMutex *sync.RWMutex, task PartitionTask, tableName string, done <-chan struct{}) {
+func processThreadsChunk(s *discordgo.Session, chunk ThreadChunk, existingThreads map[string]bool, existingThreadsMutex *sync.RWMutex, task PartitionTask, tableName string, ctx context.Context) {
 	for _, thread := range chunk.Threads {
 		select {
-		case <-done:
+		case <-ctx.Done():
 			return
 		default:
 		}
@@ -142,14 +143,14 @@ func calculateOptimalThreadsPerPartition(remainingPartitions int) int {
 }
 
 // worker 是工作池中的工作单元
-func worker(id int, s *discordgo.Session, done <-chan struct{}, tasks <-chan PartitionTask, wg *sync.WaitGroup) {
+func worker(id int, s *discordgo.Session, ctx context.Context, tasks <-chan PartitionTask, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for task := range tasks {
 		// 将完成计数的逻辑移到任务的最后
 		defer atomic.AddInt64(task.PartitionsDone, 1)
 
 		select {
-		case <-done:
+		case <-ctx.Done():
 			log.Printf("Worker %d cancelling task for partition %s.", id, task.Key)
 			return
 		default:
@@ -165,13 +166,11 @@ func worker(id int, s *discordgo.Session, done <-chan struct{}, tasks <-chan Par
 		existingThreadsMutex := &sync.RWMutex{}
 
 		if !task.IsFullScan {
-			allPosts, err := database.GetAllPosts(task.DB, tableName)
+			postIDs, err := database.GetAllPostIDs(task.DB, tableName)
 			if err != nil {
-				log.Printf("Error getting all posts for active scan from table %s: %v", tableName, err)
+				log.Printf("Error getting all post IDs for active scan from table %s: %v", tableName, err)
 			} else {
-				for _, post := range allPosts {
-					existingThreads[post.ID] = true
-				}
+				existingThreads = postIDs
 			}
 		} else {
 			for _, id := range channelConfig.ThreadIDs {
@@ -220,7 +219,7 @@ func worker(id int, s *discordgo.Session, done <-chan struct{}, tasks <-chan Par
 					semaphore <- struct{}{}
 					defer func() { <-semaphore }()
 
-					processThreadsChunk(s, chunk, existingThreads, existingThreadsMutex, task, tableName, done)
+					processThreadsChunk(s, chunk, existingThreads, existingThreadsMutex, task, tableName, ctx)
 				}(chunk)
 			}
 
@@ -238,7 +237,7 @@ func worker(id int, s *discordgo.Session, done <-chan struct{}, tasks <-chan Par
 			var before *time.Time
 			for {
 				select {
-				case <-done:
+				case <-ctx.Done():
 					log.Println("Scan cancelled during pagination.")
 					return
 				default:

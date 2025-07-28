@@ -1,12 +1,13 @@
 package bot
 
 import (
+	"context"
 	"database/sql"
 	"discord-bot/commands"
 	"discord-bot/config"
-	"errors"
 	"discord-bot/model"
 	"discord-bot/utils/database"
+	"errors"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -40,6 +41,8 @@ type Bot struct {
 	DBX                 *sqlx.DB
 	activeScanCount     int
 	scheduler           *Scheduler
+	ctx                 context.Context
+	cancel              context.CancelFunc
 }
 
 func (b *Bot) GetConfig() *model.Config {
@@ -70,6 +73,10 @@ func (b *Bot) ActiveScanCount() *int {
 	return &b.activeScanCount
 }
 
+func (b *Bot) GetCtx() context.Context {
+	return b.ctx
+}
+
 func New(cfg *model.Config, db *sql.DB, dbx *sqlx.DB) (*Bot, error) {
 	dg, err := discordgo.New("Bot " + cfg.BotToken)
 	if err != nil {
@@ -77,6 +84,8 @@ func New(cfg *model.Config, db *sql.DB, dbx *sqlx.DB) (*Bot, error) {
 	}
 	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
 	dg.StateEnabled = false
+
+	ctx, cancel := context.WithCancel(context.Background())
 
 	b := &Bot{
 		Session:         dg,
@@ -86,18 +95,24 @@ func New(cfg *model.Config, db *sql.DB, dbx *sqlx.DB) (*Bot, error) {
 		DB:              db,
 		DBX:             dbx,
 		activeScanCount: 0,
+		ctx:             ctx,
+		cancel:          cancel,
 	}
 	b.config.Store(cfg)
 	b.scheduler = NewScheduler(b)
 	// b.CommandHandlers = handlers.commandHandlers(b)
 
-	go b.cleanupExpiredPresets()
+	go b.cleanupExpiredPresets(ctx)
 
 	return b, nil
 }
 
 func (b *Bot) Close() {
 	log.Println("Gracefully shutting down.")
+
+	// Signal all background goroutines to stop
+	b.cancel()
+
 	if b.scheduler != nil {
 		b.scheduler.Stop()
 	}
@@ -123,20 +138,6 @@ func (b *Bot) RefreshCommands(guildID string) {
 		log.Printf("cannot update commands for guild '%s': %v", serverCfg.GuildID, err)
 		return
 	}
-
-	// var registeredCmds []*discordgo.ApplicationCommand
-	// for _, cmd := range cmds {
-	// 	log.Printf("Registering command: %s", cmd.Name)
-	// 	registeredCmd, err := b.Session.ApplicationCommandCreate(b.AppID, serverCfg.GuildID, cmd)
-	// 	if err != nil {
-	// 		log.Printf("Failed to register command %s for guild %s: %v", cmd.Name, serverCfg.GuildID, err)
-	// 		// Continue to next command instead of returning
-	// 		continue
-	// 	}
-	// 	registeredCmds = append(registeredCmds, registeredCmd)
-	// 	log.Printf("Successfully registered command: %s", cmd.Name)
-	// 	time.Sleep(2 * time.Second) // Add a delay to avoid hitting rate limits
-	// }
 
 	log.Printf("Successfully registered %d commands for guild %s.", len(registeredCmds), serverCfg.GuildID)
 	b.commandsMutex.Lock()
@@ -193,18 +194,24 @@ func (b *Bot) ReloadConfig() error {
 	return nil
 }
 
-func (b *Bot) cleanupExpiredPresets() {
+func (b *Bot) cleanupExpiredPresets(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		b.PendingPresetsMutex.Lock()
-		for id, preset := range b.PendingPresets {
-			if time.Since(preset.Timestamp) > 5*time.Minute {
-				log.Printf("Removing expired pending preset: %s", id)
-				delete(b.PendingPresets, id)
+	for {
+		select {
+		case <-ticker.C:
+			b.PendingPresetsMutex.Lock()
+			for id, preset := range b.PendingPresets {
+				if time.Since(preset.Timestamp) > 5*time.Minute {
+					log.Printf("Removing expired pending preset: %s", id)
+					delete(b.PendingPresets, id)
+				}
 			}
+			b.PendingPresetsMutex.Unlock()
+		case <-ctx.Done():
+			log.Println("Stopping expired presets cleanup.")
+			return
 		}
-		b.PendingPresetsMutex.Unlock()
 	}
 }

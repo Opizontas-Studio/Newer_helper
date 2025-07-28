@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"context"
 	"discord-bot/utils"
 	"discord-bot/utils/database"
 	"encoding/json"
@@ -70,7 +71,7 @@ func AddThreadToExclusionList(guildID, channelKey, threadID string) error {
 }
 
 // worker 是工作池中的工作单元
-func Scan(s *discordgo.Session, logChannelID string, scanMode string, targetGuildID string, done <-chan struct{}) {
+func Scan(s *discordgo.Session, logChannelID string, scanMode string, targetGuildID string, ctx context.Context) {
 	targetServer := "所有服务器"
 	if targetGuildID != "" {
 		targetServer = targetGuildID
@@ -126,7 +127,7 @@ func Scan(s *discordgo.Session, logChannelID string, scanMode string, targetGuil
 			defer guildWg.Done()
 
 			select {
-			case <-done:
+			case <-ctx.Done():
 				log.Println("Scan cancelled for guild:", guildConfig.Name)
 				return
 			default:
@@ -151,7 +152,7 @@ func Scan(s *discordgo.Session, logChannelID string, scanMode string, targetGuil
 			// 启动 worker 池
 			for i := 1; i <= maxPartitionConcurrency; i++ {
 				workerWg.Add(1)
-				go worker(i, s, done, tasks, &workerWg)
+				go worker(i, s, ctx, tasks, &workerWg)
 			}
 
 			// 分发任务

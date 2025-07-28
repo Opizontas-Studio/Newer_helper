@@ -46,6 +46,27 @@ func GetAllPosts(db *sql.DB, tableName string) ([]model.Post, error) {
 	return posts, nil
 }
 
+func GetAllPostIDs(db *sql.DB, tableName string) (map[string]bool, error) {
+	rows, err := db.Query(`SELECT id FROM "` + tableName + `"`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	postIDs := make(map[string]bool)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		postIDs[id] = true
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return postIDs, nil
+}
+
 func GetRandomPosts(db *sql.DB, tableName string, count int) ([]model.Post, error) {
 	rows, err := db.Query(`SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM "`+tableName+`" ORDER BY RANDOM() LIMIT ?`, count)
 	if err != nil {

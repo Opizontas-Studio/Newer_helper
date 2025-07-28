@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"context"
 	"database/sql"
 	"discord-bot/model"
 	"discord-bot/utils"
@@ -13,7 +14,7 @@ import (
 )
 
 // CleanOldPosts iterates through all configured databases and deletes posts older than a week.
-func CleanOldPosts(s *discordgo.Session, cfg *model.Config, done <-chan struct{}) {
+func CleanOldPosts(s *discordgo.Session, cfg *model.Config, ctx context.Context) {
 	sevenDaysAgo := time.Now().Add(-8 * 24 * time.Hour).Unix()
 	logChannelID := cfg.LogChannelID
 
@@ -21,7 +22,7 @@ func CleanOldPosts(s *discordgo.Session, cfg *model.Config, done <-chan struct{}
 
 	for guildID, guildConfig := range cfg.ThreadConfig {
 		select {
-		case <-done:
+		case <-ctx.Done():
 			log.Println("CleanOldPosts cancelled.")
 			return
 		default:
