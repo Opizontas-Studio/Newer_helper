@@ -79,63 +79,72 @@ func HandleNewCardsInteraction(s *discordgo.Session, i *discordgo.InteractionCre
 		}
 	}
 
-	// 立即响应，避免超时
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-	})
-	if err != nil {
-		log.Printf("Error sending deferred response: %v", err)
-		return
-	}
+	// 立即发送一个临时的确认消息
+	utils.SendEphemeralResponse(s, i, "正在生成排行榜...")
 
-	// 3. 构建并发送排行榜
+	// 3. 构建排行榜
 	embeds, err := buildLeaderboardEmbeds(targetGuildID, config)
 	if err != nil {
 		content := fmt.Sprintf("创建排行榜时出错: %v", err)
-		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Content: &content,
-		})
+		utils.SendEphemeralResponse(s, i, content) // 告知用户错误
 		return
 	}
-
 	if len(embeds) == 0 {
-		content := "无法生成排行榜，可能是因为没有数据。"
-		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Content: &content,
+		utils.SendEphemeralResponse(s, i, "无法生成排行榜，可能是因为没有数据。")
+		return
+	}
+
+	// 4. 检查现有状态并发送/更新消息
+	states, _ := utils.LoadLeaderboardState()
+	if states == nil {
+		states = make(map[string]model.LeaderboardState)
+	}
+	key := targetGuildID
+
+	var message *discordgo.Message
+	if state, ok := states[key]; ok {
+		// 如果状态存在，编辑现有消息
+		message, err = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+			Channel: state.ChannelID,
+			ID:      state.MessageID,
+			Embeds:  &embeds,
 		})
-		return
+		if err != nil {
+			log.Printf("Error editing leaderboard message, attempting to send a new one: %v", err)
+			// 如果编辑失败（例如消息被删除），则尝试发送新消息
+			message, err = s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
+				Embeds: embeds,
+			})
+		}
+	} else {
+		// 如果状态不存在，发送新消息
+		message, err = s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
+			Embeds: embeds,
+		})
 	}
 
-	message, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-		Embeds: &embeds,
-	})
 	if err != nil {
-		log.Printf("Error sending leaderboard message: %v", err)
+		log.Printf("Error sending or editing leaderboard message: %v", err)
+		utils.SendEphemeralResponse(s, i, "发送排行榜消息时出错。")
 		return
 	}
 
-	// 4. (可选) 保存状态以便更新。
-	// 当前实现为一次性创建，如果需要定时更新，需要修改状态保存逻辑
-	// 例如，使用一个复合键 `fmt.Sprintf("%s-%s", i.ChannelID, scope)`
-	// 为了简单起见，这里我们只为当前服务器的排行榜保存状态
-	if scope == "current" || scope == "global" {
-		states, _ := utils.LoadLeaderboardState()
-		if states == nil {
-			states = make(map[string]model.LeaderboardState)
-		}
-		key := i.GuildID
-		if scope == "global" {
-			key = "global"
-		}
-		states[key] = model.LeaderboardState{
-			GuildID:   key,
-			ChannelID: i.ChannelID,
-			MessageID: message.ID,
-		}
-		if err := utils.SaveLeaderboardState(states); err != nil {
-			log.Printf("Error saving leaderboard state: %v", err)
-		}
+	// 5. 保存或更新状态
+	states[key] = model.LeaderboardState{
+		GuildID:   key,
+		ChannelID: message.ChannelID,
+		MessageID: message.ID,
 	}
+	if err := utils.SaveLeaderboardState(states); err != nil {
+		log.Printf("Error saving leaderboard state: %v", err)
+		utils.SendEphemeralResponse(s, i, "保存排行榜状态时出错。")
+	}
+
+	// 最终确认
+	finalContent := fmt.Sprintf("排行榜已在 <#%s> 更新。", message.ChannelID)
+	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Content: &finalContent,
+	})
 }
 
 func UpdateLeaderboard(b model.Bot, guildID string) {

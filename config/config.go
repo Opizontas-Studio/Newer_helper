@@ -33,15 +33,17 @@ func Load() (*model.Config, error) {
 	}
 
 	disableInitialScan := os.Getenv("DISABLE_INITIAL_SCAN") == "true"
+	disableCommandUnregister := os.Getenv("DISABLE_COMMAND_UNREGISTER") == "true"
 
 	cfg := &model.Config{
-		BotToken:           token,
-		AppID:              appID,
-		LogChannelID:       logChannelID,
-		DeveloperUserIDs:   strings.Split(os.Getenv("DEVELOPER_USER_IDS"), ","),
-		SuperAdminRoleIDs:  strings.Split(os.Getenv("SUPER_ADMIN_ROLE_IDS"), ","),
-		DisableInitialScan: disableInitialScan,
-		ServerConfigs:      make(map[string]model.ServerConfig),
+		BotToken:                 token,
+		AppID:                    appID,
+		LogChannelID:             logChannelID,
+		DeveloperUserIDs:         strings.Split(os.Getenv("DEVELOPER_USER_IDS"), ","),
+		SuperAdminRoleIDs:        strings.Split(os.Getenv("SUPER_ADMIN_ROLE_IDS"), ","),
+		DisableInitialScan:       disableInitialScan,
+		DisableCommandUnregister: disableCommandUnregister,
+		ServerConfigs:            make(map[string]model.ServerConfig),
 	}
 
 	// Load task config

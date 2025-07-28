@@ -114,29 +114,29 @@ func (b *Bot) RefreshCommands(guildID string) {
 
 	cmds := commands.GenerateCommands(&serverCfg)
 	log.Printf("Registering %d new commands for guild %s...", len(cmds), serverCfg.GuildID)
-	// registeredCmds, err := b.Session.ApplicationCommandBulkOverwrite(b.AppID, serverCfg.GuildID, cmds)
-	// if err != nil {
-	// 	var restErr *discordgo.RESTError
-	// 	if errors.As(err, &restErr) && restErr.Response.StatusCode == 429 {
-	// 		log.Printf("Rate limit hit for guild '%s'.", serverCfg.GuildID)
-	// 	}
-	// 	log.Printf("cannot update commands for guild '%s': %v", serverCfg.GuildID, err)
-	// 	return
-	// }
-
-	var registeredCmds []*discordgo.ApplicationCommand
-	for _, cmd := range cmds {
-		log.Printf("Registering command: %s", cmd.Name)
-		registeredCmd, err := b.Session.ApplicationCommandCreate(b.AppID, serverCfg.GuildID, cmd)
-		if err != nil {
-			log.Printf("Failed to register command %s for guild %s: %v", cmd.Name, serverCfg.GuildID, err)
-			// Continue to next command instead of returning
-			continue
+	registeredCmds, err := b.Session.ApplicationCommandBulkOverwrite(b.AppID, serverCfg.GuildID, cmds)
+	if err != nil {
+		var restErr *discordgo.RESTError
+		if errors.As(err, &restErr) && restErr.Response.StatusCode == 429 {
+			log.Printf("Rate limit hit for guild '%s'.", serverCfg.GuildID)
 		}
-		registeredCmds = append(registeredCmds, registeredCmd)
-		log.Printf("Successfully registered command: %s", cmd.Name)
-		time.Sleep(2 * time.Second) // Add a delay to avoid hitting rate limits
+		log.Printf("cannot update commands for guild '%s': %v", serverCfg.GuildID, err)
+		return
 	}
+
+	// var registeredCmds []*discordgo.ApplicationCommand
+	// for _, cmd := range cmds {
+	// 	log.Printf("Registering command: %s", cmd.Name)
+	// 	registeredCmd, err := b.Session.ApplicationCommandCreate(b.AppID, serverCfg.GuildID, cmd)
+	// 	if err != nil {
+	// 		log.Printf("Failed to register command %s for guild %s: %v", cmd.Name, serverCfg.GuildID, err)
+	// 		// Continue to next command instead of returning
+	// 		continue
+	// 	}
+	// 	registeredCmds = append(registeredCmds, registeredCmd)
+	// 	log.Printf("Successfully registered command: %s", cmd.Name)
+	// 	time.Sleep(2 * time.Second) // Add a delay to avoid hitting rate limits
+	// }
 
 	log.Printf("Successfully registered %d commands for guild %s.", len(registeredCmds), serverCfg.GuildID)
 	b.commandsMutex.Lock()

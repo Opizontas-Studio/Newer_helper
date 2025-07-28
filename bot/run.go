@@ -18,15 +18,19 @@ func (b *Bot) Run() {
 		log.Fatalf("Error opening connection: %v", err)
 	}
 
-	log.Println("Unregistering all commands from all guilds...")
-	guilds, err := b.Session.UserGuilds(100, "", "", true)
-	if err != nil {
-		log.Printf("Could not fetch guilds: %v", err)
-	} else {
-		for _, guild := range guilds {
-			b.UnregisterCommands(guild.ID)
-			time.Sleep(1 * time.Second)
+	if !b.GetConfig().DisableCommandUnregister {
+		log.Println("Unregistering all commands from all guilds...")
+		guilds, err := b.Session.UserGuilds(100, "", "", true)
+		if err != nil {
+			log.Printf("Could not fetch guilds: %v", err)
+		} else {
+			for _, guild := range guilds {
+				b.UnregisterCommands(guild.ID)
+				time.Sleep(1 * time.Second)
+			}
 		}
+	} else {
+		log.Println("Skipping command unregistering as per environment configuration.")
 	}
 
 	log.Println("Registering commands for enabled guilds...")

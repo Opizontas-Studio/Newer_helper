@@ -50,9 +50,10 @@ type Config struct {
 	LogChannelID            string
 	DeveloperUserIDs        []string
 	SuperAdminRoleIDs       []string
-	DisableInitialScan      bool
-	ServerConfigs           map[string]ServerConfig
-	PunishmentStatsChannels map[string]PunishmentStatsChannel
+	DisableInitialScan         bool
+	DisableCommandUnregister bool
+	ServerConfigs              map[string]ServerConfig
+	PunishmentStatsChannels    map[string]PunishmentStatsChannel
 	RollCardConfigs         RollCardConfig
 	TaskConfig              map[string]struct {
 		Data map[string]struct {
