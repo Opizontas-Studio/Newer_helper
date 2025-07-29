@@ -26,7 +26,7 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 		defs.RegisterTopChannel,
 		defs.AdsBoardAdmin,
 		defs.DailyPunishmentStats,
-		defs.SearchPresetByMessage,
+		defs.SearchPreset,
 		defs.GuildsAdmin,
 	}
 }

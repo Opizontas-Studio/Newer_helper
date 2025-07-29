@@ -16,8 +16,8 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 		switch i.ApplicationCommandData().Name {
 		case "快速处罚":
 			punish.HandleQuickPunishCommand(s, i, b)
-		case "以消息文本搜索预设":
-			preset.HandleSearchPresetByMessage(s, i, b)
+		case "搜索预设":
+			preset.HandleSearchPresetCommand(s, i, b)
 		default:
 			if h, ok := b.CommandHandlers[i.ApplicationCommandData().Name]; ok {
 				h(s, i)
@@ -31,6 +31,8 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 			preset.HandlePresetConfirmationInteraction(s, i, b)
 		} else if strings.HasPrefix(customID, "search_preset_reply_") {
 			preset.HandleSearchPresetReply(s, i, b)
+		} else if strings.HasPrefix(customID, "search_preset_again_") {
+			preset.HandleSearchPresetAgain(s, i, b)
 		} else if strings.HasPrefix(customID, "punish_page_v2:") {
 			punish.HandlePunishPaginationV2(s, i, b)
 		} else if strings.HasPrefix(customID, "roll_again:") {
@@ -50,6 +52,8 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 		customID := i.ModalSubmitData().CustomID
 		if strings.HasPrefix(customID, "punish_modal_") {
 			punish.HandlePunishModalSubmit(s, i, b)
+		} else if strings.HasPrefix(customID, "search_preset_modal_") {
+			preset.HandleSearchPresetModal(s, i, b)
 		}
 	case discordgo.InteractionApplicationCommandAutocomplete:
 		if i.ApplicationCommandData().Name == "rollcard" {
