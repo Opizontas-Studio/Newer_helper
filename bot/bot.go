@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/go-ego/gse"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -39,6 +40,7 @@ type Bot struct {
 	PendingPresetsMutex sync.Mutex
 	DB                  *sql.DB
 	DBX                 *sqlx.DB
+	Segmenter           gse.Segmenter
 	activeScanCount     int
 	scheduler           *Scheduler
 	ctx                 context.Context
@@ -77,6 +79,10 @@ func (b *Bot) GetCtx() context.Context {
 	return b.ctx
 }
 
+func (b *Bot) GetSegmenter() *gse.Segmenter {
+	return &b.Segmenter
+}
+
 func New(cfg *model.Config, db *sql.DB, dbx *sqlx.DB) (*Bot, error) {
 	dg, err := discordgo.New("Bot " + cfg.BotToken)
 	if err != nil {
@@ -87,6 +93,11 @@ func New(cfg *model.Config, db *sql.DB, dbx *sqlx.DB) (*Bot, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	log.Println("Initializing gse segmenter...")
+	var seg gse.Segmenter
+	seg.LoadDict() // Load the default embedded dictionary
+	log.Println("gse segmenter initialized.")
+
 	b := &Bot{
 		Session:         dg,
 		AppID:           cfg.AppID,
@@ -94,6 +105,7 @@ func New(cfg *model.Config, db *sql.DB, dbx *sqlx.DB) (*Bot, error) {
 		PendingPresets:  make(map[string]*PendingPreset),
 		DB:              db,
 		DBX:             dbx,
+		Segmenter:       seg,
 		activeScanCount: 0,
 		ctx:             ctx,
 		cancel:          cancel,

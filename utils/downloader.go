@@ -17,8 +17,8 @@ func DownloadFile(url, destDir, fileName string) (string, error) {
 	// Create the full file path
 	filePath := filepath.Join(destDir, fileName)
 
-	// Get the data
-	resp, err := http.Get(url)
+	// Get the data using the global client
+	resp, err := GlobalHTTPClient.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to download file: %w", err)
 	}

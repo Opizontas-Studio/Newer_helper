@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/yanyiwu/gojieba"
 )
 
 func HandleSearchPresetByMessage(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
@@ -55,10 +54,8 @@ func HandleSearchPresetByMessage(s *discordgo.Session, i *discordgo.InteractionC
 		return
 	}
 
-	jieba := gojieba.NewJieba()
-	defer jieba.Free()
-
-	keywords := jieba.CutForSearch(targetMessage.Content, true)
+	segmenter := b.GetSegmenter()
+	keywords := segmenter.CutSearch(targetMessage.Content, true)
 
 	var matchedPresets []model.PresetMessage
 	for _, preset := range serverConfig.PresetMessages {

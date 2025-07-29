@@ -25,6 +25,7 @@ profile.cov
 go.work
 go.work.sum
 todo.md
+.md 
 
 # env file
 .env
