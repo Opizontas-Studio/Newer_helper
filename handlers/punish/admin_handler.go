@@ -56,7 +56,12 @@ func handleActionV2(s *discordgo.Session, i *discordgo.InteractionCreate, search
 	var record *model.PunishmentRecord
 	var err error
 
-	punishDB, err := database.InitPunishmentDB("data/kick_user.db")
+	kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
+	if err != nil {
+		utils.SendFollowUpError(s, i.Interaction, "加载配置失败。")
+		return
+	}
+	punishDB, err := database.InitPunishmentDB(kickConfig.InitConfig.DBPath)
 	if err != nil {
 		utils.SendFollowUpError(s, i.Interaction, "连接惩罚数据库失败。")
 		return
@@ -126,7 +131,12 @@ func handleActionV2(s *discordgo.Session, i *discordgo.InteractionCreate, search
 }
 
 func displayPunishmentsV2(s *discordgo.Session, i *discordgo.Interaction, searchBy, input string, page int) {
-	db, err := database.InitPunishmentDB("data/kick_user.db")
+	kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
+	if err != nil {
+		utils.SendFollowUpError(s, i, "加载配置失败。")
+		return
+	}
+	db, err := database.InitPunishmentDB(kickConfig.InitConfig.DBPath)
 	if err != nil {
 		utils.SendFollowUpError(s, i, "连接惩罚数据库失败。")
 		return
@@ -255,7 +265,7 @@ func revokePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, db *
 
 	// Remove added roles and timed tasks
 	if len(guildConfig.Timeout.AddRole) > 0 {
-		taskDB, err := database.InitTimedTaskDB("data/timed_tasks.db")
+		taskDB, err := database.InitTimedTaskDB(kickConfig.InitConfig.DBPath)
 		if err == nil {
 			defer taskDB.Close()
 			for _, roleID := range guildConfig.Timeout.AddRole {
