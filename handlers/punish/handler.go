@@ -98,9 +98,13 @@ func HandlePunishModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreat
 // applyAndLogPunishment is the core function that handles the punishment process.
 // It centralizes the logic for configuration loading, validation, database operations, and notifications.
 func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, targetUser *discordgo.User, reason, evidenceLinks string) {
-	if !utils.CheckAndSetPunishLock(targetUser.ID) {
-		utils.SendFollowUpError(s, i.Interaction, "对该用户的处罚操作过于频繁，请 5 分钟后再试。")
-		return
+	isSelfPunish := i.Member.User.ID == targetUser.ID
+
+	if !isSelfPunish {
+		if !utils.CheckAndSetPunishLock(targetUser.ID) {
+			utils.SendFollowUpError(s, i.Interaction, "对该用户的处罚操作过于频繁，请 5 分钟后再试。")
+			return
+		}
 	}
 
 	kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
@@ -121,7 +125,7 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 		utils.SendFollowUpError(s, i.Interaction, "Could not retrieve member details.")
 		return
 	}
-	if isUserWhitelisted(targetMember, configEntry) {
+	if !isSelfPunish && isUserWhitelisted(targetMember, configEntry) {
 		utils.SendFollowUpError(s, i.Interaction, "This user is on the whitelist and cannot be punished.")
 		return
 	}
@@ -132,6 +136,12 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 	if err != nil {
 		log.Printf("Error processing evidence: %v", err)
 		utils.SendFollowUpError(s, i.Interaction, "Failed to process evidence.")
+		return
+	}
+
+	if isSelfPunish {
+		embed := buildPunishmentEmbed(i, targetUser, reason, allEvidence, nil, nil, kickConfig, false, "", -1)
+		sendResponseMessages(s, i, targetUser, embed, false, "", reason)
 		return
 	}
 

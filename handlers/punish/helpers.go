@@ -282,11 +282,19 @@ func buildPunishmentEmbed(i *discordgo.InteractionCreate, targetUser *discordgo.
 				Value: reason,
 			},
 		},
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("由 %s 操作 | 处罚ID: %d", i.Member.User.Username, punishmentID),
-		},
 		Timestamp: time.Now().Format(time.RFC3339),
 		Color:     0xff0000,
+	}
+
+	if punishmentID == -1 {
+		embed.Description = "用户进行了一次自我处罚，本次操作不会被记录。"
+		embed.Footer = &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("由 %s 操作", i.Member.User.Username),
+		}
+	} else {
+		embed.Footer = &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("由 %s 操作 | 处罚ID: %d", i.Member.User.Username, punishmentID),
+		}
 	}
 
 	if len(allEvidence) > 0 {
@@ -392,7 +400,7 @@ func sendResponseMessages(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 // logPunishment sends a detailed log message to the configured log channel.
 func logPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, configEntry model.KickConfigEntry, targetUser *discordgo.User, messageLinks string, punishmentMessage *discordgo.Message, timeoutApplied bool, timeoutDurationStr string) {
-	if configEntry.LogChannelID == "" {
+	if configEntry.LogChannelID == "" || i.Member.User.ID == targetUser.ID {
 		return
 	}
 
