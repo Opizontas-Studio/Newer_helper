@@ -29,7 +29,7 @@ var ManageAutoTrigger = &discordgo.ApplicationCommand{
 		{
 			Type:        discordgo.ApplicationCommandOptionString,
 			Name:        "keyword",
-			Description: "The keyword to bind.",
+			Description: "The keyword(s) to bind, separated by commas.",
 			Required:    false,
 		},
 		{
@@ -38,6 +38,12 @@ var ManageAutoTrigger = &discordgo.ApplicationCommand{
 			Description:  "The ID of the preset to trigger.",
 			Required:     false,
 			Autocomplete: true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionInteger,
+			Name:        "trigger_id",
+			Description: "The ID of the auto-trigger rule to modify.",
+			Required:    false,
 		},
 		{
 			Type:        discordgo.ApplicationCommandOptionChannel,

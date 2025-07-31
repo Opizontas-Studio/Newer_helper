@@ -71,12 +71,13 @@ func CreateGuildTables(db *sql.DB) error {
 	}
 
 	createAutoTriggersTableSQL := `CREATE TABLE IF NOT EXISTS auto_triggers (
+		"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 		"guild_id" TEXT NOT NULL,
-		"keyword" TEXT NOT NULL,
+		"keywords" TEXT NOT NULL,
 		"preset_id" TEXT NOT NULL,
 		"channel_id" TEXT NOT NULL,
-		PRIMARY KEY (guild_id, keyword, channel_id),
-		FOREIGN KEY(guild_id) REFERENCES guild_configs(guild_id)
+		FOREIGN KEY(guild_id) REFERENCES guild_configs(guild_id),
+		UNIQUE (guild_id, preset_id, channel_id)
 	);`
 	_, err = db.Exec(createAutoTriggersTableSQL)
 	if err != nil {
@@ -165,7 +166,7 @@ func LoadConfigFromDB(db *sql.DB, cfg *model.Config) error {
 	defer punishmentStatsRows.Close()
 
 	cfg.PunishmentStatsChannels = make(map[string]model.PunishmentStatsChannel)
-	autoTriggerRows, err := db.Query("SELECT guild_id, keyword, preset_id, channel_id FROM auto_triggers")
+	autoTriggerRows, err := db.Query("SELECT id, guild_id, keywords, preset_id, channel_id FROM auto_triggers")
 	if err != nil {
 		return err
 	}
@@ -173,10 +174,11 @@ func LoadConfigFromDB(db *sql.DB, cfg *model.Config) error {
 
 	for autoTriggerRows.Next() {
 		var at model.AutoTriggerConfig
-		var guildID string
-		if err := autoTriggerRows.Scan(&guildID, &at.Keyword, &at.PresetID, &at.ChannelID); err != nil {
+		var guildID, keywords string
+		if err := autoTriggerRows.Scan(&at.ID, &guildID, &keywords, &at.PresetID, &at.ChannelID); err != nil {
 			return err
 		}
+		at.Keywords = strings.Split(keywords, ",")
 		if sc, ok := cfg.ServerConfigs[guildID]; ok {
 			sc.AutoTriggers = append(sc.AutoTriggers, at)
 			cfg.ServerConfigs[guildID] = sc
@@ -414,15 +416,28 @@ func UpdatePunishmentStatsChannel(db *sql.DB, channelID, messageID string) error
 
 	return tx.Commit()
 }
-
 func AddAutoTrigger(db *sql.DB, guildID, keyword, presetID, channelID string) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
 
-	_, err = tx.Exec("INSERT INTO auto_triggers (guild_id, keyword, preset_id, channel_id) VALUES (?, ?, ?, ?)",
-		guildID, keyword, presetID, channelID)
+	var keywords string
+	err = tx.QueryRow("SELECT keywords FROM auto_triggers WHERE guild_id = ? AND preset_id = ? AND channel_id = ?", guildID, presetID, channelID).Scan(&keywords)
+	if err != nil && err != sql.ErrNoRows {
+		tx.Rollback()
+		return err
+	}
+
+	if err == sql.ErrNoRows {
+		_, err = tx.Exec("INSERT INTO auto_triggers (guild_id, keywords, preset_id, channel_id) VALUES (?, ?, ?, ?)",
+			guildID, keyword, presetID, channelID)
+	} else {
+		newKeywords := keywords + "," + keyword
+		_, err = tx.Exec("UPDATE auto_triggers SET keywords = ? WHERE guild_id = ? AND preset_id = ? AND channel_id = ?",
+			newKeywords, guildID, presetID, channelID)
+	}
+
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -437,15 +452,43 @@ func DeleteAutoTrigger(db *sql.DB, guildID, keyword, channelID string) error {
 		return err
 	}
 
-	_, err = tx.Exec("DELETE FROM auto_triggers WHERE guild_id = ? AND keyword = ? AND channel_id = ?", guildID, keyword, channelID)
+	rows, err := tx.Query("SELECT id, keywords FROM auto_triggers WHERE guild_id = ? AND channel_id = ?", guildID, channelID)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var keywords string
+		if err := rows.Scan(&id, &keywords); err != nil {
+			continue
+		}
+
+		keywordList := strings.Split(keywords, ",")
+		newKeywordList := []string{}
+		for _, k := range keywordList {
+			if k != keyword {
+				newKeywordList = append(newKeywordList, k)
+			}
+		}
+
+		if len(newKeywordList) == 0 {
+			_, err = tx.Exec("DELETE FROM auto_triggers WHERE id = ?", id)
+		} else {
+			newKeywords := strings.Join(newKeywordList, ",")
+			_, err = tx.Exec("UPDATE auto_triggers SET keywords = ? WHERE id = ?", newKeywords, id)
+		}
+
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
 
 	return tx.Commit()
 }
-
 func GetGuildConfig(db *sql.DB, guildID string) (*model.ServerConfig, error) {
 	row := db.QueryRow("SELECT name, admin_role_ids, user_role_ids, enable FROM guild_configs WHERE guild_id = ?", guildID)
 
@@ -532,14 +575,14 @@ func GetAllGuilds(db *sql.DB) ([]model.ServerConfig, error) {
 	}
 	return guilds, nil
 }
-
 func OverwriteAutoTrigger(db *sql.DB, guildID, keyword, presetID, channelID string) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
 
-	_, err = tx.Exec("UPDATE auto_triggers SET preset_id = ? WHERE guild_id = ? AND keyword = ? AND channel_id = ?", presetID, guildID, keyword, channelID)
+	_, err = tx.Exec("UPDATE auto_triggers SET keywords = ? WHERE guild_id = ? AND preset_id = ? AND channel_id = ?",
+		keyword, guildID, presetID, channelID)
 	if err != nil {
 		tx.Rollback()
 		return err

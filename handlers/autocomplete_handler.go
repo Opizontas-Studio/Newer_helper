@@ -131,7 +131,7 @@ func handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, co
 							name = name[:80]
 						}
 						choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
-							Name:  fmt.Sprintf("(%s) %s", p.ID[:4], name),
+							Name:  fmt.Sprintf("(%s) %s", p.ID, name),
 							Value: p.ID,
 						})
 					}

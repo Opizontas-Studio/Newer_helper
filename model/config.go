@@ -18,9 +18,10 @@ type TopChannelConfig struct {
 
 // AutoTriggerConfig 定义了自动触发的配置
 type AutoTriggerConfig struct {
-	Keyword   string `json:"keyword"`
-	PresetID  string `json:"preset_id"`
-	ChannelID string `json:"channel_id"`
+	ID        int      `json:"id"`
+	Keywords  []string `json:"keywords"`
+	PresetID  string   `json:"preset_id"`
+	ChannelID string   `json:"channel_id"`
 }
 
 // ServerConfig 定义了每个服务器的配置
@@ -45,17 +46,17 @@ type PunishmentStatsChannel struct {
 
 // Config 存储应用程序的配置
 type Config struct {
-	BotToken                string
-	AppID                   string
-	LogChannelID            string
-	DeveloperUserIDs        []string
-	SuperAdminRoleIDs       []string
-	DisableInitialScan         bool
+	BotToken                 string
+	AppID                    string
+	LogChannelID             string
+	DeveloperUserIDs         []string
+	SuperAdminRoleIDs        []string
+	DisableInitialScan       bool
 	DisableCommandUnregister bool
-	ServerConfigs              map[string]ServerConfig
-	PunishmentStatsChannels    map[string]PunishmentStatsChannel
-	RollCardConfigs         RollCardConfig
-	TaskConfig              map[string]struct {
+	ServerConfigs            map[string]ServerConfig
+	PunishmentStatsChannels  map[string]PunishmentStatsChannel
+	RollCardConfigs          RollCardConfig
+	TaskConfig               map[string]struct {
 		Data map[string]struct {
 			ChannelID string `json:"channel_id"`
 			TableName string `json:"table_name"`

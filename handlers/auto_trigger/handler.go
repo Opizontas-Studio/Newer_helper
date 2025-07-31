@@ -6,10 +6,20 @@ import (
 	"discord-bot/utils/database"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
+
+func extractPresetID(input string) string {
+	re := regexp.MustCompile(`^\((.*?)\)`)
+	matches := re.FindStringSubmatch(input)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+	return strings.TrimSpace(input)
+}
 
 func HandleManageAutoTriggerCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
 	serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
@@ -49,7 +59,8 @@ func HandleManageAutoTriggerCommand(s *discordgo.Session, i *discordgo.Interacti
 
 func handleBindKeyword(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, optionMap map[string]*discordgo.ApplicationCommandInteractionDataOption) {
 	keywordsRaw := optionMap["keyword"].StringValue()
-	presetID := optionMap["id"].StringValue()
+	presetIDRaw := optionMap["id"].StringValue()
+	presetID := extractPresetID(presetIDRaw)
 	channel := optionMap["channel"].ChannelValue(s)
 
 	if keywordsRaw == "" || presetID == "" || channel == nil {
@@ -118,7 +129,11 @@ func handleListConfig(s *discordgo.Session, i *discordgo.InteractionCreate, b *b
 
 	var response string
 	for _, trigger := range serverConfig.AutoTriggers {
-		response += fmt.Sprintf("Channel: <#%s>, Keyword: `%s`, Preset ID: `%s`\n", trigger.ChannelID, trigger.Keyword, trigger.PresetID)
+		response += fmt.Sprintf("ID: %d, Channel: <#%s>, Keywords: `%s`, Preset ID: `%s`\n", trigger.ID, trigger.ChannelID, strings.Join(trigger.Keywords, ", "), trigger.PresetID)
+	}
+
+	if response == "" {
+		response = "No auto-triggers configured for this server."
 	}
 
 	utils.SendEphemeralResponse(s, i, response)
@@ -126,7 +141,8 @@ func handleListConfig(s *discordgo.Session, i *discordgo.InteractionCreate, b *b
 
 func handleOverwriteKeyword(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, optionMap map[string]*discordgo.ApplicationCommandInteractionDataOption) {
 	keywordsRaw := optionMap["keyword"].StringValue()
-	presetID := optionMap["id"].StringValue()
+	presetIDRaw := optionMap["id"].StringValue()
+	presetID := extractPresetID(presetIDRaw)
 	channel := optionMap["channel"].ChannelValue(s)
 
 	if keywordsRaw == "" || presetID == "" || channel == nil {
@@ -146,8 +162,7 @@ func handleOverwriteKeyword(s *discordgo.Session, i *discordgo.InteractionCreate
 			utils.SendEphemeralResponse(s, i, fmt.Sprintf("Error overwriting keyword: `%s`.", trimmedKeyword))
 			return
 		}
-
-		b.ReloadConfig()
-		utils.SendEphemeralResponse(s, i, fmt.Sprintf("Successfully overwrote keywords `%s` with preset `%s` in channel <#%s>.", keywordsRaw, presetID, channel.ID))
 	}
+	b.ReloadConfig()
+	utils.SendEphemeralResponse(s, i, fmt.Sprintf("Successfully overwrote keywords `%s` with preset `%s` in channel <#%s>.", keywordsRaw, presetID, channel.ID))
 }

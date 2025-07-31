@@ -32,6 +32,6 @@ func addHandlers(b *bot.Bot) {
 
 	b.Session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		HandleMessageCreate(s, m, b)
-		HandleAutoTriggerMessageCreate(s, m, b)
+		AutoTriggerHandler(s, m, b)
 	})
 }

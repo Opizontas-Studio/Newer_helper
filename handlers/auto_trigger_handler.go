@@ -3,22 +3,13 @@ package handlers
 import (
 	"discord-bot/bot"
 	"discord-bot/model"
-	"fmt"
+	"discord-bot/utils"
 	"log"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-func findPreset(presets []model.PresetMessage, id string) (model.PresetMessage, error) {
-	for _, p := range presets {
-		if p.ID == id {
-			return p, nil
-		}
-	}
-	return model.PresetMessage{}, fmt.Errorf("preset with id %s not found", id)
-}
-
-func HandleAutoTriggerMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate, b *bot.Bot) {
+func AutoTriggerHandler(s *discordgo.Session, m *discordgo.MessageCreate, b *bot.Bot) {
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
@@ -29,18 +20,25 @@ func HandleAutoTriggerMessageCreate(s *discordgo.Session, m *discordgo.MessageCr
 	}
 
 	for _, trigger := range serverConfig.AutoTriggers {
-		if trigger.ChannelID == m.ChannelID && trigger.Keyword == m.Content {
-			preset, err := findPreset(serverConfig.PresetMessages, trigger.PresetID)
-			if err != nil {
-				log.Printf("Preset not found for ID: %s", trigger.PresetID)
-				continue
-			}
+		for _, keyword := range trigger.Keywords {
+			if trigger.ChannelID == m.ChannelID && keyword == m.Content {
+				var preset *model.PresetMessage
+				for _, p := range serverConfig.PresetMessages {
+					if p.ID == trigger.PresetID {
+						preset = &p
+						break
+					}
+				}
 
-			_, err = s.ChannelMessageSendReply(m.ChannelID, preset.Value, m.Reference())
-			if err != nil {
-				log.Printf("Failed to send preset message reply: %v", err)
+				if preset != nil {
+					_, err := s.ChannelMessageSend(m.ChannelID, preset.Value)
+					if err != nil {
+						log.Printf("Error sending auto-trigger message: %v", err)
+						utils.SendPrivateMessage(s, m.ChannelID, "Error sending preset message.")
+					}
+				}
+				return
 			}
-			return // Stop after first match
 		}
 	}
 }
