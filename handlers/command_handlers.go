@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"discord-bot/bot"
 	"discord-bot/handlers/admin"
 	"discord-bot/handlers/auto_trigger"
@@ -125,7 +126,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 
 			utils.SendEphemeralResponse(s, i, fmt.Sprintf("Scan started with mode: %s. Target guild: %s", scanMode, targetGuildID))
 
-			go scanner.Scan(s, b.GetConfig().LogChannelID, scanMode, targetGuildID, nil)
+			go scanner.Scan(s, b.GetConfig().LogChannelID, scanMode, targetGuildID, context.Background())
 		},
 		"setup-roll-panel": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
