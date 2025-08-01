@@ -95,13 +95,30 @@ func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate, b *bo
 
 			// Only process links that do NOT have a message ID part.
 			if messageIDPart == "" {
-				newLink := baseURL + "/0"
+				var newLink string
+				urlParts := strings.Split(baseURL, "/")
+				if len(urlParts) > 0 {
+					threadID := urlParts[len(urlParts)-1]
+					ch, err := s.Channel(threadID)
+
+					// If we can successfully fetch the channel and it's a thread, use its ID for the first message.
+					if err == nil && ch.IsThread() {
+						newLink = fmt.Sprintf("%s/%s", baseURL, ch.ID)
+					} else {
+						// Otherwise, fall back to the original logic.
+						if err != nil {
+							log.Printf("Could not fetch channel %s to check if it is a thread, falling back to default. Error: %v", threadID, err)
+						}
+						newLink = baseURL + "/0"
+					}
+				} else {
+					newLink = baseURL + "/0"
+				}
+
 				newContent = strings.Replace(newContent, baseURL, newLink, 1)
 				modified = true
 			}
 		}
-
-		// If no links were modified (e.g., all links already had message IDs), do nothing.
 		if !modified {
 			return
 		}
