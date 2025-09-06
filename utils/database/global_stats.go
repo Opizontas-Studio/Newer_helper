@@ -192,7 +192,96 @@ func GetGlobalStats(guildMappings map[string]model.GuildMapping, threadConfigs m
 }
 
 // GetGlobalLatestPosts 获取全局最新帖子
-func GetGlobalLatestPosts(guildMappings map[string]model.GuildMapping, threadConfigs map[string]model.ThreadGuildConfig, count int) ([]model.Post, error) {
+// func GetGlobalLatestPosts(guildMappings map[string]model.GuildMapping, threadConfigs map[string]model.ThreadGuildConfig, count int) ([]model.Post, error) {
+// 	var allPosts []model.Post
+// 	var mu sync.Mutex
+// 	var wg sync.WaitGroup
+
+// 	for guildID, mapping := range guildMappings {
+// 		wg.Add(1)
+// 		go func(gID string, gMapping model.GuildMapping) {
+// 			defer wg.Done()
+
+// 			// 获取数据库路径
+// 			dbPath := gMapping.Database
+// 			if dbPath == "" {
+// 				if threadConfig, ok := threadConfigs[gID]; ok {
+// 					dbPath = threadConfig.Database
+// 				}
+// 			}
+
+// 			if dbPath == "" {
+// 				return
+// 			}
+
+// 			// 获取表名列表
+// 			var tableNames []string
+// 			if len(gMapping.DataBaseTableNameMapping) > 0 {
+// 				for tableName := range gMapping.DataBaseTableNameMapping {
+// 					tableNames = append(tableNames, tableName)
+// 				}
+// 			} else if threadConfig, ok := threadConfigs[gID]; ok && threadConfig.TableName != "" && threadConfig.TableName != "all_posts" {
+// 				tableNames = append(tableNames, threadConfig.TableName)
+// 			}
+
+// 			// 连接数据库
+// 			db, err := InitDB(dbPath)
+// 			if err != nil {
+// 				log.Printf("Error connecting to database for guild %s: %v", gID, err)
+// 				return
+// 			}
+// 			defer db.Close()
+
+// 			if len(tableNames) == 0 {
+// 				tableNames, err = GetAllTableNames(db)
+// 				if err != nil {
+// 					log.Printf("Error getting all table names for guild %s: %v", gID, err)
+// 					return
+// 				}
+// 			}
+
+// 			if len(tableNames) == 0 {
+// 				return
+// 			}
+
+// 			// 获取最新帖子
+// 			posts, err := GetLatestPosts(db, tableNames, count*2) // 获取更多以便后续筛选
+// 			if err != nil {
+// 				log.Printf("Error getting latest posts for guild %s: %v", gID, err)
+// 				return
+// 			}
+
+// 			// 添加到结果中
+// 			mu.Lock()
+// 			allPosts = append(allPosts, posts...)
+// 			mu.Unlock()
+// 		}(guildID, mapping)
+// 	}
+
+// 	wg.Wait()
+
+// 	// 按时间戳排序并限制数量
+// 	if len(allPosts) > 0 {
+// 		// 按时间戳降序排序
+// 		for i := 0; i < len(allPosts)-1; i++ {
+// 			for j := i + 1; j < len(allPosts); j++ {
+// 				if allPosts[i].Timestamp < allPosts[j].Timestamp {
+// 					allPosts[i], allPosts[j] = allPosts[j], allPosts[i]
+// 				}
+// 			}
+// 		}
+
+// 		// 限制返回数量
+// 		if len(allPosts) > count {
+// 			allPosts = allPosts[:count]
+// 		}
+// 	}
+
+// 	return allPosts, nil
+// }
+
+// GetGlobalPostsInLast24Hours 获取全局过去24小时内的最新帖子
+func GetGlobalPostsInLast24Hours(guildMappings map[string]model.GuildMapping, threadConfigs map[string]model.ThreadGuildConfig) ([]model.Post, error) {
 	var allPosts []model.Post
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -214,7 +303,6 @@ func GetGlobalLatestPosts(guildMappings map[string]model.GuildMapping, threadCon
 				return
 			}
 
-			// 获取表名列表
 			// 获取表名列表
 			var tableNames []string
 			if len(gMapping.DataBaseTableNameMapping) > 0 {
@@ -245,10 +333,10 @@ func GetGlobalLatestPosts(guildMappings map[string]model.GuildMapping, threadCon
 				return
 			}
 
-			// 获取最新帖子
-			posts, err := GetLatestPosts(db, tableNames, count*2) // 获取更多以便后续筛选
+			// 获取过去24小时内的帖子
+			posts, err := GetPostsInLast24Hours(db, tableNames)
 			if err != nil {
-				log.Printf("Error getting latest posts for guild %s: %v", gID, err)
+				log.Printf("Error getting posts from last 24 hours for guild %s: %v", gID, err)
 				return
 			}
 
@@ -261,20 +349,14 @@ func GetGlobalLatestPosts(guildMappings map[string]model.GuildMapping, threadCon
 
 	wg.Wait()
 
-	// 按时间戳排序并限制数量
+	// 按时间戳降序排序
 	if len(allPosts) > 0 {
-		// 按时间戳降序排序
 		for i := 0; i < len(allPosts)-1; i++ {
 			for j := i + 1; j < len(allPosts); j++ {
 				if allPosts[i].Timestamp < allPosts[j].Timestamp {
 					allPosts[i], allPosts[j] = allPosts[j], allPosts[i]
 				}
 			}
-		}
-
-		// 限制返回数量
-		if len(allPosts) > count {
-			allPosts = allPosts[:count]
 		}
 	}
 

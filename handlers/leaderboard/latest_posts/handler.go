@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -37,8 +36,9 @@ func LoadTagMapping(guildID string) (map[string]map[string]string, error) {
 	return mapping, nil
 }
 
-// CreateLatestPostsEmbed creates a new embed for the latest posts
-func CreateLatestPostsEmbed(guildID string) (*discordgo.MessageEmbed, error) {
+// CreateLatestPostsEmbed creates a new embed for the latest posts with carousel functionality
+// Returns the embed and the actual page used (may be reset if carouselPage was out of range)
+func CreateLatestPostsEmbed(guildID string, carouselPage int) (*discordgo.MessageEmbed, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
@@ -84,34 +84,47 @@ func CreateLatestPostsEmbed(guildID string) (*discordgo.MessageEmbed, error) {
 	}
 	defer db.Close()
 
-	posts, err := database.GetLatestPosts(db, tableNames, 12)
+	// 获取过去24小时内的所有卡片
+	posts, err := database.GetPostsInLast24Hours(db, tableNames)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get latest posts from db: %w", err)
-	}
-
-	sort.Slice(posts, func(i, j int) bool {
-		return posts[i].Timestamp > posts[j].Timestamp
-	})
-
-	if len(posts) > 12 {
-		posts = posts[:12]
+		return nil, fmt.Errorf("failed to get posts from last 24 hours: %w", err)
 	}
 
 	if len(posts) == 0 {
 		return nil, nil // No posts, no embed
 	}
 
+	// 计算分页参数
+	const postsPerPage = 12
+	totalPages := (len(posts) + postsPerPage - 1) / postsPerPage
+
+	// 确保页码在有效范围内
+	if carouselPage < 0 || carouselPage >= totalPages {
+		carouselPage = 0
+	}
+
+	// 计算当前页的数据范围
+	startIdx := carouselPage * postsPerPage
+	endIdx := startIdx + postsPerPage
+	if endIdx > len(posts) {
+		endIdx = len(posts)
+	}
+
+	currentPagePosts := posts[startIdx:endIdx]
+
 	tagMapping, err := LoadTagMapping(guildID)
 	if err != nil {
 		return nil, err
 	}
 
+	// 构建带有页码信息的标题
+	title := fmt.Sprintf("📑 最新卡片 (第%d页/共%d页)", carouselPage+1, totalPages)
 	latestCardsEmbed := &discordgo.MessageEmbed{
-		Title: "📑 最新卡片",
+		Title: title,
 		Color: 0x0099ff,
 	}
 
-	for _, post := range posts {
+	for _, post := range currentPagePosts {
 		value := fmt.Sprintf("> %s · <t:%d:R>", post.Author, post.Timestamp)
 		if post.ID != "" {
 			value += fmt.Sprintf("\n> <#%s>\n", post.ID)
