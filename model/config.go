@@ -108,3 +108,17 @@ type KickConfig struct {
 	} `json:"initConfig"`
 	Data map[string]KickConfigEntry `json:"data"`
 }
+
+// PersistentPanelInfo 存储持久化面板信息
+type PersistentPanelInfo struct {
+	MessageID   string `json:"message_id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Scope       string `json:"scope"`
+	LastUpdated int64  `json:"last_updated"`
+}
+
+// PersistentPanelData 存储所有持久化面板数据
+type PersistentPanelData struct {
+	Panels map[string]map[string]*PersistentPanelInfo `json:"panels"` // guild_id -> channel_id -> panel_info
+}

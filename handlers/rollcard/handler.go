@@ -205,7 +205,7 @@ func buildEmbeds(posts []model.Post, tagMapping map[string]map[string]string, us
 			},
 		}
 		if post.CoverImageURL != "" {
-			embed.Image = &discordgo.MessageEmbedImage{URL: post.CoverImageURL}
+			embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: post.CoverImageURL}
 		}
 		embeds = append(embeds, embed)
 	}

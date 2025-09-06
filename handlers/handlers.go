@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"discord-bot/bot"
+	"discord-bot/handlers/rollcard"
 	"log"
 
 	"github.com/bwmarrin/discordgo"
@@ -31,6 +32,7 @@ func addHandlers(b *bot.Bot) {
 	})
 
 	b.Session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
+		rollcard.HandlePersistentPanelRefresh(s, m, b)
 		HandleMessageCreate(s, m, b)
 		AutoTriggerHandler(s, m, b)
 	})
