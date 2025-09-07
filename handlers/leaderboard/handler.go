@@ -165,8 +165,9 @@ func UpdateLeaderboard(b model.Bot, guildID string) {
 
 	config := b.GetConfig()
 
-	// 先尝试当前页码，如果失败则重置
-	embeds, err := buildLeaderboardEmbedsWithCarousel(guildID, config, state.CarouselPage)
+	// 获取 embed 和总页数
+	// 注意: buildLeaderboardEmbedsWithCarousel 内部会处理越界的 carouselPage
+	embeds, totalPages, err := buildLeaderboardEmbedsWithCarousel(guildID, config, state.CarouselPage)
 	if err != nil {
 		log.Printf("Failed to build leaderboard embeds for guild %s: %v", guildID, err)
 		return
@@ -176,15 +177,10 @@ func UpdateLeaderboard(b model.Bot, guildID string) {
 		return
 	}
 
-	// 检查是否需要重置轮播页码 (如果没有最新卡片embed，说明页码可能越界了)
-	if len(embeds) < 2 || embeds[1] == nil {
-		// 重置到第0页
+	// 检查页码是否越界。如果越界，buildLeaderboardEmbedsWithCarousel
+	// 内部已经将内容重置为第0页，我们只需更新状态中的页码即可。
+	if state.CarouselPage >= totalPages {
 		state.CarouselPage = 0
-		embeds, err = buildLeaderboardEmbedsWithCarousel(guildID, config, state.CarouselPage)
-		if err != nil {
-			log.Printf("Failed to build leaderboard embeds for guild %s after reset: %v", guildID, err)
-			return
-		}
 	}
 
 	// 更新消息
@@ -206,29 +202,31 @@ func UpdateLeaderboard(b model.Bot, guildID string) {
 }
 
 func buildLeaderboardEmbeds(targetGuildID string, cfg *model.Config) ([]*discordgo.MessageEmbed, error) {
-	return buildLeaderboardEmbedsWithCarousel(targetGuildID, cfg, 0)
+	embeds, _, err := buildLeaderboardEmbedsWithCarousel(targetGuildID, cfg, 0)
+	return embeds, err
 }
 
-func buildLeaderboardEmbedsWithCarousel(targetGuildID string, cfg *model.Config, carouselPage int) ([]*discordgo.MessageEmbed, error) {
+func buildLeaderboardEmbedsWithCarousel(targetGuildID string, cfg *model.Config, carouselPage int) ([]*discordgo.MessageEmbed, int, error) {
 	if targetGuildID == "global" {
 		return buildGlobalLeaderboardEmbedsWithCarousel(cfg, carouselPage)
 	}
 	return buildSingleGuildLeaderboardEmbedsWithCarousel(targetGuildID, cfg, carouselPage)
 }
 
-func buildSingleGuildLeaderboardEmbedsWithCarousel(guildID string, cfg *model.Config, carouselPage int) ([]*discordgo.MessageEmbed, error) {
+func buildSingleGuildLeaderboardEmbedsWithCarousel(guildID string, cfg *model.Config, carouselPage int) ([]*discordgo.MessageEmbed, int, error) {
 	var embeds []*discordgo.MessageEmbed
 	now := time.Now()
+	totalPages := 1 // 至少有1页（主embed）
 
 	// 1. 获取统计数据
 	dbMapping, err := utils.LoadDatabaseMapping()
 	if err != nil {
-		return nil, fmt.Errorf("无法加载数据库映射文件: %w", err)
+		return nil, 0, fmt.Errorf("无法加载数据库映射文件: %w", err)
 	}
 
 	stats, err := database.GetServerStats(guildID, dbMapping, cfg.ThreadConfig)
 	if err != nil {
-		return nil, fmt.Errorf("获取服务器数据时出错: %w", err)
+		return nil, 0, fmt.Errorf("获取服务器数据时出错: %w", err)
 	}
 
 	// 2. 构建主-embed
@@ -258,13 +256,15 @@ func buildSingleGuildLeaderboardEmbedsWithCarousel(guildID string, cfg *model.Co
 	embeds = append(embeds, leaderboardEmbed)
 
 	// 3. 构建最新卡片-embed 使用轮播页码
-	latestPostsEmbed, err := latest_posts.CreateLatestPostsEmbed(guildID, carouselPage)
+	latestPostsEmbed, latestPostsTotalPages, err := latest_posts.CreateLatestPostsEmbed(guildID, carouselPage)
 	if err != nil {
 		log.Printf("Error creating latest posts embed for %s: %v", guildID, err)
 		// 不返回错误，只记录日志
 	}
 	if latestPostsEmbed != nil {
 		embeds = append(embeds, latestPostsEmbed)
+		// 如果有最新卡片，总页数由最新卡片的分页决定
+		totalPages = latestPostsTotalPages
 	}
 
 	guildsDB, err := database.InitDB("data/guilds.db")
@@ -290,22 +290,22 @@ func buildSingleGuildLeaderboardEmbedsWithCarousel(guildID string, cfg *model.Co
 		}
 	}
 
-	return embeds, nil
+	return embeds, totalPages, nil
 }
 
-func buildGlobalLeaderboardEmbedsWithCarousel(cfg *model.Config, carouselPage int) ([]*discordgo.MessageEmbed, error) {
+func buildGlobalLeaderboardEmbedsWithCarousel(cfg *model.Config, carouselPage int) ([]*discordgo.MessageEmbed, int, error) {
 	var embeds []*discordgo.MessageEmbed
 	now := time.Now()
 
 	// 1. 获取全局统计数据
 	dbMapping, err := utils.LoadDatabaseMapping()
 	if err != nil {
-		return nil, fmt.Errorf("无法加载数据库映射文件: %w", err)
+		return nil, 0, fmt.Errorf("无法加载数据库映射文件: %w", err)
 	}
 
 	stats, err := database.GetGlobalStats(dbMapping, cfg.ThreadConfig)
 	if err != nil {
-		return nil, fmt.Errorf("获取全局数据时出错: %w", err)
+		return nil, 0, fmt.Errorf("获取全局数据时出错: %w", err)
 	}
 
 	// 2. 构建主-embed
@@ -339,7 +339,7 @@ func buildGlobalLeaderboardEmbedsWithCarousel(cfg *model.Config, carouselPage in
 	embeds = append(embeds, leaderboardEmbed)
 
 	// 3. 构建全局最新卡片-embed 使用轮播功能
-	latestPostsEmbed, err := buildGlobalLatestPostsEmbed(dbMapping, map[string]model.ThreadGuildConfig(cfg.ThreadConfig), carouselPage)
+	latestPostsEmbed, totalPages, err := buildGlobalLatestPostsEmbed(dbMapping, map[string]model.ThreadGuildConfig(cfg.ThreadConfig), carouselPage)
 	if err != nil {
 		log.Printf("Error creating global latest posts embed: %v", err)
 	}
@@ -347,16 +347,16 @@ func buildGlobalLeaderboardEmbedsWithCarousel(cfg *model.Config, carouselPage in
 		embeds = append(embeds, latestPostsEmbed)
 	}
 
-	return embeds, nil
+	return embeds, totalPages, nil
 }
 
-func buildGlobalLatestPostsEmbed(dbMapping map[string]model.GuildMapping, threadConfig map[string]model.ThreadGuildConfig, carouselPage int) (*discordgo.MessageEmbed, error) {
+func buildGlobalLatestPostsEmbed(dbMapping map[string]model.GuildMapping, threadConfig map[string]model.ThreadGuildConfig, carouselPage int) (*discordgo.MessageEmbed, int, error) {
 	// 获取过去24小时内的全局最新卡片
 	latestPosts, err := database.GetGlobalPostsInLast24Hours(dbMapping, threadConfig)
 	if err != nil {
 		log.Printf("Error getting global posts from last 24 hours: %v", err)
 		// 即使获取数据失败，也返回一个基础的轮播embed以保持轮播功能
-		return &discordgo.MessageEmbed{
+		embed := &discordgo.MessageEmbed{
 			Title: "📑 全局最新卡片 (数据获取失败)",
 			Color: 0x0099ff,
 			Fields: []*discordgo.MessageEmbedField{
@@ -366,12 +366,13 @@ func buildGlobalLatestPostsEmbed(dbMapping map[string]model.GuildMapping, thread
 					Inline: false,
 				},
 			},
-		}, nil
+		}
+		return embed, 1, nil // 返回1页，因为显示了错误信息
 	}
 
 	if len(latestPosts) == 0 {
 		// 没有帖子时，返回一个空内容的embed，但保持轮播格式
-		return &discordgo.MessageEmbed{
+		embed := &discordgo.MessageEmbed{
 			Title: "📑 全局最新卡片 (暂无数据)",
 			Color: 0x0099ff,
 			Fields: []*discordgo.MessageEmbedField{
@@ -381,7 +382,8 @@ func buildGlobalLatestPostsEmbed(dbMapping map[string]model.GuildMapping, thread
 					Inline: false,
 				},
 			},
-		}, nil
+		}
+		return embed, 1, nil // 返回1页，因为显示了“暂无数据”
 	}
 
 	// 计算分页参数
@@ -423,5 +425,5 @@ func buildGlobalLatestPostsEmbed(dbMapping map[string]model.GuildMapping, thread
 		})
 	}
 
-	return latestPostsEmbed, nil
+	return latestPostsEmbed, totalPages, nil
 }

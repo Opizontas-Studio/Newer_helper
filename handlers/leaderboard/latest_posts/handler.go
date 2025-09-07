@@ -38,29 +38,29 @@ func LoadTagMapping(guildID string) (map[string]map[string]string, error) {
 
 // CreateLatestPostsEmbed creates a new embed for the latest posts with carousel functionality
 // Returns the embed and the actual page used (may be reset if carouselPage was out of range)
-func CreateLatestPostsEmbed(guildID string, carouselPage int) (*discordgo.MessageEmbed, error) {
+func CreateLatestPostsEmbed(guildID string, carouselPage int) (*discordgo.MessageEmbed, int, error) {
 	cfg, err := config.Load()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
+		return nil, 0, fmt.Errorf("failed to load config: %w", err)
 	}
 
 	threadGuildConfig, ok := cfg.ThreadConfig[guildID]
 	if !ok || threadGuildConfig.Database == "" {
 		log.Printf("No database path configured for guild %s", guildID)
-		return nil, nil
+		return nil, 0, nil
 	}
 	dbPath := threadGuildConfig.Database
 
 	dbMapping, err := utils.LoadDatabaseMapping()
 	if err != nil {
 		log.Printf("Error loading database mapping: %v", err)
-		return nil, nil
+		return nil, 0, nil
 	}
 
 	guildMapping, ok := dbMapping[guildID]
 	if !ok {
 		log.Printf("No database mapping found for guild %s", guildID)
-		return nil, nil
+		return nil, 0, nil
 	}
 
 	var tableNames []string
@@ -74,24 +74,24 @@ func CreateLatestPostsEmbed(guildID string, carouselPage int) (*discordgo.Messag
 
 	if len(tableNames) == 0 {
 		log.Printf("No tables configured for leaderboard in guild %s", guildID)
-		return nil, nil
+		return nil, 0, nil
 	}
 
 	db, err := database.InitDB(dbPath)
 	if err != nil {
 		log.Printf("Error initializing database for guild %s at %s: %v", guildID, dbPath, err)
-		return nil, nil
+		return nil, 0, nil
 	}
 	defer db.Close()
 
 	// 获取过去24小时内的所有卡片
 	posts, err := database.GetPostsInLast24Hours(db, tableNames)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get posts from last 24 hours: %w", err)
+		return nil, 0, fmt.Errorf("failed to get posts from last 24 hours: %w", err)
 	}
 
 	if len(posts) == 0 {
-		return nil, nil // No posts, no embed
+		return nil, 0, nil // No posts, no embed, 0 pages
 	}
 
 	// 计算分页参数
@@ -114,7 +114,7 @@ func CreateLatestPostsEmbed(guildID string, carouselPage int) (*discordgo.Messag
 
 	tagMapping, err := LoadTagMapping(guildID)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	// 构建带有页码信息的标题
@@ -152,5 +152,5 @@ func CreateLatestPostsEmbed(guildID string, carouselPage int) (*discordgo.Messag
 		})
 	}
 
-	return latestCardsEmbed, nil
+	return latestCardsEmbed, totalPages, nil
 }
