@@ -71,3 +71,18 @@ func LoadKickConfig(path string) (*model.KickConfig, error) {
 
 	return &config, nil
 }
+
+// LoadTaskConfig loads the task configuration from the specified path.
+func LoadTaskConfig(path string) (model.TaskConfig, error) {
+	fileData, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("error reading task config file %s: %w", path, err)
+	}
+
+	var config model.TaskConfig
+	if err := json.Unmarshal(fileData, &config); err != nil {
+		return nil, fmt.Errorf("error unmarshalling task config from %s: %w", path, err)
+	}
+
+	return config, nil
+}

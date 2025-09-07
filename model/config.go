@@ -122,3 +122,19 @@ type PersistentPanelInfo struct {
 type PersistentPanelData struct {
 	Panels map[string]map[string]*PersistentPanelInfo `json:"panels"` // guild_id -> channel_id -> panel_info
 }
+
+// TaskConfig represents the structure of task_config.json
+type TaskConfig map[string]GuildTaskConfig
+
+// GuildTaskConfig represents the configuration for a single guild's tasks.
+type GuildTaskConfig struct {
+	Name     string                 `json:"name"`
+	GuildsID string                 `json:"guilds_id"`
+	Data     map[string]ChannelTask `json:"data"`
+}
+
+// ChannelTask represents a task for a specific channel.
+type ChannelTask struct {
+	ChannelID string   `json:"channel_id"`
+	ThreadID  []string `json:"thread_id"`
+}

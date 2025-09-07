@@ -6,6 +6,7 @@ import (
 	"discord-bot/commands"
 	"discord-bot/config"
 	"discord-bot/model"
+	"discord-bot/utils"
 	"discord-bot/utils/database"
 	"errors"
 	"log"
@@ -103,6 +104,18 @@ func New(cfg *model.Config, db *sql.DB, dbx *sqlx.DB) (*Bot, error) {
 	// b.CommandHandlers = handlers.commandHandlers(b)
 
 	go b.cleanupExpiredPresets(ctx)
+
+	taskConfig, err := utils.LoadTaskConfig("data/task_config.json")
+	if err != nil {
+		log.Printf("Error loading task config, skipping tag mapping generation: %v", err)
+	} else {
+		err := utils.GenerateTagMappingFiles(dg, taskConfig)
+		if err != nil {
+			log.Printf("Error generating tag mapping files: %v", err)
+		} else {
+			log.Println("Successfully generated tag mapping files.")
+		}
+	}
 
 	return b, nil
 }
