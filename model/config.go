@@ -69,7 +69,8 @@ type Config struct {
 			TableName string `json:"table_name"`
 		} `json:"data"`
 	}
-	KickConfig KickConfig
+	KickConfig      KickConfig
+	EvidenceCleaner EvidenceCleanerConfig
 }
 
 // ThreadConfig holds the configuration for thread database paths.
@@ -137,4 +138,10 @@ type GuildTaskConfig struct {
 type ChannelTask struct {
 	ChannelID string   `json:"channel_id"`
 	ThreadID  []string `json:"thread_id"`
+}
+
+// EvidenceCleanerConfig holds the configuration for the evidence cleaner.
+type EvidenceCleanerConfig struct {
+	Path       string
+	MaxAgeDays int
 }

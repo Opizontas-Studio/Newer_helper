@@ -209,7 +209,7 @@ func (s *Scheduler) updateLeaderboard() {
 
 func (s *Scheduler) startDailyTasks() {
 	defer s.wg.Done()
-	runHours := []int{5, 13, 21} // 5 AM, 1 PM, 9 PM
+	runHours := []int{4, 5, 13, 21} // 4 AM, 5 AM, 1 PM, 9 PM
 
 	for {
 		now := time.Now()
@@ -231,12 +231,23 @@ func (s *Scheduler) startDailyTasks() {
 		log.Printf("Next daily task scheduled for: %v", next)
 		select {
 		case <-time.After(next.Sub(now)):
-			s.runDailyScanTasks()
-			s.runDailyPunishmentReport()
+			// Check the hour to decide which task to run
+			switch next.Hour() {
+			case 4:
+				s.runDailyEvidenceCleaner()
+			case 5, 13, 21:
+				s.runDailyScanTasks()
+				s.runDailyPunishmentReport()
+			}
 		case <-s.ctx.Done():
 			return
 		}
 	}
+}
+
+func (s *Scheduler) runDailyEvidenceCleaner() {
+	log.Println("Starting daily evidence cleanup...")
+	scanner.CleanOldEvidence(s.bot.GetSession(), s.bot.GetConfig())
 }
 
 func (s *Scheduler) runDailyScanTasks() {

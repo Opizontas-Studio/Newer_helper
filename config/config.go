@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -35,6 +36,21 @@ func Load() (*model.Config, error) {
 	disableInitialScan := os.Getenv("DISABLE_INITIAL_SCAN") == "true"
 	disableCommandUnregister := os.Getenv("DISABLE_COMMAND_UNREGISTER") == "true"
 
+	evidencePath := os.Getenv("EVIDENCE_PATH")
+	if evidencePath == "" {
+		evidencePath = "data/evidence"
+	}
+
+	evidenceMaxAgeDaysStr := os.Getenv("EVIDENCE_MAX_AGE_DAYS")
+	if evidenceMaxAgeDaysStr == "" {
+		evidenceMaxAgeDaysStr = "30"
+	}
+	evidenceMaxAgeDays, err := strconv.Atoi(evidenceMaxAgeDaysStr)
+	if err != nil {
+		log.Printf("Warning: Invalid EVIDENCE_MAX_AGE_DAYS value, using default of 30. Error: %v", err)
+		evidenceMaxAgeDays = 30
+	}
+
 	cfg := &model.Config{
 		BotToken:                 token,
 		AppID:                    appID,
@@ -44,6 +60,10 @@ func Load() (*model.Config, error) {
 		DisableInitialScan:       disableInitialScan,
 		DisableCommandUnregister: disableCommandUnregister,
 		ServerConfigs:            make(map[string]model.ServerConfig),
+		EvidenceCleaner: model.EvidenceCleanerConfig{
+			Path:       evidencePath,
+			MaxAgeDays: evidenceMaxAgeDays,
+		},
 	}
 
 	// Load task config

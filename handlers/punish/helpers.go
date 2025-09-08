@@ -268,7 +268,7 @@ func getPunishmentHistory(db *sqlx.DB, userID, currentGuildID string) ([]model.P
 // buildPunishmentEmbed creates the rich embed message for the punishment announcement.
 func buildPunishmentEmbed(i *discordgo.InteractionCreate, targetUser *discordgo.User, reason string, allEvidence []Evidence, currentGuildHistory []model.PunishmentRecord, otherGuildsHistory map[string][]model.PunishmentRecord, kickConfig *model.KickConfig, timeoutApplied bool, timeoutDurationStr string, punishmentID int64) *discordgo.MessageEmbed {
 	embed := &discordgo.MessageEmbed{
-		Title: "用户惩罚",
+		Title: "答题惩罚",
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: targetUser.AvatarURL(""),
 		},
