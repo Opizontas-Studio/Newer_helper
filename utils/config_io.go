@@ -86,3 +86,18 @@ func LoadTaskConfig(path string) (model.TaskConfig, error) {
 
 	return config, nil
 }
+
+// LoadPunishConfig loads the punishment configuration from the specified path.
+func LoadPunishConfig(path string) (*model.PunishConfig, error) {
+	fileData, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("error reading punish config file %s: %w", path, err)
+	}
+
+	var config model.PunishConfig
+	if err := json.Unmarshal(fileData, &config); err != nil {
+		return nil, fmt.Errorf("error unmarshalling punish config from %s: %w", path, err)
+	}
+
+	return &config, nil
+}

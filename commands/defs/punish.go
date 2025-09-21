@@ -21,6 +21,13 @@ var Punish = &discordgo.ApplicationCommand{
 			Required:    true,
 		},
 		{
+			Type:         discordgo.ApplicationCommandOptionString,
+			Name:         "action",
+			Description:  "处罚类型 (默认: re-answer)",
+			Required:     false,
+			Autocomplete: true,
+		},
+		{
 			Type:        discordgo.ApplicationCommandOptionString,
 			Name:        "reason",
 			Description: "处罚原因 (留空使用默认原因)",

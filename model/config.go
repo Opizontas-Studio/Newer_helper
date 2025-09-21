@@ -140,3 +140,29 @@ type EvidenceCleanerConfig struct {
 	Path       string
 	MaxAgeDays int
 }
+
+// PunishLevel defines a specific punishment level configuration.
+type PunishLevel struct {
+	Time                 int      `json:"time"`
+	RemoveRoleID         []string `json:"remove_role_id"`
+	Timeout              string   `json:"timeout"`
+	AddRole              []string `json:"add_role"`
+	AddRoleTimeoutTime   string   `json:"add_role_timeout_time"`
+}
+
+// ActionConfig defines the configuration for a specific punishment action type.
+type ActionConfig struct {
+	Type            string                 `json:"tpye"` // Note: keeping the typo to match JSON
+	Name            string                 `json:"name"`
+	Timescale       string                 `json:"timescale"`
+	GuildID         string                 `json:"guilds_id"`
+	BaseRoleID      string                 `json:"base_role_id"`
+	RemoveRoleID    []string               `json:"remove_role_id"`
+	WhitelistRoleID []string               `json:"whitelist_role_id"`
+	Data            map[string]PunishLevel `json:"data"`
+}
+
+// PunishConfig defines the structure for punishment configurations.
+type PunishConfig struct {
+	PunishConfig map[string]map[string]ActionConfig `json:"punish_config"`
+}

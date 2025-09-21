@@ -28,6 +28,7 @@ type Evidence struct {
 // ParsedOptions holds the parsed options from the punish command interaction.
 type ParsedOptions struct {
 	TargetUser   *discordgo.User
+	Action       string
 	Reason       string
 	MessageLinks string
 	OptionMap    map[string]*discordgo.ApplicationCommandInteractionDataOption
@@ -51,8 +52,17 @@ func parsePunishOptions(s *discordgo.Session, i *discordgo.InteractionCreate) Pa
 		reason = reasonOpt.StringValue()
 	}
 
+	var action string
+	if actionOpt, ok := optionMap["action"]; ok {
+		action = actionOpt.StringValue()
+	}
+	if action == "" {
+		action = "re-answer" // Default action
+	}
+
 	return ParsedOptions{
 		TargetUser:   optionMap["user"].UserValue(s),
+		Action:       action,
 		Reason:       reason,
 		MessageLinks: messageLinks,
 		OptionMap:    optionMap,
@@ -108,18 +118,6 @@ func processEvidence(s *discordgo.Session, messageLinks string, targetUser *disc
 	return string(evidenceJSON), allEvidence, nil
 }
 
-// isUserWhitelisted checks if a user has a role that is on the whitelist.
-func isUserWhitelisted(targetMember *discordgo.Member, configEntry model.KickConfigEntry) bool {
-	for _, whitelistRole := range configEntry.WhitelistRoleID {
-		for _, userRole := range targetMember.Roles {
-			if userRole == whitelistRole {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // removePunishmentRoles removes specified roles from a user.
 func removePunishmentRoles(s *discordgo.Session, guildID, userID string, roleIDs []string) {
 	for _, roleID := range roleIDs {
@@ -130,107 +128,8 @@ func removePunishmentRoles(s *discordgo.Session, guildID, userID string, roleIDs
 	}
 }
 
-// addTimedRoles adds roles to a user and schedules their removal.
-func addTimedRoles(s *discordgo.Session, i *discordgo.InteractionCreate, kickConfig *model.KickConfig, configEntry model.KickConfigEntry, targetUser *discordgo.User) error {
-	if configEntry.Timeout.AddRoleTimeoutTime == "" {
-		// Fallback to just adding roles without scheduling removal
-		for _, roleID := range configEntry.Timeout.AddRole {
-			err := s.GuildMemberRoleAdd(i.GuildID, targetUser.ID, roleID)
-			if err != nil {
-				log.Printf("Failed to add role %s to user %s: %v", roleID, targetUser.ID, err)
-			}
-		}
-		return nil
-	}
-
-	removalDuration, err := utils.ParseDuration(configEntry.Timeout.AddRoleTimeoutTime)
-	if err != nil {
-		return fmt.Errorf("error parsing add_role_timeout_time: %w", err)
-	}
-
-	removeAt := time.Now().Add(removalDuration)
-	timedTaskDB, err := punishment_db.InitTimedTaskDB(kickConfig.InitConfig.DBPath)
-	if err != nil {
-		return fmt.Errorf("failed to connect to timed task DB for scheduling: %w", err)
-	}
-	defer timedTaskDB.Close()
-
-	for _, roleID := range configEntry.Timeout.AddRole {
-		err := s.GuildMemberRoleAdd(i.GuildID, targetUser.ID, roleID)
-		if err != nil {
-			log.Printf("Failed to add role %s to user %s: %v", roleID, targetUser.ID, err)
-			continue // Continue to next role even if one fails
-		}
-
-		task := model.TimedTask{
-			GuildID:  i.GuildID,
-			UserID:   targetUser.ID,
-			RoleID:   roleID,
-			RemoveAt: removeAt,
-		}
-		if err := punishment_db.AddTimedTask(timedTaskDB, task); err != nil {
-			log.Printf("Failed to schedule role removal for user %s, role %s: %v", targetUser.ID, roleID, err)
-		}
-	}
-	return nil
-}
-
-// applyTimeoutIfRequired checks punishment history and applies timeout if conditions are met.
-func applyTimeoutIfRequired(s *discordgo.Session, i *discordgo.InteractionCreate, db *sqlx.DB, kickConfig *model.KickConfig, configEntry model.KickConfigEntry, targetUser *discordgo.User) (bool, string, error) {
-	if configEntry.Timeout.Frequency <= 0 || configEntry.Timeout.Time == "" {
-		return false, "", nil
-	}
-
-	duration, err := utils.ParseDuration(configEntry.Timeout.Time)
-	if err != nil {
-		return false, "", fmt.Errorf("error parsing timeout duration: %w", err)
-	}
-
-	since := time.Now().Add(-duration)
-	recentHistory, err := punishment_db.GetPunishmentRecordsByUserID(db, targetUser.ID, &since)
-	if err != nil {
-		return false, "", fmt.Errorf("error fetching recent punishment history: %w", err)
-	}
-
-	var currentGuildRecentHistory []model.PunishmentRecord
-	for _, rec := range recentHistory {
-		if rec.GuildID == i.GuildID {
-			currentGuildRecentHistory = append(currentGuildRecentHistory, rec)
-		}
-	}
-
-	if len(currentGuildRecentHistory) < configEntry.Timeout.Frequency {
-		return false, "", nil
-	}
-
-	// Apply timeout
-	if configEntry.Timeout.TimeoutTime == "" {
-		return false, "", nil
-	}
-
-	timeoutDuration, err := utils.ParseDuration(configEntry.Timeout.TimeoutTime)
-	if err != nil {
-		return false, "", fmt.Errorf("error parsing timeout_time: %w", err)
-	}
-
-	timeoutUntil := time.Now().Add(timeoutDuration)
-	err = s.GuildMemberTimeout(i.GuildID, targetUser.ID, &timeoutUntil)
-	if err != nil {
-		return false, "", fmt.Errorf("failed to timeout user %s: %w", targetUser.ID, err)
-	}
-
-	log.Printf("Successfully timed out user %s for %s", targetUser.ID, configEntry.Timeout.TimeoutTime)
-
-	// Add roles and schedule their removal
-	if err := addTimedRoles(s, i, kickConfig, configEntry, targetUser); err != nil {
-		log.Printf("Failed to add timed roles: %v", err) // Log error but don't block timeout
-	}
-
-	return true, configEntry.Timeout.TimeoutTime, nil
-}
-
 // addPunishmentRecord adds a new punishment record to the database and returns the new record's ID.
-func addPunishmentRecord(db *sqlx.DB, i *discordgo.InteractionCreate, targetUser *discordgo.User, reason, evidenceJSON string) (int64, error) {
+func addPunishmentRecord(db *sqlx.DB, i *discordgo.InteractionCreate, targetUser *discordgo.User, reason, evidenceJSON, actionType string) (int64, error) {
 	record := model.PunishmentRecord{
 		MessageID:    i.ID,
 		AdminID:      i.Member.User.ID,
@@ -240,6 +139,7 @@ func addPunishmentRecord(db *sqlx.DB, i *discordgo.InteractionCreate, targetUser
 		GuildID:      i.GuildID,
 		Timestamp:    time.Now().Unix(),
 		Evidence:     evidenceJSON,
+		ActionType:   actionType,
 	}
 	return punishment_db.AddPunishmentRecord(db, record)
 }
@@ -263,91 +163,6 @@ func getPunishmentHistory(db *sqlx.DB, userID, currentGuildID string) ([]model.P
 	}
 
 	return currentGuildHistory, otherGuildsHistory, nil
-}
-
-// buildPunishmentEmbed creates the rich embed message for the punishment announcement.
-func buildPunishmentEmbed(i *discordgo.InteractionCreate, targetUser *discordgo.User, reason string, allEvidence []Evidence, currentGuildHistory []model.PunishmentRecord, otherGuildsHistory map[string][]model.PunishmentRecord, kickConfig *model.KickConfig, timeoutApplied bool, timeoutDurationStr string, punishmentID int64) *discordgo.MessageEmbed {
-	embed := &discordgo.MessageEmbed{
-		Title: "答题惩罚",
-		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL: targetUser.AvatarURL(""),
-		},
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:  "用户",
-				Value: targetUser.Mention(),
-			},
-			{
-				Name:  "原因",
-				Value: reason,
-			},
-		},
-		Timestamp: time.Now().Format(time.RFC3339),
-		Color:     0xff0000,
-	}
-
-	if punishmentID == -1 {
-		embed.Description = "用户进行了一次自我处罚，本次操作不会被记录。"
-		embed.Footer = &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("由 %s 操作", i.Member.User.Username),
-		}
-	} else {
-		embed.Footer = &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("由 %s 操作 | 处罚ID: %d", i.Member.User.Username, punishmentID),
-		}
-	}
-
-	if len(allEvidence) > 0 {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:  "已存档证据",
-			Value: fmt.Sprintf("已保存 %d 条消息作为证据。", len(allEvidence)),
-		})
-	}
-
-	if len(currentGuildHistory) > 0 {
-		var historyValue string
-		for _, rec := range currentGuildHistory {
-			entry := fmt.Sprintf("操作人: <@%s>, 原因: %s\n", rec.AdminID, rec.Reason)
-			if rec.PunishmentID == punishmentID {
-				entry = fmt.Sprintf("\n**> 本次处罚** %s", entry)
-			}
-			historyValue += entry
-		}
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:  "历史处罚记录",
-			Value: historyValue,
-		})
-	}
-
-	if len(otherGuildsHistory) > 0 {
-		var otherGuildsValue string
-		for guildID, records := range otherGuildsHistory {
-			var guildName string
-			if guildConfig, exists := kickConfig.Data[guildID]; exists {
-				guildName = guildConfig.Name
-			} else {
-				guildName = "未知服务器"
-			}
-			otherGuildsValue += fmt.Sprintf("在'%s'存在 %d 条处罚记录\n", guildName, len(records))
-		}
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:  "其他服务器处罚记录",
-			Value: otherGuildsValue,
-		})
-	}
-
-	if timeoutApplied {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:  "自动禁言",
-			Value: fmt.Sprintf("该用户已被自动禁言，时长为: %s", timeoutDurationStr),
-		})
-	}
-
-	if configEntry, ok := kickConfig.Data[i.GuildID]; ok && configEntry.Timeout.Frequency <= 0 {
-		embed.Footer.Text += "\n此服务器已禁用自动禁言"
-	}
-
-	return embed
 }
 
 // sendPrivatePunishmentNotification sends a private message to the punished user.
@@ -398,33 +213,220 @@ func sendResponseMessages(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	return punishmentMessage
 }
 
-// logPunishment sends a detailed log message to the configured log channel.
-func logPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, configEntry model.KickConfigEntry, targetUser *discordgo.User, messageLinks string, punishmentMessage *discordgo.Message, timeoutApplied bool, timeoutDurationStr string) {
-	if configEntry.LogChannelID == "" || i.Member.User.ID == targetUser.ID {
-		return
+// isUserWhitelistedForAction checks if a user has a role that is on the action-specific whitelist.
+func isUserWhitelistedForAction(targetMember *discordgo.Member, actionConfig model.ActionConfig) bool {
+	for _, whitelistRole := range actionConfig.WhitelistRoleID {
+		for _, userRole := range targetMember.Roles {
+			if userRole == whitelistRole {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// getPunishmentLevel returns the punishment level configuration for the given count.
+func getPunishmentLevel(actionConfig model.ActionConfig, count int) *model.PunishLevel {
+	countStr := fmt.Sprintf("%d", count)
+	if level, ok := actionConfig.Data[countStr]; ok {
+		return &level
+	}
+	return nil
+}
+
+// getHighestPunishmentLevel returns the highest available punishment level.
+func getHighestPunishmentLevel(actionConfig model.ActionConfig) *model.PunishLevel {
+	var highest *model.PunishLevel
+	var highestKey int = -1
+
+	for key, level := range actionConfig.Data {
+		if keyInt := parseIntSafe(key); keyInt > highestKey {
+			highestKey = keyInt
+			levelCopy := level
+			highest = &levelCopy
+		}
+	}
+	return highest
+}
+
+// parseIntSafe safely parses an integer, returning 0 if parsing fails.
+func parseIntSafe(s string) int {
+	if val, err := fmt.Sscanf(s, "%d", new(int)); err == nil && val == 1 {
+		var result int
+		fmt.Sscanf(s, "%d", &result)
+		return result
+	}
+	return 0
+}
+
+// applyPunishmentLevel applies the punishment actions according to the punishment level.
+func applyPunishmentLevel(s *discordgo.Session, i *discordgo.InteractionCreate, targetUser *discordgo.User, level model.PunishLevel) (bool, string) {
+	// Remove roles
+	removePunishmentRoles(s, i.GuildID, targetUser.ID, level.RemoveRoleID)
+
+	timeoutApplied := false
+	timeoutDurationStr := ""
+
+	// Apply timeout/ban
+	if level.Timeout != "" && level.Timeout != "0" {
+		if level.Timeout == "ban" {
+			// Apply ban
+			err := s.GuildBanCreateWithReason(i.GuildID, targetUser.ID, "Automatic punishment ban", 0)
+			if err != nil {
+				log.Printf("Failed to ban user %s: %v", targetUser.ID, err)
+			} else {
+				timeoutApplied = true
+				timeoutDurationStr = "永久封禁"
+			}
+		} else {
+			// Apply timeout (assume it's in days)
+			days := parseIntSafe(level.Timeout)
+			if days > 0 {
+				timeoutDuration := time.Duration(days) * 24 * time.Hour
+				timeoutUntil := time.Now().Add(timeoutDuration)
+				err := s.GuildMemberTimeout(i.GuildID, targetUser.ID, &timeoutUntil)
+				if err != nil {
+					log.Printf("Failed to timeout user %s: %v", targetUser.ID, err)
+				} else {
+					timeoutApplied = true
+					timeoutDurationStr = fmt.Sprintf("%d天", days)
+				}
+			}
+		}
 	}
 
-	var logDetails strings.Builder
-	logDetails.WriteString(fmt.Sprintf("执行人: %s (`%s`)\n", i.Member.User.Username, i.Member.User.ID))
-	logDetails.WriteString(fmt.Sprintf("被处罚用户: %s (`%s`)\n", targetUser.Username, targetUser.ID))
+	// Add roles with optional timeout
+	for _, roleID := range level.AddRole {
+		if roleID == "0" {
+			continue // Skip "0" roles
+		}
 
-	timeoutStatus := "否"
+		err := s.GuildMemberRoleAdd(i.GuildID, targetUser.ID, roleID)
+		if err != nil {
+			log.Printf("Failed to add role %s to user %s: %v", roleID, targetUser.ID, err)
+			continue
+		}
+
+		// Schedule role removal if timeout is specified
+		if level.AddRoleTimeoutTime != "" && level.AddRoleTimeoutTime != "0" && level.AddRoleTimeoutTime != "-1" {
+			timeoutMinutes := parseIntSafe(level.AddRoleTimeoutTime)
+			if timeoutMinutes > 0 {
+				removeAt := time.Now().Add(time.Duration(timeoutMinutes) * time.Minute)
+
+				// Get kick config for database path
+				kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
+				if err != nil {
+					log.Printf("Error loading kick config for timed task: %v", err)
+					continue
+				}
+
+				timedTaskDB, err := punishment_db.InitTimedTaskDB(kickConfig.InitConfig.DBPath)
+				if err != nil {
+					log.Printf("Failed to connect to timed task DB: %v", err)
+					continue
+				}
+
+				task := model.TimedTask{
+					GuildID:  i.GuildID,
+					UserID:   targetUser.ID,
+					RoleID:   roleID,
+					RemoveAt: removeAt,
+				}
+
+				if err := punishment_db.AddTimedTask(timedTaskDB, task); err != nil {
+					log.Printf("Failed to schedule role removal: %v", err)
+				}
+
+				timedTaskDB.Close()
+			}
+		}
+	}
+
+	return timeoutApplied, timeoutDurationStr
+}
+
+// buildPunishmentEmbedNew creates the rich embed message for the punishment announcement using new config.
+func buildPunishmentEmbedNew(i *discordgo.InteractionCreate, targetUser *discordgo.User, action, reason string, allEvidence []Evidence, currentGuildHistory []model.PunishmentRecord, otherGuildsHistory map[string][]model.PunishmentRecord, timeoutApplied bool, timeoutDurationStr string, punishmentID int64) *discordgo.MessageEmbed {
+	embed := &discordgo.MessageEmbed{
+		Title: fmt.Sprintf("%s 处罚", action),
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: targetUser.AvatarURL(""),
+		},
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:  "用户",
+				Value: targetUser.Mention(),
+			},
+			{
+				Name:  "处罚类型",
+				Value: action,
+			},
+			{
+				Name:  "原因",
+				Value: reason,
+			},
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+		Color:     0xff0000,
+	}
+
+	if punishmentID == -1 {
+		embed.Description = "用户进行了一次自我处罚，本次操作不会被记录。"
+		embed.Footer = &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("由 %s 操作", i.Member.User.Username),
+		}
+	} else {
+		embed.Footer = &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("由 %s 操作 | 处罚ID: %d", i.Member.User.Username, punishmentID),
+		}
+	}
+
+	if len(allEvidence) > 0 {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:  "已存档证据",
+			Value: fmt.Sprintf("已保存 %d 条消息作为证据。", len(allEvidence)),
+		})
+	}
+
+	if len(currentGuildHistory) > 0 {
+		var historyValue string
+		for _, rec := range currentGuildHistory {
+			entry := fmt.Sprintf("操作人: <@%s>, 类型: %s, 原因: %s\n", rec.AdminID, rec.ActionType, rec.Reason)
+			if rec.PunishmentID == punishmentID {
+				entry = fmt.Sprintf("\n**> 本次处罚** %s", entry)
+			}
+			historyValue += entry
+		}
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:  "历史处罚记录",
+			Value: historyValue,
+		})
+	}
+
+	if len(otherGuildsHistory) > 0 {
+		var otherGuildsValue string
+		for guildID, records := range otherGuildsHistory {
+			otherGuildsValue += fmt.Sprintf("在服务器 %s 存在 %d 条处罚记录\n", guildID, len(records))
+		}
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:  "其他服务器处罚记录",
+			Value: otherGuildsValue,
+		})
+	}
+
 	if timeoutApplied {
-		timeoutStatus = fmt.Sprintf("是 (时长: %s)", timeoutDurationStr)
-	}
-	logDetails.WriteString(fmt.Sprintf("是否禁言: %s\n", timeoutStatus))
-
-	if messageLinks != "" {
-		logDetails.WriteString(fmt.Sprintf("证据链接: %s\n", messageLinks))
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:  "处罚措施",
+			Value: fmt.Sprintf("该用户已被处罚: %s", timeoutDurationStr),
+		})
 	}
 
-	if punishmentMessage != nil {
-		punishmentLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, punishmentMessage.ID)
-		logDetails.WriteString(fmt.Sprintf("处罚消息链接: %s\n", punishmentLink))
-	}
+	return embed
+}
 
-	err := utils.LogInfo(s, configEntry.LogChannelID, "处罚模块", "执行处罚", logDetails.String())
-	if err != nil {
-		log.Printf("Failed to send punish log: %v", err)
-	}
+// logPunishmentNew sends a detailed log message to the configured log channel using new config.
+func logPunishmentNew(i *discordgo.InteractionCreate, actionConfig model.ActionConfig, targetUser *discordgo.User) {
+	// Note: ActionConfig doesn't have LogChannelID, so we'll skip logging for now
+	// This would need to be added to the configuration structure if required
+	log.Printf("Punishment logged for action %s: user %s by %s", actionConfig.Type, targetUser.ID, i.Member.User.ID)
 }

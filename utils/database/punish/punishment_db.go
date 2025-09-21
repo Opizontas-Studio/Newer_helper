@@ -3,6 +3,7 @@ package punishment_db
 import (
 	"discord-bot/model"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -25,12 +26,21 @@ func InitPunishmentDB(dbPath string) (*sqlx.DB, error) {
 	          reason TEXT NOT NULL,
 	          guild_id TEXT NOT NULL,
 	          timestamp INTEGER NOT NULL,
-	          evidence TEXT,
-	          action_type TEXT NOT NULL
+	          evidence TEXT
 	      );`
 	_, err = db.Exec(schema)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create punishments table: %w", err)
+	}
+
+	// Add action_type column if it doesn't exist
+	_, err = db.Exec(`ALTER TABLE punishments ADD COLUMN action_type TEXT DEFAULT ''`)
+	if err != nil {
+		// Column might already exist, check if it's a "duplicate column" error
+		if !strings.Contains(err.Error(), "duplicate column name") {
+			return nil, fmt.Errorf("failed to add action_type column: %w", err)
+		}
+		// If it's a duplicate column error, that means the column already exists, which is fine
 	}
 
 	return db, nil
@@ -160,6 +170,17 @@ func GetTotalPunishmentCount(db *sqlx.DB, guildID string, since time.Time) (int,
 	err := db.Get(&count, query, guildID, since.Unix())
 	if err != nil {
 		return 0, fmt.Errorf("failed to get total punishment count for guild %s: %w", guildID, err)
+	}
+	return count, nil
+}
+
+// GetPunishmentCountByAction retrieves the number of punishments for a specific user and action type within a given time range.
+func GetPunishmentCountByAction(db *sqlx.DB, guildID, userID, actionType string, since time.Time) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM punishments WHERE guild_id = ? AND user_id = ? AND action_type = ? AND timestamp >= ?`
+	err := db.Get(&count, query, guildID, userID, actionType, since.Unix())
+	if err != nil {
+		return 0, fmt.Errorf("failed to get punishment count for user %s with action %s in guild %s: %w", userID, actionType, guildID, err)
 	}
 	return count, nil
 }

@@ -25,6 +25,43 @@ func handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, co
 	}
 
 	switch data.Name {
+	case "punish":
+		var focusedOption *discordgo.ApplicationCommandInteractionDataOption
+		for _, opt := range data.Options {
+			if opt.Focused {
+				focusedOption = opt
+				break
+			}
+		}
+
+		if focusedOption != nil && focusedOption.Name == "action" {
+			punishConfig, err := utils.LoadPunishConfig("config/config_file/punish_config.json")
+			if err != nil {
+				log.Printf("Autocomplete: failed to load punish config: %v", err)
+				return
+			}
+
+			guildActions, ok := punishConfig.PunishConfig[i.GuildID]
+			if ok {
+				inputValue := focusedOption.StringValue()
+				for actionKey, actionConfig := range guildActions {
+					// Fuzzy match against action key or name
+					matchKey := strings.Contains(strings.ToLower(actionKey), strings.ToLower(inputValue))
+					matchName := strings.Contains(strings.ToLower(actionConfig.Name), strings.ToLower(inputValue))
+
+					if matchKey || matchName {
+						choiceName := fmt.Sprintf("%s - %s", actionKey, actionConfig.Name)
+						if len(choiceName) > 100 {
+							choiceName = choiceName[:97] + "..."
+						}
+						choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+							Name:  choiceName,
+							Value: actionKey,
+						})
+					}
+				}
+			}
+		}
 	case "punish_admin":
 		inputField, inputOk := optionMap["input"]
 		searchByOpt, searchByOk := optionMap["search_by"]

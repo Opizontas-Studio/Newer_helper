@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -26,7 +27,7 @@ func HandlePunishCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b
 		reason = "使用第三方类型提问，违反问答规范"
 	}
 
-	applyAndLogPunishment(s, i, cmdOptions.TargetUser, reason, cmdOptions.MessageLinks)
+	applyAndLogPunishment(s, i, cmdOptions.TargetUser, cmdOptions.Action, reason, cmdOptions.MessageLinks)
 }
 
 // HandleQuickPunishCommand creates and displays a modal for a quick punishment.
@@ -92,12 +93,12 @@ func HandlePunishModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	messageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, targetMessage.ID)
-	applyAndLogPunishment(s, i, targetMessage.Author, reason, messageLink)
+	applyAndLogPunishment(s, i, targetMessage.Author, "re-answer", reason, messageLink)
 }
 
 // applyAndLogPunishment is the core function that handles the punishment process.
 // It centralizes the logic for configuration loading, validation, database operations, and notifications.
-func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, targetUser *discordgo.User, reason, evidenceLinks string) {
+func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, targetUser *discordgo.User, action, reason, evidenceLinks string) {
 	isSelfPunish := i.Member.User.ID == targetUser.ID
 
 	if !isSelfPunish {
@@ -107,31 +108,43 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 		}
 	}
 
-	kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
+	// Load new punishment configuration
+	punishConfig, err := utils.LoadPunishConfig("config/config_file/punish_config.json")
 	if err != nil {
-		log.Printf("Error loading kick config: %v", err)
-		utils.SendFollowUpError(s, i.Interaction, "Failed to load kick configuration.")
+		log.Printf("Error loading punish config: %v", err)
+		utils.SendFollowUpError(s, i.Interaction, "Failed to load punishment configuration.")
 		return
 	}
-	configEntry, ok := kickConfig.Data[i.GuildID]
+
+	// Get guild-specific action configurations
+	guildActions, ok := punishConfig.PunishConfig[i.GuildID]
 	if !ok {
 		utils.SendFollowUpError(s, i.Interaction, "❓ 此服务器未找到可用配置文件")
 		return
 	}
 
+	// Get specific action configuration
+	actionConfig, ok := guildActions[action]
+	if !ok {
+		utils.SendFollowUpError(s, i.Interaction, fmt.Sprintf("❓ 处罚类型 '%s' 未在配置中找到", action))
+		return
+	}
+
+	// Get target member for whitelist check
 	targetMember, err := s.GuildMember(i.GuildID, targetUser.ID)
 	if err != nil {
 		log.Printf("Error getting member details: %v", err)
 		utils.SendFollowUpError(s, i.Interaction, "Could not retrieve member details.")
 		return
 	}
-	if !isSelfPunish && isUserWhitelisted(targetMember, configEntry) {
+
+	// Check whitelist (using action-specific whitelist)
+	if !isSelfPunish && isUserWhitelistedForAction(targetMember, actionConfig) {
 		utils.SendFollowUpError(s, i.Interaction, "This user is on the whitelist and cannot be punished.")
 		return
 	}
 
-	removePunishmentRoles(s, i.GuildID, targetUser.ID, configEntry.RemoveRoleID)
-
+	// Process evidence
 	evidenceJSON, allEvidence, err := processEvidence(s, evidenceLinks, targetUser)
 	if err != nil {
 		log.Printf("Error processing evidence: %v", err)
@@ -140,11 +153,22 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 
 	if isSelfPunish {
-		embed := buildPunishmentEmbed(i, targetUser, reason, allEvidence, nil, nil, kickConfig, false, "", -1)
+		// For self-punishment, just remove roles and show message
+		removePunishmentRoles(s, i.GuildID, targetUser.ID, actionConfig.RemoveRoleID)
+		embed := buildPunishmentEmbedNew(i, targetUser, action, reason, allEvidence, nil, nil, false, "", -1)
 		sendResponseMessages(s, i, targetUser, embed, false, "", reason)
 		return
 	}
 
+	// Load legacy kick config for database path
+	kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
+	if err != nil {
+		log.Printf("Error loading kick config: %v", err)
+		utils.SendFollowUpError(s, i.Interaction, "Failed to load database configuration.")
+		return
+	}
+
+	// Connect to database
 	db, err := punishment_db.InitPunishmentDB(kickConfig.InitConfig.DBPath)
 	if err != nil {
 		log.Printf("Error connecting to punishment DB: %v", err)
@@ -153,25 +177,47 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 	defer db.Close()
 
-	timeoutApplied, timeoutDurationStr, err := applyTimeoutIfRequired(s, i, db, kickConfig, configEntry, targetUser)
+	// Get punishment history for this specific action type
+	timescaleDays := 1 // Default to 1 day
+	if actionConfig.Timescale == "day" {
+		timescaleDays = 1
+	}
+	since := time.Now().AddDate(0, 0, -timescaleDays)
+	punishmentCount, err := punishment_db.GetPunishmentCountByAction(db, i.GuildID, targetUser.ID, action, since)
 	if err != nil {
-		log.Printf("Error applying timeout: %v", err)
+		log.Printf("Error getting punishment count: %v", err)
+		utils.SendFollowUpError(s, i.Interaction, "Failed to retrieve punishment history.")
+		return
 	}
 
-	punishmentID, err := addPunishmentRecord(db, i, targetUser, reason, evidenceJSON)
+	// Determine punishment level based on count
+	punishLevel := getPunishmentLevel(actionConfig, punishmentCount)
+	if punishLevel == nil {
+		// Use the highest available level if count exceeds configured levels
+		punishLevel = getHighestPunishmentLevel(actionConfig)
+	}
+
+	// Apply punishments according to the level
+	timeoutApplied, timeoutDurationStr := applyPunishmentLevel(s, i, targetUser, *punishLevel)
+
+	// Record the punishment
+	punishmentID, err := addPunishmentRecord(db, i, targetUser, reason, evidenceJSON, action)
 	if err != nil {
 		log.Printf("Error saving punishment record: %v", err)
 		utils.SendFollowUpError(s, i.Interaction, "Failed to save the punishment record.")
 		return
 	}
 
+	// Get history for display
 	currentGuildHistory, otherGuildsHistory, err := getPunishmentHistory(db, targetUser.ID, i.GuildID)
 	if err != nil {
 		log.Printf("Error fetching punishment history: %v", err)
 	}
 
-	embed := buildPunishmentEmbed(i, targetUser, reason, allEvidence, currentGuildHistory, otherGuildsHistory, kickConfig, timeoutApplied, timeoutDurationStr, punishmentID)
-	punishmentMessage := sendResponseMessages(s, i, targetUser, embed, timeoutApplied, timeoutDurationStr, reason)
+	// Build and send response
+	embed := buildPunishmentEmbedNew(i, targetUser, action, reason, allEvidence, currentGuildHistory, otherGuildsHistory, timeoutApplied, timeoutDurationStr, punishmentID)
+	_ = sendResponseMessages(s, i, targetUser, embed, timeoutApplied, timeoutDurationStr, reason)
 
-	logPunishment(s, i, configEntry, targetUser, evidenceLinks, punishmentMessage, timeoutApplied, timeoutDurationStr)
+	// Log to configured channel
+	logPunishmentNew(i, actionConfig, targetUser)
 }
