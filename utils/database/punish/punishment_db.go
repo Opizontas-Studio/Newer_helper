@@ -1,4 +1,4 @@
-package database
+package punishment_db
 
 import (
 	"discord-bot/model"
@@ -25,7 +25,8 @@ func InitPunishmentDB(dbPath string) (*sqlx.DB, error) {
 	          reason TEXT NOT NULL,
 	          guild_id TEXT NOT NULL,
 	          timestamp INTEGER NOT NULL,
-	          evidence TEXT
+	          evidence TEXT,
+	          action_type TEXT NOT NULL
 	      );`
 	_, err = db.Exec(schema)
 	if err != nil {
@@ -37,7 +38,7 @@ func InitPunishmentDB(dbPath string) (*sqlx.DB, error) {
 
 // AddPunishmentRecord adds a new punishment record to the database and returns the new record's ID.
 func AddPunishmentRecord(db *sqlx.DB, record model.PunishmentRecord) (int64, error) {
-	query := `INSERT INTO punishments (message_id, admin_id, user_id, user_username, reason, guild_id, timestamp, evidence) VALUES (:message_id, :admin_id, :user_id, :user_username, :reason, :guild_id, :timestamp, :evidence)`
+	query := `INSERT INTO punishments (message_id, admin_id, user_id, user_username, reason, guild_id, timestamp, evidence, action_type) VALUES (:message_id, :admin_id, :user_id, :user_username, :reason, :guild_id, :timestamp, :evidence, :action_type)`
 
 	result, err := db.NamedExec(query, record)
 	if err != nil {

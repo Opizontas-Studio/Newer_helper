@@ -40,3 +40,5 @@ data/
 .vscode/
 .claude/
 Newer_helper-release
+
+temp/

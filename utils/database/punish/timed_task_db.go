@@ -1,4 +1,4 @@
-package database
+package punishment_db
 
 import (
 	"discord-bot/model"

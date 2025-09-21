@@ -3,7 +3,7 @@ package punish
 import (
 	"discord-bot/bot"
 	"discord-bot/utils"
-	"discord-bot/utils/database"
+	punishment_db "discord-bot/utils/database/punish"
 	"fmt"
 	"log"
 	"strings"
@@ -145,7 +145,7 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 		return
 	}
 
-	db, err := database.InitPunishmentDB(kickConfig.InitConfig.DBPath)
+	db, err := punishment_db.InitPunishmentDB(kickConfig.InitConfig.DBPath)
 	if err != nil {
 		log.Printf("Error connecting to punishment DB: %v", err)
 		utils.SendFollowUpError(s, i.Interaction, "Failed to connect to the punishment database.")

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"discord-bot/model"
 	"discord-bot/utils/database"
+	punishment_db "discord-bot/utils/database/punish"
 	"fmt"
 	"log"
 	"sort"
@@ -16,12 +17,12 @@ import (
 
 func GeneratePunishmentStatsEmbed(dbx *sqlx.DB, targetGuildID string, duration time.Duration) (*discordgo.MessageEmbed, error) {
 	since := time.Now().Add(-duration)
-	stats, err := database.GetAdminPunishmentStats(dbx, targetGuildID, since)
+	stats, err := punishment_db.GetAdminPunishmentStats(dbx, targetGuildID, since)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get admin punishment stats for guild %s: %v", targetGuildID, err)
 	}
 
-	total, err := database.GetTotalPunishmentCount(dbx, targetGuildID, since)
+	total, err := punishment_db.GetTotalPunishmentCount(dbx, targetGuildID, since)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get total punishment count for guild %s: %v", targetGuildID, err)
 	}

@@ -8,7 +8,7 @@ import (
 	"discord-bot/scanner"
 	"discord-bot/tasks"
 	"discord-bot/utils"
-	"discord-bot/utils/database"
+	punishment_db "discord-bot/utils/database/punish"
 	"encoding/json"
 	"log"
 	"os"
@@ -122,7 +122,7 @@ func (s *Scheduler) startRoleRemover() {
 		log.Printf("Failed to load kick config for scanner: %v", err)
 		return
 	}
-	timedTaskDB, err := database.InitTimedTaskDB(kickConfig.InitConfig.DBPath)
+	timedTaskDB, err := punishment_db.InitTimedTaskDB(kickConfig.InitConfig.DBPath)
 	if err != nil {
 		log.Printf("Failed to initialize timed task DB: %v", err)
 		return

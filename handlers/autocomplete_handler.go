@@ -5,6 +5,7 @@ import (
 	"discord-bot/scanner"
 	"discord-bot/utils"
 	"discord-bot/utils/database"
+	punishment_db "discord-bot/utils/database/punish"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -38,14 +39,14 @@ func handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, co
 					log.Printf("Autocomplete: failed to load kick config: %v", err)
 					return
 				}
-				db, err := database.InitPunishmentDB(kickConfig.InitConfig.DBPath)
+				db, err := punishment_db.InitPunishmentDB(kickConfig.InitConfig.DBPath)
 				if err != nil {
 					log.Printf("Autocomplete: failed to connect to db: %v", err)
 					return
 				}
 				defer db.Close()
 
-				records, err := database.GetAllPunishmentRecords(db, i.GuildID)
+				records, err := punishment_db.GetAllPunishmentRecords(db, i.GuildID)
 				if err != nil {
 					log.Printf("Autocomplete: failed to get records: %v", err)
 					return

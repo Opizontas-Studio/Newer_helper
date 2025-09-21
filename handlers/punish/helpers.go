@@ -2,7 +2,7 @@ package punish
 
 import (
 	"discord-bot/model"
-	"discord-bot/utils/database"
+	punishment_db "discord-bot/utils/database/punish"
 	"time"
 
 	"discord-bot/utils"
@@ -149,7 +149,7 @@ func addTimedRoles(s *discordgo.Session, i *discordgo.InteractionCreate, kickCon
 	}
 
 	removeAt := time.Now().Add(removalDuration)
-	timedTaskDB, err := database.InitTimedTaskDB(kickConfig.InitConfig.DBPath)
+	timedTaskDB, err := punishment_db.InitTimedTaskDB(kickConfig.InitConfig.DBPath)
 	if err != nil {
 		return fmt.Errorf("failed to connect to timed task DB for scheduling: %w", err)
 	}
@@ -168,7 +168,7 @@ func addTimedRoles(s *discordgo.Session, i *discordgo.InteractionCreate, kickCon
 			RoleID:   roleID,
 			RemoveAt: removeAt,
 		}
-		if err := database.AddTimedTask(timedTaskDB, task); err != nil {
+		if err := punishment_db.AddTimedTask(timedTaskDB, task); err != nil {
 			log.Printf("Failed to schedule role removal for user %s, role %s: %v", targetUser.ID, roleID, err)
 		}
 	}
@@ -187,7 +187,7 @@ func applyTimeoutIfRequired(s *discordgo.Session, i *discordgo.InteractionCreate
 	}
 
 	since := time.Now().Add(-duration)
-	recentHistory, err := database.GetPunishmentRecordsByUserID(db, targetUser.ID, &since)
+	recentHistory, err := punishment_db.GetPunishmentRecordsByUserID(db, targetUser.ID, &since)
 	if err != nil {
 		return false, "", fmt.Errorf("error fetching recent punishment history: %w", err)
 	}
@@ -241,12 +241,12 @@ func addPunishmentRecord(db *sqlx.DB, i *discordgo.InteractionCreate, targetUser
 		Timestamp:    time.Now().Unix(),
 		Evidence:     evidenceJSON,
 	}
-	return database.AddPunishmentRecord(db, record)
+	return punishment_db.AddPunishmentRecord(db, record)
 }
 
 // getPunishmentHistory retrieves and categorizes punishment records for a user.
 func getPunishmentHistory(db *sqlx.DB, userID, currentGuildID string) ([]model.PunishmentRecord, map[string][]model.PunishmentRecord, error) {
-	history, err := database.GetPunishmentRecordsByUserID(db, userID, nil)
+	history, err := punishment_db.GetPunishmentRecordsByUserID(db, userID, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error fetching punishment history: %w", err)
 	}
