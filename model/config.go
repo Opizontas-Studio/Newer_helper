@@ -56,14 +56,9 @@ type Config struct {
 	ServerConfigs            map[string]ServerConfig
 	PunishmentStatsChannels  map[string]PunishmentStatsChannel
 	RollCardConfigs          RollCardConfig
-	TaskConfig               map[string]struct {
-		Data map[string]struct {
-			ChannelID string `json:"channel_id"`
-			TableName string `json:"table_name"`
-		} `json:"data"`
-	}
-	ThreadConfig    ThreadConfig
-	DatabaseMapping map[string]struct {
+	TaskConfig               TaskConfig
+	ThreadConfig             ThreadConfig
+	DatabaseMapping          map[string]struct {
 		Data map[string]struct {
 			ChannelID string `json:"channel_id"`
 			TableName string `json:"table_name"`

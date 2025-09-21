@@ -86,6 +86,10 @@ func Load() (*model.Config, error) {
 		return nil, err
 	}
 
+	if err := generateDatabaseMapping(cfg.TaskConfig); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
 }
 
@@ -99,4 +103,36 @@ func loadJSON(path string, v interface{}) error {
 		return err
 	}
 	return json.Unmarshal(configFile, v)
+}
+
+// generateDatabaseMapping generates the databaseMapping.json file from the task config.
+func generateDatabaseMapping(taskConfig model.TaskConfig) error {
+	databaseMapping := make(map[string]interface{})
+
+	for guildID, guildConfig := range taskConfig {
+		dataBaseTableNameMapping := make(map[string]string)
+		for name, channelTask := range guildConfig.Data {
+			if len(channelTask.ChannelID) >= 4 {
+				key := name + "_" + channelTask.ChannelID[len(channelTask.ChannelID)-4:]
+				dataBaseTableNameMapping[key] = name
+			}
+		}
+
+		databaseMapping[guildID] = struct {
+			GuildsID                 string            `json:"guilds_id"`
+			Database                 string            `json:"database"`
+			DataBaseTableNameMapping map[string]string `json:"dataBaseTableNameMapping"`
+		}{
+			GuildsID:                 guildID,
+			Database:                 "data/" + guildID + ".db",
+			DataBaseTableNameMapping: dataBaseTableNameMapping,
+		}
+	}
+
+	file, err := json.MarshalIndent(databaseMapping, "", "    ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile("data/databaseMapping.json", file, 0644)
 }
