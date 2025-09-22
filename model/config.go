@@ -64,7 +64,6 @@ type Config struct {
 			TableName string `json:"table_name"`
 		} `json:"data"`
 	}
-	KickConfig      KickConfig
 	EvidenceCleaner EvidenceCleanerConfig
 }
 
@@ -87,23 +86,6 @@ type TimeoutConfig struct {
 	AddRoleTimeoutTime string   `json:"add_role_timeout_time"`
 }
 
-// TimeoutConfig defines the settings for user timeout punishments.
-type KickConfigEntry struct {
-	Name            string        `json:"name"`
-	BaseRoleID      string        `json:"base_role_id"`
-	LogChannelID    string        `json:"log_channel_id,omitempty"`
-	RemoveRoleID    []string      `json:"remove_role_id"`
-	WhitelistRoleID []string      `json:"whitelist_role_id"`
-	Timeout         TimeoutConfig `json:"timeout,omitempty"`
-}
-
-// KickConfig defines the overall structure for kick configurations.
-type KickConfig struct {
-	InitConfig struct {
-		DBPath string `json:"dbpath"`
-	} `json:"initConfig"`
-	Data map[string]KickConfigEntry `json:"data"`
-}
 
 // PersistentPanelInfo 存储持久化面板信息
 type PersistentPanelInfo struct {
@@ -164,5 +146,6 @@ type ActionConfig struct {
 
 // PunishConfig defines the structure for punishment configurations.
 type PunishConfig struct {
+	DatabasePath string                              `json:"database_path"`
 	PunishConfig map[string]map[string]ActionConfig `json:"punish_config"`
 }

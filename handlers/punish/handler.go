@@ -3,7 +3,7 @@ package punish
 import (
 	"discord-bot/bot"
 	"discord-bot/utils"
-	punishment_db "discord-bot/utils/database/punish"
+	punishments_db "discord-bot/utils/database/punishments"
 	"fmt"
 	"log"
 	"strings"
@@ -160,16 +160,8 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 		return
 	}
 
-	// Load legacy kick config for database path
-	kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
-	if err != nil {
-		log.Printf("Error loading kick config: %v", err)
-		utils.SendFollowUpError(s, i.Interaction, "Failed to load database configuration.")
-		return
-	}
-
-	// Connect to database
-	db, err := punishment_db.InitPunishmentDB(kickConfig.InitConfig.DBPath)
+	// Connect to database using the database path from punish config
+	db, err := punishments_db.Init(punishConfig.DatabasePath)
 	if err != nil {
 		log.Printf("Error connecting to punishment DB: %v", err)
 		utils.SendFollowUpError(s, i.Interaction, "Failed to connect to the punishment database.")
@@ -183,7 +175,7 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 		timescaleDays = 1
 	}
 	since := time.Now().AddDate(0, 0, -timescaleDays)
-	punishmentCount, err := punishment_db.GetPunishmentCountByAction(db, i.GuildID, targetUser.ID, action, since)
+	punishmentCount, err := punishments_db.GetPunishmentCountByAction(db, i.GuildID, targetUser.ID, action, since)
 	if err != nil {
 		log.Printf("Error getting punishment count: %v", err)
 		utils.SendFollowUpError(s, i.Interaction, "Failed to retrieve punishment history.")
@@ -198,10 +190,10 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 
 	// Apply punishments according to the level
-	timeoutApplied, timeoutDurationStr := applyPunishmentLevel(s, i, targetUser, *punishLevel)
+	timeoutApplied, timeoutDurationStr, tempRoles, rolesRemoveAt := applyPunishmentLevel(s, i, targetUser, *punishLevel)
 
 	// Record the punishment
-	punishmentID, err := addPunishmentRecord(db, i, targetUser, reason, evidenceJSON, action)
+	punishmentID, err := addPunishmentRecord(db, i, targetUser, reason, evidenceJSON, action, tempRoles, rolesRemoveAt)
 	if err != nil {
 		log.Printf("Error saving punishment record: %v", err)
 		utils.SendFollowUpError(s, i.Interaction, "Failed to save the punishment record.")

@@ -2,7 +2,7 @@ package punish
 
 import (
 	"discord-bot/model"
-	punishment_db "discord-bot/utils/database/punish"
+	punishments_db "discord-bot/utils/database/punishments"
 	"time"
 
 	"discord-bot/utils"
@@ -129,24 +129,39 @@ func removePunishmentRoles(s *discordgo.Session, guildID, userID string, roleIDs
 }
 
 // addPunishmentRecord adds a new punishment record to the database and returns the new record's ID.
-func addPunishmentRecord(db *sqlx.DB, i *discordgo.InteractionCreate, targetUser *discordgo.User, reason, evidenceJSON, actionType string) (int64, error) {
-	record := model.PunishmentRecord{
-		MessageID:    i.ID,
-		AdminID:      i.Member.User.ID,
-		UserID:       targetUser.ID,
-		UserUsername: targetUser.Username,
-		Reason:       reason,
-		GuildID:      i.GuildID,
-		Timestamp:    time.Now().Unix(),
-		Evidence:     evidenceJSON,
-		ActionType:   actionType,
+func addPunishmentRecord(db *sqlx.DB, i *discordgo.InteractionCreate, targetUser *discordgo.User, reason, evidenceJSON, actionType string, tempRoles []string, rolesRemoveAt map[string]time.Time) (int64, error) {
+	// Serialize temp roles to JSON
+	tempRolesJSON, err := json.Marshal(tempRoles)
+	if err != nil {
+		return 0, fmt.Errorf("failed to serialize temp roles: %w", err)
 	}
-	return punishment_db.AddPunishmentRecord(db, record)
+
+	// Serialize roles remove times to JSON
+	rolesRemoveAtJSON, err := json.Marshal(rolesRemoveAt)
+	if err != nil {
+		return 0, fmt.Errorf("failed to serialize roles remove times: %w", err)
+	}
+
+	record := model.PunishmentRecord{
+		MessageID:        i.ID,
+		AdminID:          i.Member.User.ID,
+		UserID:           targetUser.ID,
+		UserUsername:     targetUser.Username,
+		Reason:           reason,
+		GuildID:          i.GuildID,
+		Timestamp:        time.Now().Unix(),
+		Evidence:         evidenceJSON,
+		ActionType:       actionType,
+		TempRolesJSON:    string(tempRolesJSON),
+		RolesRemoveAt:    string(rolesRemoveAtJSON),
+		PunishmentStatus: "active",
+	}
+	return punishments_db.AddPunishmentRecord(db, record)
 }
 
 // getPunishmentHistory retrieves and categorizes punishment records for a user.
 func getPunishmentHistory(db *sqlx.DB, userID, currentGuildID string) ([]model.PunishmentRecord, map[string][]model.PunishmentRecord, error) {
-	history, err := punishment_db.GetPunishmentRecordsByUserID(db, userID, nil)
+	history, err := punishments_db.GetPunishmentRecordsByUserID(db, userID, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error fetching punishment history: %w", err)
 	}
@@ -260,7 +275,8 @@ func parseIntSafe(s string) int {
 }
 
 // applyPunishmentLevel applies the punishment actions according to the punishment level.
-func applyPunishmentLevel(s *discordgo.Session, i *discordgo.InteractionCreate, targetUser *discordgo.User, level model.PunishLevel) (bool, string) {
+// Returns: timeoutApplied, timeoutDurationStr, tempRoles, rolesRemoveAt
+func applyPunishmentLevel(s *discordgo.Session, i *discordgo.InteractionCreate, targetUser *discordgo.User, level model.PunishLevel) (bool, string, []string, map[string]time.Time) {
 	// Remove roles
 	removePunishmentRoles(s, i.GuildID, targetUser.ID, level.RemoveRoleID)
 
@@ -295,6 +311,10 @@ func applyPunishmentLevel(s *discordgo.Session, i *discordgo.InteractionCreate, 
 		}
 	}
 
+	// Track temporary roles and their removal times
+	var tempRoles []string
+	rolesRemoveAt := make(map[string]time.Time)
+
 	// Add roles with optional timeout
 	for _, roleID := range level.AddRole {
 		if roleID == "0" {
@@ -307,42 +327,19 @@ func applyPunishmentLevel(s *discordgo.Session, i *discordgo.InteractionCreate, 
 			continue
 		}
 
+		tempRoles = append(tempRoles, roleID)
+
 		// Schedule role removal if timeout is specified
 		if level.AddRoleTimeoutTime != "" && level.AddRoleTimeoutTime != "0" && level.AddRoleTimeoutTime != "-1" {
 			timeoutMinutes := parseIntSafe(level.AddRoleTimeoutTime)
 			if timeoutMinutes > 0 {
 				removeAt := time.Now().Add(time.Duration(timeoutMinutes) * time.Minute)
-
-				// Get kick config for database path
-				kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
-				if err != nil {
-					log.Printf("Error loading kick config for timed task: %v", err)
-					continue
-				}
-
-				timedTaskDB, err := punishment_db.InitTimedTaskDB(kickConfig.InitConfig.DBPath)
-				if err != nil {
-					log.Printf("Failed to connect to timed task DB: %v", err)
-					continue
-				}
-
-				task := model.TimedTask{
-					GuildID:  i.GuildID,
-					UserID:   targetUser.ID,
-					RoleID:   roleID,
-					RemoveAt: removeAt,
-				}
-
-				if err := punishment_db.AddTimedTask(timedTaskDB, task); err != nil {
-					log.Printf("Failed to schedule role removal: %v", err)
-				}
-
-				timedTaskDB.Close()
+				rolesRemoveAt[roleID] = removeAt
 			}
 		}
 	}
 
-	return timeoutApplied, timeoutDurationStr
+	return timeoutApplied, timeoutDurationStr, tempRoles, rolesRemoveAt
 }
 
 // buildPunishmentEmbedNew creates the rich embed message for the punishment announcement using new config.

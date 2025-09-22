@@ -8,7 +8,6 @@ import (
 	"discord-bot/scanner"
 	"discord-bot/tasks"
 	"discord-bot/utils"
-	punishment_db "discord-bot/utils/database/punish"
 	"encoding/json"
 	"log"
 	"os"
@@ -57,8 +56,8 @@ func (s *Scheduler) Start() {
 	// Start the initial scan
 	go s.runInitialScan()
 
-	// Start the role remover scheduler
-	go s.startRoleRemover()
+	// Start the punishment timer scheduler
+	go s.startPunishmentTimer()
 
 	// Start the channel cleaner scheduler
 	go s.startChannelCleaner()
@@ -115,19 +114,9 @@ func (s *Scheduler) runInitialScan() {
 	}
 }
 
-func (s *Scheduler) startRoleRemover() {
+func (s *Scheduler) startPunishmentTimer() {
 	defer s.wg.Done()
-	kickConfig, err := utils.LoadKickConfig("data/kick_config.json")
-	if err != nil {
-		log.Printf("Failed to load kick config for scanner: %v", err)
-		return
-	}
-	timedTaskDB, err := punishment_db.InitTimedTaskDB(kickConfig.InitConfig.DBPath)
-	if err != nil {
-		log.Printf("Failed to initialize timed task DB: %v", err)
-		return
-	}
-	scanner.StartRoleRemover(s.bot.GetSession(), timedTaskDB)
+	scanner.StartPunishmentTimer(s.bot.GetSession())
 }
 
 func (s *Scheduler) startChannelCleaner() {

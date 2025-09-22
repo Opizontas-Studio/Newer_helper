@@ -4,8 +4,9 @@ import (
 	"discord-bot/bot"
 	"discord-bot/config"
 	"discord-bot/handlers"
+	"discord-bot/utils"
 	"discord-bot/utils/database"
-	punishment_db "discord-bot/utils/database/punish"
+	punishments_db "discord-bot/utils/database/punishments"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -48,7 +49,13 @@ func main() {
 		log.Fatalf("Error creating guild tables: %v", err)
 	}
 
-	punishDB, err := punishment_db.InitPunishmentDB(cfg.KickConfig.InitConfig.DBPath)
+	// Load punish config and initialize punishment database
+	punishConfig, err := utils.LoadPunishConfig("config/config_file/punish_config.json")
+	if err != nil {
+		log.Fatalf("Error loading punish config: %v", err)
+	}
+
+	punishDB, err := punishments_db.Init(punishConfig.DatabasePath)
 	if err != nil {
 		log.Fatalf("Error setting up punishment database: %v", err)
 	}

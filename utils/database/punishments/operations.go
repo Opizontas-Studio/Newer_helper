@@ -1,54 +1,17 @@
-package punishment_db
+package punishments
 
 import (
 	"discord-bot/model"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	_ "github.com/mattn/go-sqlite3"
 )
-
-// InitPunishmentDB initializes the punishment database and ensures the table exists.
-func InitPunishmentDB(dbPath string) (*sqlx.DB, error) {
-	db, err := sqlx.Connect("sqlite3", dbPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to punishment database: %w", err)
-	}
-
-	schema := `CREATE TABLE IF NOT EXISTS punishments (
-	          punishment_id INTEGER PRIMARY KEY AUTOINCREMENT,
-	          message_id TEXT NOT NULL,
-	          admin_id TEXT NOT NULL,
-	          user_id TEXT NOT NULL,
-	          user_username TEXT NOT NULL,
-	          reason TEXT NOT NULL,
-	          guild_id TEXT NOT NULL,
-	          timestamp INTEGER NOT NULL,
-	          evidence TEXT
-	      );`
-	_, err = db.Exec(schema)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create punishments table: %w", err)
-	}
-
-	// Add action_type column if it doesn't exist
-	_, err = db.Exec(`ALTER TABLE punishments ADD COLUMN action_type TEXT DEFAULT ''`)
-	if err != nil {
-		// Column might already exist, check if it's a "duplicate column" error
-		if !strings.Contains(err.Error(), "duplicate column name") {
-			return nil, fmt.Errorf("failed to add action_type column: %w", err)
-		}
-		// If it's a duplicate column error, that means the column already exists, which is fine
-	}
-
-	return db, nil
-}
 
 // AddPunishmentRecord adds a new punishment record to the database and returns the new record's ID.
 func AddPunishmentRecord(db *sqlx.DB, record model.PunishmentRecord) (int64, error) {
-	query := `INSERT INTO punishments (message_id, admin_id, user_id, user_username, reason, guild_id, timestamp, evidence, action_type) VALUES (:message_id, :admin_id, :user_id, :user_username, :reason, :guild_id, :timestamp, :evidence, :action_type)`
+	query := `INSERT INTO punishments (message_id, admin_id, user_id, user_username, reason, guild_id, timestamp, evidence, action_type, temp_roles_json, roles_remove_at, punishment_status)
+			  VALUES (:message_id, :admin_id, :user_id, :user_username, :reason, :guild_id, :timestamp, :evidence, :action_type, :temp_roles_json, :roles_remove_at, :punishment_status)`
 
 	result, err := db.NamedExec(query, record)
 	if err != nil {
@@ -183,4 +146,52 @@ func GetPunishmentCountByAction(db *sqlx.DB, guildID, userID, actionType string,
 		return 0, fmt.Errorf("failed to get punishment count for user %s with action %s in guild %s: %w", userID, actionType, guildID, err)
 	}
 	return count, nil
+}
+
+// GetActivePunishments retrieves all active punishment records that have temporary roles.
+func GetActivePunishments(db *sqlx.DB) ([]model.PunishmentRecord, error) {
+	var records []model.PunishmentRecord
+	query := `SELECT * FROM punishments
+			  WHERE punishment_status = 'active'
+			  AND roles_remove_at != '{}'
+			  AND roles_remove_at != ''`
+	err := db.Select(&records, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active punishments: %w", err)
+	}
+	return records, nil
+}
+
+// UpdatePunishmentStatus updates the status of a punishment record.
+func UpdatePunishmentStatus(db *sqlx.DB, punishmentID int64, status string) error {
+	query := "UPDATE punishments SET punishment_status = ? WHERE punishment_id = ?"
+	result, err := db.Exec(query, status, punishmentID)
+	if err != nil {
+		return fmt.Errorf("failed to update punishment status for ID %d: %w", punishmentID, err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected for punishment ID %d: %w", punishmentID, err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("no punishment found with ID %d", punishmentID)
+	}
+	return nil
+}
+
+// RemoveExpiredRoleFromPunishment removes a specific role from the roles_remove_at JSON of a punishment.
+func RemoveExpiredRoleFromPunishment(db *sqlx.DB, punishmentID int64, roleID string, newRolesRemoveAtJSON string) error {
+	query := "UPDATE punishments SET roles_remove_at = ? WHERE punishment_id = ?"
+	result, err := db.Exec(query, newRolesRemoveAtJSON, punishmentID)
+	if err != nil {
+		return fmt.Errorf("failed to update roles_remove_at for punishment ID %d: %w", punishmentID, err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected for punishment ID %d: %w", punishmentID, err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("no punishment found with ID %d", punishmentID)
+	}
+	return nil
 }

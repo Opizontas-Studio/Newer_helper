@@ -81,10 +81,6 @@ func Load() (*model.Config, error) {
 		return nil, err
 	}
 
-	// Load kick config
-	if err := loadJSON("data/kick_config.json", &cfg.KickConfig); err != nil {
-		return nil, err
-	}
 
 	if err := generateDatabaseMapping(cfg.TaskConfig); err != nil {
 		return nil, err
