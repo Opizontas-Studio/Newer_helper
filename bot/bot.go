@@ -27,23 +27,34 @@ type PendingPreset struct {
 	Timestamp   time.Time
 }
 
+// PendingPunishment holds the data for a punishment awaiting action selection.
+type PendingPunishment struct {
+	TargetUser    *discordgo.User
+	Reason        string
+	EvidenceLinks string
+	Interaction   *discordgo.Interaction
+	Timestamp     time.Time
+}
+
 type Bot struct {
-	Session             *discordgo.Session
-	AppID               string
-	RegisteredCommands  []*discordgo.ApplicationCommand
-	commandsMutex       sync.Mutex
-	config              atomic.Value // *model.Config
-	CommandHandlers     map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)
-	PresetCooldowns     map[string]time.Time
-	CooldownMutex       sync.Mutex
-	PendingPresets      map[string]*PendingPreset
-	PendingPresetsMutex sync.Mutex
-	DB                  *sql.DB
-	DBX                 *sqlx.DB
-	activeScanCount     int
-	scheduler           *Scheduler
-	ctx                 context.Context
-	cancel              context.CancelFunc
+	Session                 *discordgo.Session
+	AppID                   string
+	RegisteredCommands      []*discordgo.ApplicationCommand
+	commandsMutex           sync.Mutex
+	config                  atomic.Value // *model.Config
+	CommandHandlers         map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate)
+	PresetCooldowns         map[string]time.Time
+	CooldownMutex           sync.Mutex
+	PendingPresets          map[string]*PendingPreset
+	PendingPresetsMutex     sync.Mutex
+	PendingPunishments      map[string]*PendingPunishment
+	PendingPunishmentsMutex sync.Mutex
+	DB                      *sql.DB
+	DBX                     *sqlx.DB
+	activeScanCount         int
+	scheduler               *Scheduler
+	ctx                     context.Context
+	cancel                  context.CancelFunc
 }
 
 func (b *Bot) GetConfig() *model.Config {
@@ -89,21 +100,23 @@ func New(cfg *model.Config, db *sql.DB, dbx *sqlx.DB) (*Bot, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	b := &Bot{
-		Session:         dg,
-		AppID:           cfg.AppID,
-		PresetCooldowns: make(map[string]time.Time),
-		PendingPresets:  make(map[string]*PendingPreset),
-		DB:              db,
-		DBX:             dbx,
-		activeScanCount: 0,
-		ctx:             ctx,
-		cancel:          cancel,
+		Session:            dg,
+		AppID:              cfg.AppID,
+		PresetCooldowns:    make(map[string]time.Time),
+		PendingPresets:     make(map[string]*PendingPreset),
+		PendingPunishments: make(map[string]*PendingPunishment),
+		DB:                 db,
+		DBX:                dbx,
+		activeScanCount:    0,
+		ctx:                ctx,
+		cancel:             cancel,
 	}
 	b.config.Store(cfg)
 	b.scheduler = NewScheduler(b)
 	// b.CommandHandlers = handlers.commandHandlers(b)
 
 	go b.cleanupExpiredPresets(ctx)
+	go b.cleanupExpiredPunishments(ctx)
 
 	taskConfig, err := utils.LoadTaskConfig("data/task_config.json")
 	if err != nil {
@@ -182,6 +195,14 @@ func (b *Bot) GetPendingPresetsMutex() *sync.Mutex {
 	return &b.PendingPresetsMutex
 }
 
+func (b *Bot) GetPendingPunishments() map[string]*PendingPunishment {
+	return b.PendingPunishments
+}
+
+func (b *Bot) GetPendingPunishmentsMutex() *sync.Mutex {
+	return &b.PendingPunishmentsMutex
+}
+
 func (b *Bot) ReloadConfig() error {
 	log.Println("Reloading configuration...")
 	newCfg, err := config.Load()
@@ -227,4 +248,39 @@ func (b *Bot) cleanupExpiredPresets(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (b *Bot) cleanupExpiredPunishments(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			b.PendingPunishmentsMutex.Lock()
+			for id, punishment := range b.PendingPunishments {
+				if time.Since(punishment.Timestamp) > 5*time.Minute {
+					log.Printf("Removing expired pending punishment: %s", id)
+					delete(b.PendingPunishments, id)
+				}
+			}
+			b.PendingPunishmentsMutex.Unlock()
+		case <-ctx.Done():
+			log.Println("Stopping expired punishments cleanup.")
+			return
+		}
+	}
+}
+
+// FindPresetByID searches for a preset message by its ID across all server configurations.
+func (b *Bot) FindPresetByID(presetID string) *model.PresetMessage {
+	config := b.GetConfig()
+	for _, serverConfig := range config.ServerConfigs {
+		for _, preset := range serverConfig.PresetMessages {
+			if preset.ID == presetID {
+				return &preset
+			}
+		}
+	}
+	return nil
 }

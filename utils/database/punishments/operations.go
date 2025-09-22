@@ -44,6 +44,17 @@ func GetPunishmentRecordsByUserID(db *sqlx.DB, userID string, since *time.Time) 
 	return records, nil
 }
 
+// GetPunishmentRecordsByUserIDAndActionType retrieves punishment records for a specific user and action type.
+func GetPunishmentRecordsByUserIDAndActionType(db *sqlx.DB, userID, actionType string) ([]model.PunishmentRecord, error) {
+	var records []model.PunishmentRecord
+	query := "SELECT * FROM punishments WHERE user_id = ? AND action_type = ? ORDER BY timestamp ASC"
+	err := db.Select(&records, query, userID, actionType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get punishment records for user %s and action type %s: %w", userID, actionType, err)
+	}
+	return records, nil
+}
+
 // GetPunishmentRecordByID retrieves a single punishment record by its primary key.
 func GetPunishmentRecordByID(db *sqlx.DB, id int64) (*model.PunishmentRecord, error) {
 	var record model.PunishmentRecord
@@ -144,6 +155,17 @@ func GetPunishmentCountByAction(db *sqlx.DB, guildID, userID, actionType string,
 	err := db.Get(&count, query, guildID, userID, actionType, since.Unix())
 	if err != nil {
 		return 0, fmt.Errorf("failed to get punishment count for user %s with action %s in guild %s: %w", userID, actionType, guildID, err)
+	}
+	return count, nil
+}
+
+// GetActivePunishmentCountByUser retrieves the total number of active punishments for a specific user (all action types).
+func GetActivePunishmentCountByUser(db *sqlx.DB, guildID, userID string) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM punishments WHERE guild_id = ? AND user_id = ? AND punishment_status = 'active'`
+	err := db.Get(&count, query, guildID, userID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get total active punishment count for user %s in guild %s: %w", userID, guildID, err)
 	}
 	return count, nil
 }

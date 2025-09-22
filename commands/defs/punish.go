@@ -63,7 +63,6 @@ var PunishAdmin = &discordgo.ApplicationCommand{
 				{Name: "处罚ID", Value: "punishment_id"},
 				{Name: "被处罚者ID", Value: "punished_user_id"},
 				{Name: "处罚者ID", Value: "punisher_id"},
-				{Name: "禁言数据库ID", Value: "mute_db_id"},
 			},
 		},
 		{

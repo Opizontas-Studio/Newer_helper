@@ -226,6 +226,15 @@ func revokePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, db *
 		utils.SendFollowUpError(s, i.Interaction, "加载处罚配置失败。")
 		return
 	}
+	// Check if the user is banned and unban them if so
+	_, banErr := s.GuildBan(record.GuildID, record.UserID)
+	if banErr == nil { // If err is nil, the user is banned
+		unbanErr := s.GuildBanDelete(record.GuildID, record.UserID)
+		if unbanErr != nil {
+			log.Printf("Failed to unban user %s from guild %s: %v", record.UserID, record.GuildID, unbanErr)
+			// Optionally, notify the admin that unbanning failed but the process will continue
+		}
+	}
 
 	// Get guild-specific action configurations
 	guildActions, ok := punishConfig.PunishConfig[record.GuildID]
@@ -239,6 +248,32 @@ func revokePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, db *
 	if !ok {
 		utils.SendFollowUpError(s, i.Interaction, "找不到此处罚类型的配置。")
 		return
+	}
+
+	// Get all punishments of the same type for the user to determine the punishment level
+	userPunishments, err := punishments_db.GetPunishmentRecordsByUserIDAndActionType(db, record.UserID, record.ActionType)
+	if err != nil {
+		utils.SendFollowUpError(s, i.Interaction, "获取用户处罚历史失败。")
+		return
+	}
+
+	punishmentIndex := -1
+	for i, p := range userPunishments {
+		if p.PunishmentID == record.PunishmentID {
+			punishmentIndex = i
+			break
+		}
+	}
+
+	if punishmentIndex != -1 {
+		punishmentLevel := strconv.Itoa(punishmentIndex)
+		if levelData, ok := actionConfig.Data[punishmentLevel]; ok {
+			for _, roleID := range levelData.AddRole {
+				if roleID != "0" {
+					s.GuildMemberRoleRemove(record.GuildID, record.UserID, roleID)
+				}
+			}
+		}
 	}
 
 	// Restore base role

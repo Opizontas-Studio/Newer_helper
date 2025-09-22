@@ -86,7 +86,6 @@ type TimeoutConfig struct {
 	AddRoleTimeoutTime string   `json:"add_role_timeout_time"`
 }
 
-
 // PersistentPanelInfo 存储持久化面板信息
 type PersistentPanelInfo struct {
 	MessageID   string `json:"message_id"`
@@ -125,17 +124,19 @@ type EvidenceCleanerConfig struct {
 
 // PunishLevel defines a specific punishment level configuration.
 type PunishLevel struct {
-	Time                 int      `json:"time"`
-	RemoveRoleID         []string `json:"remove_role_id"`
-	Timeout              string   `json:"timeout"`
-	AddRole              []string `json:"add_role"`
-	AddRoleTimeoutTime   string   `json:"add_role_timeout_time"`
+	Time               int      `json:"time"`
+	RemoveRoleID       []string `json:"remove_role_id"`
+	Timeout            string   `json:"timeout"`
+	AddRole            []string `json:"add_role"`
+	AddRoleTimeoutTime string   `json:"add_role_timeout_time"`
+	SendPresetID       string   `json:"send_preset_id,omitempty"`
 }
 
 // ActionConfig defines the configuration for a specific punishment action type.
 type ActionConfig struct {
 	Type            string                 `json:"tpye"` // Note: keeping the typo to match JSON
 	Name            string                 `json:"name"`
+	PeeUserLimit    int                    `json:"pee_user_limit"`
 	Timescale       string                 `json:"timescale"`
 	GuildID         string                 `json:"guilds_id"`
 	BaseRoleID      string                 `json:"base_role_id"`
@@ -146,6 +147,6 @@ type ActionConfig struct {
 
 // PunishConfig defines the structure for punishment configurations.
 type PunishConfig struct {
-	DatabasePath string                              `json:"database_path"`
+	DatabasePath string                             `json:"database_path"`
 	PunishConfig map[string]map[string]ActionConfig `json:"punish_config"`
 }
