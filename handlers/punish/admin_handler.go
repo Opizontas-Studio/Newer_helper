@@ -276,9 +276,30 @@ func revokePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, db *
 		}
 	}
 
-	// Restore base role
-	if actionConfig.BaseRoleID != "" {
-		s.GuildMemberRoleAdd(record.GuildID, record.UserID, actionConfig.BaseRoleID)
+	// Restore role from revocation config
+	if revConfig, ok := punishConfig.Revocation[record.GuildID]; ok {
+		if revConfig.RecoverRoleID != "" && revConfig.RecoverRoleID != "0" {
+			// Check if any roles were actually removed by the original punishment
+			rolesWereRemoved := false
+			if punishmentIndex != -1 {
+				punishmentLevel := strconv.Itoa(punishmentIndex)
+				if levelData, ok := actionConfig.Data[punishmentLevel]; ok {
+					for _, roleID := range levelData.RemoveRoleID {
+						if roleID != "0" {
+							rolesWereRemoved = true
+							break
+						}
+					}
+				}
+			}
+
+			if rolesWereRemoved {
+				err := s.GuildMemberRoleAdd(record.GuildID, record.UserID, revConfig.RecoverRoleID)
+				if err != nil {
+					log.Printf("Failed to restore role %s for user %s: %v", revConfig.RecoverRoleID, record.UserID, err)
+				}
+			}
+		}
 	}
 
 	// Remove temporary roles that were added by this punishment

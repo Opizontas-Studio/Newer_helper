@@ -120,6 +120,13 @@ func processEvidence(s *discordgo.Session, messageLinks string, targetUser *disc
 
 // removePunishmentRoles removes specified roles from a user.
 func removePunishmentRoles(s *discordgo.Session, guildID, userID string, roleIDs []string) {
+	// 如果 roleIDs 包含 "0"，则不执行任何操作
+	for _, roleID := range roleIDs {
+		if roleID == "0" {
+			return
+		}
+	}
+
 	for _, roleID := range roleIDs {
 		err := s.GuildMemberRoleRemove(guildID, userID, roleID)
 		if err != nil {

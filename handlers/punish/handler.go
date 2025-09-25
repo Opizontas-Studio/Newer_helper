@@ -317,11 +317,11 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 	defer db.Close()
 
-	// Get total active punishment count for this user (all action types)
-	punishmentCount, err := punishments_db.GetActivePunishmentCountByUser(db, i.GuildID, targetUser.ID)
+	// Get total punishment count for this user (all action types)
+	punishmentCount, err := punishments_db.GetTotalPunishmentCountByUser(db, i.GuildID, targetUser.ID)
 	if err != nil {
-		log.Printf("Error getting total active punishment count: %v", err)
-		utils.SendFollowUpError(s, i.Interaction, "Failed to retrieve active punishment history.")
+		log.Printf("Error getting total punishment count: %v", err)
+		utils.SendFollowUpError(s, i.Interaction, "Failed to retrieve punishment history.")
 		return
 	}
 

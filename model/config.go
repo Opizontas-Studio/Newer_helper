@@ -145,8 +145,14 @@ type ActionConfig struct {
 	Data            map[string]PunishLevel `json:"data"`
 }
 
+// RevocationConfig defines the structure for revocation settings.
+type RevocationConfig struct {
+	RecoverRoleID string `json:"recover_roleid"`
+}
+
 // PunishConfig defines the structure for punishment configurations.
 type PunishConfig struct {
 	DatabasePath string                             `json:"database_path"`
+	Revocation   map[string]RevocationConfig        `json:"revocation"`
 	PunishConfig map[string]map[string]ActionConfig `json:"punish_config"`
 }

@@ -170,6 +170,17 @@ func GetActivePunishmentCountByUser(db *sqlx.DB, guildID, userID string) (int, e
 	return count, nil
 }
 
+// GetTotalPunishmentCountByUser retrieves the total number of punishments for a specific user (all action types).
+func GetTotalPunishmentCountByUser(db *sqlx.DB, guildID, userID string) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM punishments WHERE guild_id = ? AND user_id = ?`
+	err := db.Get(&count, query, guildID, userID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get total punishment count for user %s in guild %s: %w", userID, guildID, err)
+	}
+	return count, nil
+}
+
 // GetActivePunishments retrieves all active punishment records that have temporary roles.
 func GetActivePunishments(db *sqlx.DB) ([]model.PunishmentRecord, error) {
 	var records []model.PunishmentRecord
