@@ -128,14 +128,37 @@ func HandlePunishModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	// --- Create action buttons ---
+	// Define fixed order for consistent button positioning
+	actionOrder := []string{"re-answer", "cheat", "tag"}
+
 	var components []discordgo.MessageComponent
 	actionRow := discordgo.ActionsRow{}
+	for _, actionKey := range actionOrder {
+		if actionConfig, exists := guildActions[actionKey]; exists {
+			actionRow.Components = append(actionRow.Components, discordgo.Button{
+				Label:    actionConfig.Name,
+				Style:    discordgo.PrimaryButton,
+				CustomID: fmt.Sprintf("punish_action_%s_%s", pendingID, actionKey),
+			})
+		}
+	}
+
+	// Add any additional actions not in the predefined order
 	for actionKey, actionConfig := range guildActions {
-		actionRow.Components = append(actionRow.Components, discordgo.Button{
-			Label:    actionConfig.Name,
-			Style:    discordgo.PrimaryButton,
-			CustomID: fmt.Sprintf("punish_action_%s_%s", pendingID, actionKey),
-		})
+		alreadyAdded := false
+		for _, orderedKey := range actionOrder {
+			if orderedKey == actionKey {
+				alreadyAdded = true
+				break
+			}
+		}
+		if !alreadyAdded {
+			actionRow.Components = append(actionRow.Components, discordgo.Button{
+				Label:    actionConfig.Name,
+				Style:    discordgo.PrimaryButton,
+				CustomID: fmt.Sprintf("punish_action_%s_%s", pendingID, actionKey),
+			})
+		}
 	}
 	components = append(components, actionRow)
 
@@ -184,29 +207,12 @@ func HandlePunishActionSelection(s *discordgo.Session, i *discordgo.InteractionC
 	// Execute the punishment
 	applyAndLogPunishment(s, i, b, pendingPunishment.TargetUser, action, pendingPunishment.Reason, pendingPunishment.EvidenceLinks)
 
-	// Disable components on the original message
-	disabledComponents := []discordgo.MessageComponent{}
-	for _, comp := range i.Message.Components {
-		row, ok := comp.(*discordgo.ActionsRow)
-		if !ok {
-			continue
-		}
-		newRow := discordgo.ActionsRow{}
-		for _, buttonComp := range row.Components {
-			button, ok := buttonComp.(*discordgo.Button)
-			if !ok {
-				continue
-			}
-			newButton := *button
-			newButton.Disabled = true
-			newRow.Components = append(newRow.Components, newButton)
-		}
-		disabledComponents = append(disabledComponents, newRow)
-	}
+	// Remove all components (hide all buttons) after punishment is applied
+	emptyComponents := []discordgo.MessageComponent{}
 
-	// Update the original message to show it's been handled
+	// Update the original message to hide all buttons
 	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-		Components: &disabledComponents,
+		Components: &emptyComponents,
 	})
 }
 
@@ -241,6 +247,11 @@ func buildPunishmentPreviewEmbed(i *discordgo.InteractionCreate, targetUser *dis
 // applyAndLogPunishment is the core function that handles the punishment process.
 // It centralizes the logic for configuration loading, validation, database operations, and notifications.
 func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, targetUser *discordgo.User, action, reason, evidenceLinks string) {
+	if targetUser.ID == s.State.User.ID {
+		utils.SendFollowUpError(s, i.Interaction, "错误，这样做是不被允许的（恼！）")
+		return
+	}
+
 	isSelfPunish := i.Member.User.ID == targetUser.ID
 
 	if !isSelfPunish {

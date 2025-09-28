@@ -28,5 +28,7 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 		defs.DailyPunishmentStats,
 		defs.SearchPreset,
 		defs.GuildsAdmin,
+		defs.QuickPreset,
+		defs.QuickPresetReplyForAPP,
 	}
 }

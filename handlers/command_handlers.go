@@ -95,6 +95,19 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 			preset.HandlePresetMessageAdminInteraction(s, i, b)
 		},
+		"quick-preset": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
+			if !ok {
+				log.Printf("Could not find server config for guild: %s", i.GuildID)
+				return
+			}
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
+			if permissionLevel == utils.GuestPermission {
+				utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
+				return
+			}
+			preset.HandleQuickPresetInteraction(s, i, b)
+		},
 		"start-scan": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, nil, nil, b.GetConfig().DeveloperUserIDs, nil)
 			if permissionLevel != utils.DeveloperPermission {

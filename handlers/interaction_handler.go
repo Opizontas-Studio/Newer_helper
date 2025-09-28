@@ -18,6 +18,8 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 			punish.HandleQuickPunishCommand(s, i, b)
 		case "搜索预设":
 			preset.HandleSearchPresetCommand(s, i, b)
+		case "快速预设回复":
+			preset.HandleQuickPresetReplyCommand(s, i, b)
 		default:
 			if h, ok := b.CommandHandlers[i.ApplicationCommandData().Name]; ok {
 				h(s, i)
@@ -25,7 +27,9 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 		}
 	case discordgo.InteractionMessageComponent:
 		customID := i.MessageComponentData().CustomID
-		if strings.HasPrefix(customID, "confirm_delete_") || strings.HasPrefix(customID, "cancel_delete_") {
+		if strings.HasPrefix(customID, "quick_preset_reply_") {
+			preset.HandleQuickPresetReplyButton(s, i, b)
+		} else if strings.HasPrefix(customID, "confirm_delete_") || strings.HasPrefix(customID, "cancel_delete_") {
 			preset.HandlePresetDeleteInteraction(s, i, b)
 		} else if strings.HasPrefix(customID, "confirm_preset_") || strings.HasPrefix(customID, "cancel_preset_") || strings.HasPrefix(customID, "disable_confirm_preset_") {
 			preset.HandlePresetConfirmationInteraction(s, i, b)

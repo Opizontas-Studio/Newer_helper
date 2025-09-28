@@ -15,9 +15,6 @@ import (
 
 // HandlePresetMessageInteraction handles the preset message interaction
 func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
-	cooldowns := b.GetPresetCooldowns()
-	mutex := b.GetCooldownMutex()
-
 	serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
 	if !ok {
 		log.Printf("Could not find server config for guild: %s", i.GuildID)
@@ -65,16 +62,28 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 		return
 	}
 
-	mutex.Lock()
-	defer mutex.Unlock()
+	sendPreset(s, i, b, selectedPreset, user, messageLink)
+}
 
-	log.Printf("Checking cooldown for preset: %s", selectedPreset.ID)
+// sendPreset handles the logic of sending a preset message, including cooldowns, permissions, and confirmations.
+func sendPreset(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, selectedPreset *model.PresetMessage, user, messageLink string) {
+	serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
+	if !ok {
+		log.Printf("Could not find server config for guild: %s", i.GuildID)
+		return
+	}
+
+	cooldowns := b.GetPresetCooldowns()
+	mutex := b.GetCooldownMutex()
+
+	mutex.Lock()
 	if lastUsed, ok := cooldowns[selectedPreset.ID]; ok {
-		log.Printf("Preset '%s' was last used at %v", selectedPreset.ID, lastUsed)
 		if time.Since(lastUsed) < 30*time.Second {
+			mutex.Unlock()
 			log.Printf("Preset '%s' is on cooldown.", selectedPreset.ID)
 			_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 				Content: fmt.Sprintf("Preset '%s' is on cooldown. Please wait.", selectedPreset.Name),
+				Flags:   discordgo.MessageFlagsEphemeral,
 			})
 			if err != nil {
 				log.Printf("Failed to send cooldown message: %v", err)
@@ -82,112 +91,110 @@ func HandlePresetMessageInteraction(s *discordgo.Session, i *discordgo.Interacti
 			return
 		}
 	}
-
-	log.Printf("Updating cooldown for preset: %s", selectedPreset.ID)
 	cooldowns[selectedPreset.ID] = time.Now()
+	mutex.Unlock()
 
 	permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, serverConfig.UserRoleIDs, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
 
 	if permissionLevel == utils.GuestPermission {
-		// Guest users can only view the preset privately
 		messageSend := FormatPresetMessageSend(selectedPreset, "") // User mention is ignored for private view
 		webhookParams := &discordgo.WebhookParams{
 			Content: messageSend.Content,
 			Embeds:  messageSend.Embeds,
+			Flags:   discordgo.MessageFlagsEphemeral,
 		}
-		// The followup message will be ephemeral because the initial response was deferred as ephemeral.
 		_, err := s.FollowupMessageCreate(i.Interaction, true, webhookParams)
 		if err != nil {
 			log.Printf("Failed to send private followup message: %v", err)
 		}
-	} else {
-		// Check user preference for skipping confirmation
-		skipConfirmation, err := database.GetUserPresetConfirmationPreference(i.Member.User.ID, i.GuildID)
+		return
+	}
+
+	skipConfirmation, err := database.GetUserPresetConfirmationPreference(i.Member.User.ID, i.GuildID)
+	if err != nil {
+		log.Printf("Failed to get user preference, proceeding with confirmation: %v", err)
+	}
+
+	messageSend := FormatPresetMessageSend(selectedPreset, user)
+	if messageLink != "" {
+		_, _, msgID, err := utils.ParseMessageLink(messageLink)
 		if err != nil {
-			log.Printf("Failed to get user preference, proceeding with confirmation: %v", err)
-		}
-
-		messageSend := FormatPresetMessageSend(selectedPreset, user)
-		if messageLink != "" {
-			_, _, msgID, err := utils.ParseMessageLink(messageLink)
-			if err != nil {
-				log.Printf("Invalid message link: %v", err)
-			} else {
-				messageSend.Reference = &discordgo.MessageReference{
-					MessageID: msgID,
-					ChannelID: i.ChannelID,
-					GuildID:   i.GuildID,
-				}
-			}
-		}
-
-		if skipConfirmation {
-			// User prefers to skip confirmation, send directly
-			message, err := s.ChannelMessageSendComplex(i.ChannelID, messageSend)
-			if err != nil {
-				log.Printf("Failed to send channel message directly: %v", err)
-				utils.SendEphemeralResponse(s, i, "发送消息失败。")
-				return
-			}
-			if b.GetConfig().LogChannelID != "" {
-				logMessageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, message.ID)
-				logInfo := fmt.Sprintf("用户: `%s`\n预设名: `%s`\n[点击查看消息](%s)", i.Member.User.Username, selectedPreset.Name, logMessageLink)
-				utils.LogInfo(s, b.GetConfig().LogChannelID, "预设", "使用", logInfo)
-			}
-			s.InteractionResponseDelete(i.Interaction)
+			log.Printf("Invalid message link: %v", err)
 		} else {
-			// User requires confirmation, show preview with options
-			pendingPresets := b.GetPendingPresets()
-			pendingPresetsMutex := b.GetPendingPresetsMutex()
-			pendingPresetsMutex.Lock()
-			defer pendingPresetsMutex.Unlock()
-
-			interactionID := i.Interaction.ID
-			pendingPresets[interactionID] = &bot.PendingPreset{
-				MessageSend: messageSend,
-				PresetName:  selectedPreset.Name,
-				UserID:      i.Member.User.ID,
-				Timestamp:   time.Now(),
+			messageSend.Reference = &discordgo.MessageReference{
+				MessageID: msgID,
+				ChannelID: i.ChannelID,
+				GuildID:   i.GuildID,
 			}
+		}
+	}
 
-			webhookParams := &discordgo.WebhookParams{
-				Content: messageSend.Content,
-				Embeds:  messageSend.Embeds,
-				Components: []discordgo.MessageComponent{
-					discordgo.ActionsRow{
-						Components: []discordgo.MessageComponent{
-							discordgo.Button{
-								Label:    "确认发送",
-								Style:    discordgo.SuccessButton,
-								CustomID: "confirm_preset_" + interactionID,
-							},
-							discordgo.Button{
-								Label:    "取消",
-								Style:    discordgo.DangerButton,
-								CustomID: "cancel_preset_" + interactionID,
-							},
-							discordgo.Button{
-								Label:    "不再确认",
-								Style:    discordgo.SecondaryButton,
-								CustomID: "disable_confirm_preset_" + interactionID,
-							},
+	if skipConfirmation {
+		message, err := s.ChannelMessageSendComplex(i.ChannelID, messageSend)
+		if err != nil {
+			log.Printf("Failed to send channel message directly: %v", err)
+			utils.SendEphemeralResponse(s, i, "发送消息失败。")
+			return
+		}
+		if b.GetConfig().LogChannelID != "" {
+			logMessageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, message.ID)
+			logInfo := fmt.Sprintf("用户: `%s`\n预设名: `%s`\n[点击查看消息](%s)", i.Member.User.Username, selectedPreset.Name, logMessageLink)
+			utils.LogInfo(s, b.GetConfig().LogChannelID, "预设", "使用", logInfo)
+		}
+		s.InteractionResponseDelete(i.Interaction)
+	} else {
+		pendingPresets := b.GetPendingPresets()
+		pendingPresetsMutex := b.GetPendingPresetsMutex()
+		pendingPresetsMutex.Lock()
+
+		interactionID := i.Interaction.ID
+		pendingPresets[interactionID] = &bot.PendingPreset{
+			MessageSend: messageSend,
+			PresetName:  selectedPreset.Name,
+			UserID:      i.Member.User.ID,
+			Timestamp:   time.Now(),
+		}
+		pendingPresetsMutex.Unlock()
+
+		webhookParams := &discordgo.WebhookParams{
+			Content: messageSend.Content,
+			Embeds:  messageSend.Embeds,
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.Button{
+							Label:    "确认发送",
+							Style:    discordgo.SuccessButton,
+							CustomID: "confirm_preset_" + interactionID,
+						},
+						discordgo.Button{
+							Label:    "取消",
+							Style:    discordgo.DangerButton,
+							CustomID: "cancel_preset_" + interactionID,
+						},
+						discordgo.Button{
+							Label:    "不再确认",
+							Style:    discordgo.SecondaryButton,
+							CustomID: "disable_confirm_preset_" + interactionID,
 						},
 					},
 				},
-				Flags: discordgo.MessageFlagsEphemeral,
-			}
+			},
+			Flags: discordgo.MessageFlagsEphemeral,
+		}
 
-			if webhookParams.Content != "" {
-				webhookParams.Content = "请预览并确认发送以下消息：\n\n" + webhookParams.Content
-			} else {
-				webhookParams.Content = "请预览并确认发送以下消息："
-			}
+		if webhookParams.Content != "" {
+			webhookParams.Content = "请预览并确认发送以下消息：\n\n" + webhookParams.Content
+		} else {
+			webhookParams.Content = "请预览并确认发送以下消息："
+		}
 
-			_, err := s.FollowupMessageCreate(i.Interaction, true, webhookParams)
-			if err != nil {
-				log.Printf("Failed to send confirmation message: %v", err)
-				delete(pendingPresets, interactionID)
-			}
+		_, err := s.FollowupMessageCreate(i.Interaction, true, webhookParams)
+		if err != nil {
+			log.Printf("Failed to send confirmation message: %v", err)
+			pendingPresetsMutex.Lock()
+			delete(pendingPresets, interactionID)
+			pendingPresetsMutex.Unlock()
 		}
 	}
 }
@@ -205,7 +212,12 @@ func FindPreset(serverConfig *model.ServerConfig, presetID string) *model.Preset
 
 // FormatPresetMessageSend formats a preset message into a MessageSend struct.
 func FormatPresetMessageSend(preset *model.PresetMessage, user string) *discordgo.MessageSend {
-	messageSend := &discordgo.MessageSend{}
+	messageSend := &discordgo.MessageSend{
+		AllowedMentions: &discordgo.MessageAllowedMentions{
+			Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers},
+		},
+	}
+
 	if preset.Type == "embed" {
 		description := preset.Description
 		if user != "" {
@@ -219,10 +231,15 @@ func FormatPresetMessageSend(preset *model.PresetMessage, user string) *discordg
 	} else {
 		content := preset.Value
 		if user != "" {
-			content = fmt.Sprintf("%s \n%s", user, content)
+			content = fmt.Sprintf("%s\n%s", user, content)
 		}
 		messageSend.Content = content
 	}
+
+	if user == "" {
+		messageSend.AllowedMentions = nil
+	}
+
 	return messageSend
 }
 

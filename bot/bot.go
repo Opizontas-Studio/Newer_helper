@@ -155,6 +155,9 @@ func (b *Bot) RefreshCommands(guildID string) {
 
 	cmds := commands.GenerateCommands(&serverCfg)
 	log.Printf("Registering %d new commands for guild %s...", len(cmds), serverCfg.GuildID)
+	for _, cmd := range cmds {
+		log.Printf("Command to be registered: Name='%s', Type=%d", cmd.Name, cmd.Type)
+	}
 	registeredCmds, err := b.Session.ApplicationCommandBulkOverwrite(b.AppID, serverCfg.GuildID, cmds)
 	if err != nil {
 		var restErr *discordgo.RESTError
