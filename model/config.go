@@ -125,6 +125,7 @@ type EvidenceCleanerConfig struct {
 // PunishLevel defines a specific punishment level configuration.
 type PunishLevel struct {
 	Time               int      `json:"time"`
+	EdColor            string   `json:"ed_color,omitempty"`
 	RemoveRoleID       []string `json:"remove_role_id"`
 	Timeout            string   `json:"timeout"`
 	AddRole            []string `json:"add_role"`

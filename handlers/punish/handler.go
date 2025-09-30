@@ -162,7 +162,7 @@ func HandlePunishModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 	components = append(components, actionRow)
 
-	// --- Send preview message ---
+	// Send preview message
 	embed := buildPunishmentPreviewEmbed(i, targetMessage.Author, reason, messageLink)
 	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -314,7 +314,7 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 	if isSelfPunish {
 		// For self-punishment, just remove roles and show message
 		removePunishmentRoles(s, i.GuildID, targetUser.ID, actionConfig.RemoveRoleID)
-		embed := buildPunishmentEmbedNew(i, targetUser, action, reason, allEvidence, nil, nil, false, "", -1)
+		embed := buildPunishmentEmbedNew(i, targetUser, &actionConfig, reason, allEvidence, nil, nil, false, "", -1, nil)
 		sendResponseMessages(s, i, targetUser, embed, false, "", reason)
 		return
 	}
@@ -360,7 +360,7 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 		log.Printf("Error fetching punishment history: %v", err)
 	}
 	// Build and send response
-	embed := buildPunishmentEmbedNew(i, targetUser, action, reason, allEvidence, currentGuildHistory, otherGuildsHistory, timeoutApplied, timeoutDurationStr, punishmentID)
+	embed := buildPunishmentEmbedNew(i, targetUser, &actionConfig, reason, allEvidence, currentGuildHistory, otherGuildsHistory, timeoutApplied, timeoutDurationStr, punishmentID, punishLevel)
 
 	// Prepare preset message if configured
 	var presetContent string

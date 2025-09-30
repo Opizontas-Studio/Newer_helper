@@ -349,10 +349,25 @@ func applyPunishmentLevel(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	return timeoutApplied, timeoutDurationStr, tempRoles, rolesRemoveAt
 }
 
+// getEmbedColor determines the embed color based on the punishment level configuration.
+// Returns the configured color from ed_color field, or default red if not available.
+func getEmbedColor(punishLevel *model.PunishLevel) int {
+	if punishLevel != nil && punishLevel.EdColor != "" {
+		return utils.ParseHexColor(punishLevel.EdColor)
+	}
+	return 0xff0000 // Default red color
+}
+
 // buildPunishmentEmbedNew creates the rich embed message for the punishment announcement using new config.
-func buildPunishmentEmbedNew(i *discordgo.InteractionCreate, targetUser *discordgo.User, action, reason string, allEvidence []Evidence, currentGuildHistory []model.PunishmentRecord, otherGuildsHistory map[string][]model.PunishmentRecord, timeoutApplied bool, timeoutDurationStr string, punishmentID int64) *discordgo.MessageEmbed {
+func buildPunishmentEmbedNew(i *discordgo.InteractionCreate, targetUser *discordgo.User, actionConfig *model.ActionConfig, reason string, allEvidence []Evidence, currentGuildHistory []model.PunishmentRecord, otherGuildsHistory map[string][]model.PunishmentRecord, timeoutApplied bool, timeoutDurationStr string, punishmentID int64, punishLevel *model.PunishLevel) *discordgo.MessageEmbed {
+	// Get display name, fallback to type if actionConfig is nil
+	displayName := "未知处罚"
+	if actionConfig != nil {
+		displayName = actionConfig.Name
+	}
+
 	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("%s 处罚", action),
+		Title: fmt.Sprintf("%s 处罚", displayName),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: targetUser.AvatarURL(""),
 		},
@@ -363,7 +378,7 @@ func buildPunishmentEmbedNew(i *discordgo.InteractionCreate, targetUser *discord
 			},
 			{
 				Name:  "处罚类型",
-				Value: action,
+				Value: displayName,
 			},
 			{
 				Name:  "原因",
@@ -371,7 +386,7 @@ func buildPunishmentEmbedNew(i *discordgo.InteractionCreate, targetUser *discord
 			},
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
-		Color:     0xff0000,
+		Color:     getEmbedColor(punishLevel),
 	}
 
 	if punishmentID == -1 {
