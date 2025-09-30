@@ -8,6 +8,7 @@ import (
 	"discord-bot/handlers/leaderboard"
 	"discord-bot/handlers/preset"
 	"discord-bot/handlers/punish"
+	punish_admin "discord-bot/handlers/punish/admin"
 	"discord-bot/handlers/rollcard"
 	"discord-bot/scanner"
 	"discord-bot/utils"
@@ -32,18 +33,70 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			}
 			punish.HandlePunishCommand(s, i, b)
 		},
-		"punish_admin": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		"punish_search": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
 			if !ok {
 				log.Printf("Could not find server config for guild: %s", i.GuildID)
 				return
 			}
 			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
-			if permissionLevel != utils.AdminPermission && permissionLevel != utils.SuperAdminPermission && permissionLevel != utils.DeveloperPermission {
+			if permissionLevel < utils.AdminPermission {
 				utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
 				return
 			}
-			punish.HandlePunishAdminCommandV2(s, i, b)
+			punish_admin.HandlePunishSearchCommand(s, i)
+		},
+		"punish_revoke": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
+			if !ok {
+				log.Printf("Could not find server config for guild: %s", i.GuildID)
+				return
+			}
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
+			if permissionLevel < utils.AdminPermission {
+				utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
+				return
+			}
+			punish_admin.HandlePunishRevokeCommand(s, i)
+		},
+		"punish_delete": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
+			if !ok {
+				log.Printf("Could not find server config for guild: %s", i.GuildID)
+				return
+			}
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
+			if permissionLevel < utils.AdminPermission {
+				utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
+				return
+			}
+			punish_admin.HandlePunishDeleteCommand(s, i)
+		},
+		"punish_print_evidence": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
+			if !ok {
+				log.Printf("Could not find server config for guild: %s", i.GuildID)
+				return
+			}
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
+			if permissionLevel < utils.AdminPermission {
+				utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
+				return
+			}
+			punish_admin.HandlePunishPrintEvidenceCommand(s, i)
+		},
+		"reset_punish_cooldown": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
+			if !ok {
+				log.Printf("Could not find server config for guild: %s", i.GuildID)
+				return
+			}
+			permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
+			if permissionLevel < utils.AdminPermission {
+				utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
+				return
+			}
+			punish.HandleResetPunishCooldownCommand(s, i, b)
 		},
 		"new-cards": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			leaderboard.HandleNewCardsInteraction(s, i, b)

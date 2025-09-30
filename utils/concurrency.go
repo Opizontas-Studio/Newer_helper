@@ -29,6 +29,13 @@ func CheckAndSetPunishLock(userID string) bool {
 	return true // Not locked, new lock set
 }
 
+// ResetAllPunishLocks removes all active punish locks.
+func ResetAllPunishLocks() {
+	punishMutex.Lock()
+	defer punishMutex.Unlock()
+	punishLocks = make(map[string]time.Time)
+}
+
 // AdminActionRateLimiter implementation
 var (
 	adminActionRecords = make(map[string]map[string][]time.Time)

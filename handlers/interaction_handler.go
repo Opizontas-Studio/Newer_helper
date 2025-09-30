@@ -4,6 +4,7 @@ import (
 	"discord-bot/bot"
 	"discord-bot/handlers/preset"
 	"discord-bot/handlers/punish"
+	punish_admin "discord-bot/handlers/punish/admin"
 	"discord-bot/handlers/rollcard"
 	"strings"
 
@@ -38,7 +39,7 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 		} else if strings.HasPrefix(customID, "search_preset_again_") {
 			preset.HandleSearchPresetAgain(s, i, b)
 		} else if strings.HasPrefix(customID, "punish_page_v2:") {
-			punish.HandlePunishPaginationV2(s, i, b)
+			punish_admin.HandlePunishPaginationV2(s, i)
 		} else if strings.HasPrefix(customID, "punish_action_") {
 			punish.HandlePunishActionSelection(s, i, b)
 		} else if strings.HasPrefix(customID, "roll_again:") {

@@ -397,3 +397,25 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 	// Log to configured channel
 	logPunishmentNew(i, actionConfig, targetUser)
 }
+
+// HandleResetPunishCooldownCommand handles the slash command to reset all punishment cooldowns.
+func HandleResetPunishCooldownCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
+	// Permission Check
+	serverConfig, ok := b.GetConfig().ServerConfigs[i.GuildID]
+	if !ok {
+		log.Printf("Could not find server config for guild: %s", i.GuildID)
+		utils.SendEphemeralResponse(s, i, "Server configuration not found.")
+		return
+	}
+	permissionLevel := utils.CheckPermission(i.Member.Roles, i.Member.User.ID, serverConfig.AdminRoleIDs, nil, b.GetConfig().DeveloperUserIDs, b.GetConfig().SuperAdminRoleIDs)
+	if permissionLevel < utils.AdminPermission {
+		utils.SendEphemeralResponse(s, i, "You do not have permission to use this command.")
+		return
+	}
+
+	// Reset all punishment locks
+	utils.ResetAllPunishLocks()
+
+	// Send confirmation message
+	utils.SendEphemeralResponse(s, i, "All punishment cooldowns have been reset.")
+}
