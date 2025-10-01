@@ -131,6 +131,7 @@ type PunishLevel struct {
 	AddRole            []string `json:"add_role"`
 	AddRoleTimeoutTime string   `json:"add_role_timeout_time"`
 	SendPresetID       string   `json:"send_preset_id,omitempty"`
+	Description        string   `json:"description,omitempty"`
 }
 
 // ActionConfig defines the configuration for a specific punishment action type.
@@ -140,6 +141,7 @@ type ActionConfig struct {
 	PeeUserLimit    int                    `json:"pee_user_limit"`
 	Timescale       string                 `json:"timescale"`
 	GuildID         string                 `json:"guilds_id"`
+	AdminChannelID  string                 `json:"admin_channel_id,omitempty"`
 	BaseRoleID      string                 `json:"base_role_id"`
 	RemoveRoleID    []string               `json:"remove_role_id"`
 	WhitelistRoleID []string               `json:"whitelist_role_id"`

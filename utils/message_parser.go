@@ -38,3 +38,8 @@ func ParseMessageLink(link string) (guildID, channelID, messageID string, err er
 
 	return matches[1], matches[2], matches[3], nil
 }
+
+// ReplaceMacro replaces a macro placeholder with a value in a string.
+func ReplaceMacro(text, macro, value string) string {
+	return regexp.MustCompile(regexp.QuoteMeta(macro)).ReplaceAllString(text, value)
+}

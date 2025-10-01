@@ -94,6 +94,28 @@ func buildPunishmentEmbedNew(i *discordgo.InteractionCreate, targetUser *discord
 	return embed
 }
 
+// buildSoftPunishmentEmbed creates a softer embed message using the description macro from config.
+// This embed is sent to private messages and command execution channel.
+func buildSoftPunishmentEmbed(targetUser *discordgo.User, punishLevel *model.PunishLevel, reason string, timeoutDurationStr string, adminUsername string, punishmentID int64) *discordgo.MessageEmbed {
+	// Replace macros in description
+	description := punishLevel.Description
+	description = utils.ReplaceMacro(description, "${user}", targetUser.Mention())
+	description = utils.ReplaceMacro(description, "${reason}", reason)
+	description = utils.ReplaceMacro(description, "${timeout}", timeoutDurationStr)
+	description = utils.ReplaceMacro(description, "${add_role_timeout_time}", punishLevel.AddRoleTimeoutTime)
+
+	embed := &discordgo.MessageEmbed{
+		Description: description,
+		Color:       getEmbedColor(punishLevel),
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("由 %s 操作 | 处罚ID: %d", adminUsername, punishmentID),
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	return embed
+}
+
 // getEmbedColor determines the embed color based on the punishment level configuration.
 // Returns the configured color from ed_color field, or default red if not available.
 func getEmbedColor(punishLevel *model.PunishLevel) int {

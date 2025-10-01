@@ -359,8 +359,12 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 	if err != nil {
 		log.Printf("Error fetching punishment history: %v", err)
 	}
-	// Build and send response
-	embed := buildPunishmentEmbedNew(i, targetUser, &actionConfig, reason, allEvidence, currentGuildHistory, otherGuildsHistory, timeoutApplied, timeoutDurationStr, punishmentID, punishLevel)
+
+	// Build soft embed for private message and command channel
+	softEmbed := buildSoftPunishmentEmbed(targetUser, punishLevel, reason, timeoutDurationStr, i.Member.User.Username, punishmentID)
+
+	// Build detailed embed for admin log channel
+	adminEmbed := buildPunishmentEmbedNew(i, targetUser, &actionConfig, reason, allEvidence, currentGuildHistory, otherGuildsHistory, timeoutApplied, timeoutDurationStr, punishmentID, punishLevel)
 
 	// Prepare preset message if configured
 	var presetContent string
@@ -376,26 +380,30 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 		}
 	}
 
-	// Combine punishment embed with preset message for the private message
-	privateEmbeds := []*discordgo.MessageEmbed{embed}
-	privateEmbeds = append(privateEmbeds, presetEmbeds...)
+	// Send soft embed to private message
+	utils.SendPrivateEmbedMessage(s, targetUser.ID, softEmbed)
 
-	// Send combined private message
+	// Send preset content and embeds to private message
 	if presetContent != "" {
 		utils.SendPrivateMessage(s, targetUser.ID, presetContent)
 	}
-	for _, e := range privateEmbeds {
+	for _, e := range presetEmbeds {
 		utils.SendPrivateEmbedMessage(s, targetUser.ID, e)
 	}
 
-	// The public message only contains the original punishment embed.
-	_, err = s.ChannelMessageSendEmbed(i.ChannelID, embed)
+	// Send soft embed to command execution channel
+	_, err = s.ChannelMessageSendEmbed(i.ChannelID, softEmbed)
 	if err != nil {
 		log.Printf("Error sending public punishment message: %v", err)
 	}
 
-	// Log to configured channel
-	logPunishmentNew(i, actionConfig, targetUser)
+	// Send detailed embed to admin log channel
+	if actionConfig.AdminChannelID != "" {
+		_, err = s.ChannelMessageSendEmbed(actionConfig.AdminChannelID, adminEmbed)
+		if err != nil {
+			log.Printf("Error sending admin log message: %v", err)
+		}
+	}
 }
 
 // HandleResetPunishCooldownCommand handles the slash command to reset all punishment cooldowns.
