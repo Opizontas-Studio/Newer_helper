@@ -137,6 +137,8 @@ func removePunishmentRoles(s *discordgo.Session, guildID, userID string, roleIDs
 
 // addPunishmentRecord adds a new punishment record to the database and returns the new record's ID.
 func addPunishmentRecord(db *sqlx.DB, i *discordgo.InteractionCreate, targetUser *discordgo.User, reason, evidenceJSON, actionType string, tempRoles []string, rolesRemoveAt map[string]time.Time) (int64, error) {
+	log.Printf("[DEBUG] addPunishmentRecord: tempRoles=%v, rolesRemoveAt=%v", tempRoles, rolesRemoveAt)
+
 	// Serialize temp roles to JSON
 	tempRolesJSON, err := json.Marshal(tempRoles)
 	if err != nil {
@@ -148,6 +150,8 @@ func addPunishmentRecord(db *sqlx.DB, i *discordgo.InteractionCreate, targetUser
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize roles remove times: %w", err)
 	}
+
+	log.Printf("[DEBUG] Serialized: tempRolesJSON='%s', rolesRemoveAtJSON='%s'", string(tempRolesJSON), string(rolesRemoveAtJSON))
 
 	record := model.PunishmentRecord{
 		MessageID:        i.ID,
@@ -273,9 +277,8 @@ func getHighestPunishmentLevel(actionConfig model.ActionConfig) *model.PunishLev
 
 // parseIntSafe safely parses an integer, returning 0 if parsing fails.
 func parseIntSafe(s string) int {
-	if val, err := fmt.Sscanf(s, "%d", new(int)); err == nil && val == 1 {
-		var result int
-		fmt.Sscanf(s, "%d", &result)
+	var result int
+	if val, err := fmt.Sscanf(s, "%d", &result); err == nil && val == 1 {
 		return result
 	}
 	return 0
@@ -284,6 +287,9 @@ func parseIntSafe(s string) int {
 // applyPunishmentLevel applies the punishment actions according to the punishment level.
 // Returns: timeoutApplied, timeoutDurationStr, tempRoles, rolesRemoveAt
 func applyPunishmentLevel(s *discordgo.Session, i *discordgo.InteractionCreate, targetUser *discordgo.User, level model.PunishLevel) (bool, string, []string, map[string]time.Time) {
+	log.Printf("[DEBUG] applyPunishmentLevel: user=%s, AddRoleTimeoutTime='%s', AddRole=%v",
+		targetUser.ID, level.AddRoleTimeoutTime, level.AddRole)
+
 	// Remove roles
 	removePunishmentRoles(s, i.GuildID, targetUser.ID, level.RemoveRoleID)
 
@@ -334,21 +340,41 @@ func applyPunishmentLevel(s *discordgo.Session, i *discordgo.InteractionCreate, 
 			continue
 		}
 
+		log.Printf("[DEBUG] Successfully added role %s to user %s", roleID, targetUser.ID)
 		tempRoles = append(tempRoles, roleID)
 
 		// Schedule role removal if timeout is specified
 		if level.AddRoleTimeoutTime != "" && level.AddRoleTimeoutTime != "0" && level.AddRoleTimeoutTime != "-1" {
 			timeoutMinutes := parseIntSafe(level.AddRoleTimeoutTime)
+			log.Printf("[DEBUG] parseIntSafe('%s') = %d", level.AddRoleTimeoutTime, timeoutMinutes)
 			if timeoutMinutes > 0 {
 				removeAt := time.Now().Add(time.Duration(timeoutMinutes) * time.Minute)
 				rolesRemoveAt[roleID] = removeAt
+				log.Printf("[DEBUG] Scheduled role %s removal at %v", roleID, removeAt)
+			} else {
+				log.Printf("[DEBUG] timeoutMinutes <= 0, not scheduling removal")
+			}
+		} else {
+			log.Printf("[DEBUG] AddRoleTimeoutTime check failed: '%s' is empty, 0, or -1", level.AddRoleTimeoutTime)
+		}
+	}
+
+	// 如果成功添加了临时身份组，但上面流程没有写入移除时间，这里补上一遍以避免数据库空白。
+	if len(tempRoles) > 0 && len(rolesRemoveAt) == 0 && level.AddRoleTimeoutTime != "" && level.AddRoleTimeoutTime != "0" && level.AddRoleTimeoutTime != "-1" {
+		log.Printf("[DEBUG] Fallback: tempRoles=%d, rolesRemoveAt=%d, trying to add removal times", len(tempRoles), len(rolesRemoveAt))
+		timeoutMinutes := parseIntSafe(level.AddRoleTimeoutTime)
+		if timeoutMinutes > 0 {
+			removeAt := time.Now().Add(time.Duration(timeoutMinutes) * time.Minute)
+			for _, roleID := range tempRoles {
+				rolesRemoveAt[roleID] = removeAt
+				log.Printf("[DEBUG] Fallback: Added removal time for role %s at %v", roleID, removeAt)
 			}
 		}
 	}
 
+	log.Printf("[DEBUG] Final result: tempRoles=%v, rolesRemoveAt=%v", tempRoles, rolesRemoveAt)
 	return timeoutApplied, timeoutDurationStr, tempRoles, rolesRemoveAt
 }
-
 
 // logPunishmentNew sends a detailed log message to the configured log channel using new config.
 func logPunishmentNew(i *discordgo.InteractionCreate, actionConfig model.ActionConfig, targetUser *discordgo.User) {

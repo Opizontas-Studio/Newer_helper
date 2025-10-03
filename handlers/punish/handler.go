@@ -404,6 +404,12 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 			log.Printf("Error sending admin log message: %v", err)
 		}
 	}
+
+	// Edit deferred response to complete the interaction
+	responseMessage := "✅ 处罚已成功执行。"
+	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Content: &responseMessage,
+	})
 }
 
 // HandleResetPunishCooldownCommand handles the slash command to reset all punishment cooldowns.
