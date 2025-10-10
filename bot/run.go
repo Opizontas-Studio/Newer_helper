@@ -1,9 +1,9 @@
 package bot
 
 import (
-	"discord-bot/utils"
 	"fmt"
 	"log"
+	"newer_helper/utils"
 	"time"
 
 	"github.com/bwmarrin/discordgo"

@@ -1,9 +1,9 @@
 package config
 
 import (
-	"discord-bot/model"
 	"encoding/json"
 	"log"
+	"newer_helper/model"
 	"os"
 	"strconv"
 	"strings"
@@ -80,7 +80,6 @@ func Load() (*model.Config, error) {
 	if err := loadJSON("data/thread_config.json", &cfg.ThreadConfig); err != nil {
 		return nil, err
 	}
-
 
 	if err := generateDatabaseMapping(cfg.TaskConfig); err != nil {
 		return nil, err

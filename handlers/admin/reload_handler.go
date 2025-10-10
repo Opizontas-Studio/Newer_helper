@@ -1,9 +1,9 @@
 package admin
 
 import (
-	"discord-bot/bot"
-	"discord-bot/utils"
 	"fmt"
+	"newer_helper/bot"
+	"newer_helper/utils"
 
 	"github.com/bwmarrin/discordgo"
 )

@@ -2,11 +2,11 @@ package scanner
 
 import (
 	"context"
-	"discord-bot/utils"
-	"discord-bot/utils/database"
 	"encoding/json"
 	"fmt"
 	"log"
+	"newer_helper/utils"
+	"newer_helper/utils/database"
 	"os"
 	"sort"
 	"strings"

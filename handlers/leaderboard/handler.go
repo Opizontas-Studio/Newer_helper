@@ -1,13 +1,13 @@
 package leaderboard
 
 import (
-	"discord-bot/handlers/leaderboard/latest_posts"
-	"discord-bot/model"
-	"discord-bot/utils"
-	"discord-bot/utils/database"
 	"encoding/json"
 	"fmt"
 	"log"
+	"newer_helper/handlers/leaderboard/latest_posts"
+	"newer_helper/model"
+	"newer_helper/utils"
+	"newer_helper/utils/database"
 	"time"
 
 	"github.com/bwmarrin/discordgo"

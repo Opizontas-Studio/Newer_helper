@@ -1,13 +1,13 @@
 package rollcard
 
 import (
-	"discord-bot/bot"
-	"discord-bot/model"
-	"discord-bot/utils"
-	"discord-bot/utils/database"
 	"fmt"
 	"log"
 	"math/rand"
+	"newer_helper/bot"
+	"newer_helper/model"
+	"newer_helper/utils"
+	"newer_helper/utils/database"
 	"strconv"
 	"strings"
 	"time"

@@ -1,15 +1,16 @@
 package main
 
 import (
-	"discord-bot/bot"
-	"discord-bot/config"
-	"discord-bot/handlers"
-	"discord-bot/utils"
-	"discord-bot/utils/database"
-	punishments_db "discord-bot/utils/database/punishments"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
+	"newer_helper/bot"
+	"newer_helper/config"
+	grpcclient "newer_helper/grpc/client"
+	"newer_helper/handlers"
+	"newer_helper/utils"
+	"newer_helper/utils/database"
+	punishments_db "newer_helper/utils/database/punishments"
 	"os"
 	"os/signal"
 	"syscall"
@@ -73,6 +74,20 @@ func main() {
 
 	if err := b.Run(); err != nil {
 		log.Fatalf("Error running bot: %v", err)
+	}
+
+	// Initialize and connect gRPC client
+	grpcClient, err := grpcclient.NewClient()
+	if err != nil {
+		log.Printf("Warning: Failed to create gRPC client: %v", err)
+		log.Println("Continuing without gRPC connection...")
+	} else {
+		if err := grpcClient.Connect(); err != nil {
+			log.Printf("Warning: Failed to connect to gRPC gateway: %v", err)
+			log.Println("Continuing without gRPC connection...")
+		} else {
+			defer grpcClient.Close()
+		}
 	}
 
 	log.Println("Bot is now running. Press CTRL-C to exit.")

@@ -1,14 +1,14 @@
 package punish
 
 import (
-	"discord-bot/model"
-	punishments_db "discord-bot/utils/database/punishments"
+	"newer_helper/model"
+	punishments_db "newer_helper/utils/database/punishments"
 	"time"
 
-	"discord-bot/utils"
 	"encoding/json"
 	"fmt"
 	"log"
+	"newer_helper/utils"
 	"path/filepath"
 	"regexp"
 	"strings"

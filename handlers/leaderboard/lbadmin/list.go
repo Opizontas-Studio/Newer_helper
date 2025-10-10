@@ -2,10 +2,10 @@ package lbadmin
 
 import (
 	"database/sql"
-	"discord-bot/utils"
-	"discord-bot/utils/database"
 	"fmt"
 	"log"
+	"newer_helper/utils"
+	"newer_helper/utils/database"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"

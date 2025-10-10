@@ -1,11 +1,11 @@
 package preset
 
 import (
-	"discord-bot/bot"
-	"discord-bot/model"
-	"discord-bot/utils"
 	"fmt"
 	"log"
+	"newer_helper/bot"
+	"newer_helper/model"
+	"newer_helper/utils"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"

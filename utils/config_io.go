@@ -1,9 +1,9 @@
 package utils
 
 import (
-	"discord-bot/model"
 	"encoding/json"
 	"fmt"
+	"newer_helper/model"
 	"os"
 	"path/filepath"
 )
@@ -56,7 +56,6 @@ func SaveNewCardPushConfig(guildID string, config *model.NewCardPushConfig) erro
 
 	return nil
 }
-
 
 // LoadTaskConfig loads the task configuration from the specified path.
 func LoadTaskConfig(path string) (model.TaskConfig, error) {

@@ -1,9 +1,9 @@
 package utils
 
 import (
-	"discord-bot/model"
 	"encoding/json"
 	"fmt"
+	"newer_helper/model"
 	"os"
 	"path/filepath"
 

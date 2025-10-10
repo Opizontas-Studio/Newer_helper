@@ -1,10 +1,10 @@
 package scanner
 
 import (
-	"discord-bot/model"
-	"discord-bot/utils"
 	"fmt"
 	"log"
+	"newer_helper/model"
+	"newer_helper/utils"
 	"os"
 	"path/filepath"
 	"time"

@@ -1,11 +1,11 @@
 package leaderboard
 
 import (
-	"discord-bot/handlers/leaderboard/lbadmin"
-	"discord-bot/model"
-	"discord-bot/utils"
-	"discord-bot/utils/database"
 	"log"
+	"newer_helper/handlers/leaderboard/lbadmin"
+	"newer_helper/model"
+	"newer_helper/utils"
+	"newer_helper/utils/database"
 
 	"github.com/bwmarrin/discordgo"
 )

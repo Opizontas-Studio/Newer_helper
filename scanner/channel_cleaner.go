@@ -2,8 +2,8 @@ package scanner
 
 import (
 	"context"
-	"discord-bot/model"
 	"log"
+	"newer_helper/model"
 	"time"
 
 	"github.com/bwmarrin/discordgo"

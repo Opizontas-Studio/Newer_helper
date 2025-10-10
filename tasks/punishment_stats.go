@@ -2,11 +2,11 @@ package tasks
 
 import (
 	"database/sql"
-	"discord-bot/model"
-	"discord-bot/utils/database"
-	punishments_db "discord-bot/utils/database/punishments"
 	"fmt"
 	"log"
+	"newer_helper/model"
+	"newer_helper/utils/database"
+	punishments_db "newer_helper/utils/database/punishments"
 	"sort"
 	"strings"
 	"time"

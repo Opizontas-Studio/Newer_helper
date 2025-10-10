@@ -1,8 +1,8 @@
 package commands
 
 import (
-	"discord-bot/commands/defs"
-	"discord-bot/model"
+	"newer_helper/commands/defs"
+	"newer_helper/model"
 
 	"github.com/bwmarrin/discordgo"
 )

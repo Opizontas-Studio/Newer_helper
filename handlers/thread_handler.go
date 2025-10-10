@@ -2,11 +2,11 @@ package handlers
 
 import (
 	"database/sql"
-	"discord-bot/model"
-	"discord-bot/utils"
-	"discord-bot/utils/database"
 	"errors"
 	"fmt"
+	"newer_helper/model"
+	"newer_helper/utils"
+	"newer_helper/utils/database"
 	"os"
 	"path/filepath"
 	"strings"

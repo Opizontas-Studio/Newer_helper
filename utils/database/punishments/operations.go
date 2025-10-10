@@ -1,8 +1,8 @@
 package punishments
 
 import (
-	"discord-bot/model"
 	"fmt"
+	"newer_helper/model"
 	"time"
 
 	"github.com/jmoiron/sqlx"

@@ -2,7 +2,7 @@ package database
 
 import (
 	"database/sql"
-	"discord-bot/model"
+	"newer_helper/model"
 )
 
 func CreateTable(db *sql.DB, tableName string) error {

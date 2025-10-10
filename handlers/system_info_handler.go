@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	"discord-bot/utils"
-	"discord-bot/utils/database"
 	"encoding/json"
 	"fmt"
+	"newer_helper/utils"
+	"newer_helper/utils/database"
 	"os"
 	"runtime"
 	"time"

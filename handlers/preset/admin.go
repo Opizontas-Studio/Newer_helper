@@ -2,13 +2,13 @@ package preset
 
 import (
 	"crypto/rand"
-	"discord-bot/bot"
-	"discord-bot/model"
-	"discord-bot/utils"
-	"discord-bot/utils/database"
 	"encoding/hex"
 	"fmt"
 	"log"
+	"newer_helper/bot"
+	"newer_helper/model"
+	"newer_helper/utils"
+	"newer_helper/utils/database"
 	"os"
 	"strings"
 

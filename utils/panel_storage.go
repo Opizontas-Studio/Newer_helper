@@ -1,11 +1,11 @@
 package utils
 
 import (
-	"discord-bot/model"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"newer_helper/model"
 	"os"
 	"sync"
 	"time"

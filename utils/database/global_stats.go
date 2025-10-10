@@ -2,9 +2,9 @@ package database
 
 import (
 	"database/sql"
-	"discord-bot/model"
 	"fmt"
 	"log"
+	"newer_helper/model"
 	"sync"
 	"time"
 )
@@ -189,7 +189,6 @@ func GetGlobalStats(guildMappings map[string]model.GuildMapping, threadConfigs m
 
 	return result, nil
 }
-
 
 // GetGlobalPostsInLast24Hours 获取全局过去24小时内的最新帖子
 func GetGlobalPostsInLast24Hours(guildMappings map[string]model.GuildMapping, threadConfigs map[string]model.ThreadGuildConfig) ([]model.Post, error) {

@@ -1,0 +1,187 @@
+syntax = "proto3";
+
+package registry;
+
+option go_package = "newer_helper/proto";
+
+// 服务发现服务，由网关提供
+service RegistryService {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  // 建立反向连接的双向流
+  rpc EstablishConnection(stream ConnectionMessage) returns (stream ConnectionMessage);
+}
+
+message RegisterRequest {
+  // API 密钥，用于身份验证
+  string api_key = 1;
+  // Bot 的网络地址, 例如 "http://bot-a:50051"
+  string address = 2;
+  // Bot 提供的 gRPC 服务名称列表
+  repeated string services = 3;
+}
+
+message RegisterResponse {
+  // 注册是否成功
+  bool success = 1;
+  // 可选的返回消息
+  string message = 2;
+}
+
+// 反向连接消息类型
+message ConnectionMessage {
+  oneof message_type {
+    // 微服务连接注册
+    ConnectionRegister register = 1;
+    // 网关推送的请求
+    ForwardRequest request = 2;
+    // 微服务返回的响应
+    ForwardResponse response = 3;
+    // 心跳消息
+    Heartbeat heartbeat = 4;
+    // 连接状态消息
+    ConnectionStatus status = 5;
+    // 事件消息
+    EventMessage event = 6;
+    // 订阅请求消息
+    SubscriptionRequest subscription = 7;
+  }
+}
+
+// 连接注册消息
+message ConnectionRegister {
+  // API 密钥，用于身份验证
+  string api_key = 1;
+  // 微服务提供的 gRPC 服务名称列表
+  repeated string services = 2;
+  // 可选的连接标识符
+  string connection_id = 3;
+}
+
+// 转发请求消息
+message ForwardRequest {
+  // 请求唯一标识符
+  string request_id = 1;
+  // gRPC 方法路径 (例如: /post.PostService/GetPost)
+  string method_path = 2;
+  // 请求头部
+  map<string, string> headers = 3;
+  // 请求体 (protobuf 编码的字节)
+  bytes payload = 4;
+  // 超时时间 (秒)
+  int32 timeout_seconds = 5;
+  
+  // 流式传输支持
+  StreamingInfo streaming_info = 6;
+}
+
+// 流式传输信息
+message StreamingInfo {
+  // 流式传输类型
+  enum StreamType {
+    // 一元调用（默认）
+    UNARY = 0;
+    // 客户端流
+    CLIENT_STREAMING = 1;
+    // 服务端流
+    SERVER_STREAMING = 2;
+    // 双向流
+    BIDIRECTIONAL_STREAMING = 3;
+  }
+  
+  StreamType stream_type = 1;
+  // 是否为流的结束标记
+  bool is_stream_end = 2;
+  // 流序列号（用于排序）
+  int64 sequence_number = 3;
+  // 流数据块大小（字节）
+  int32 chunk_size = 4;
+}
+
+// 转发响应消息
+message ForwardResponse {
+  // 对应的请求ID
+  string request_id = 1;
+  // 响应状态码
+  int32 status_code = 2;
+  // 响应头部
+  map<string, string> headers = 3;
+  // 响应体 (protobuf 编码的字节)
+  bytes payload = 4;
+  // 错误消息 (如果有)
+  string error_message = 5;
+  
+  // 流式传输支持
+  StreamingInfo streaming_info = 6;
+  
+  // 响应体流式传输支持
+  ResponseStreamInfo response_stream_info = 7;
+}
+
+// 响应体流式传输信息
+message ResponseStreamInfo {
+  // 是否为流式响应
+  bool is_streamed = 1;
+  // 当前块在流中的索引
+  int64 chunk_index = 2;
+  // 是否为最后一个块
+  bool is_final_chunk = 3;
+  // 当前块大小
+  int32 chunk_size = 4;
+  // 总响应大小（如果已知）
+  optional int64 total_size = 5;
+}
+
+// 心跳消息
+message Heartbeat {
+  // 时间戳
+  int64 timestamp = 1;
+  // 连接ID
+  string connection_id = 2;
+}
+
+// 连接状态消息
+message ConnectionStatus {
+  // 连接ID
+  string connection_id = 1;
+  // 状态类型
+  enum StatusType {
+    CONNECTED = 0;
+    DISCONNECTED = 1;
+    ERROR = 2;
+  }
+  StatusType status = 2;
+  // 可选的状态消息
+  string message = 3;
+}
+
+// 事件消息
+message EventMessage {
+  // 事件唯一标识符
+  string event_id = 1;
+  // 事件类型 (例如: "user.login", "order.created")
+  string event_type = 2;
+  // 发布者连接ID
+  string publisher_id = 3;
+  // 事件数据 (protobuf 编码的字节)
+  bytes payload = 4;
+  // 发布时间戳 (Unix 时间戳)
+  int64 timestamp = 5;
+  // 事件元数据
+  map<string, string> metadata = 6;
+}
+
+// 订阅请求消息
+message SubscriptionRequest {
+  // 操作类型
+  enum Action {
+    // 订阅事件
+    SUBSCRIBE = 0;
+    // 取消订阅事件
+    UNSUBSCRIBE = 1;
+  }
+  Action action = 1;
+  // 要订阅/取消订阅的事件类型列表
+  repeated string event_types = 2;
+  // 订阅者连接ID
+  string subscriber_id = 3;
+}

@@ -1,9 +1,9 @@
 package scanner
 
 import (
-	"discord-bot/utils/database"
 	"encoding/json"
 	"log"
+	"newer_helper/utils/database"
 	"os"
 	"sync"
 

@@ -1,14 +1,14 @@
 package handlers
 
 import (
-	"discord-bot/model"
-	"discord-bot/scanner"
-	"discord-bot/utils"
-	"discord-bot/utils/database"
-	punishments_db "discord-bot/utils/database/punishments"
 	"encoding/json"
 	"fmt"
 	"log"
+	"newer_helper/model"
+	"newer_helper/scanner"
+	"newer_helper/utils"
+	"newer_helper/utils/database"
+	punishments_db "newer_helper/utils/database/punishments"
 	"os"
 	"strings"
 

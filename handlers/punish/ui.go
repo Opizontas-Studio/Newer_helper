@@ -1,9 +1,9 @@
 package punish
 
 import (
-	"discord-bot/model"
-	"discord-bot/utils"
 	"fmt"
+	"newer_helper/model"
+	"newer_helper/utils"
 	"time"
 
 	"github.com/bwmarrin/discordgo"

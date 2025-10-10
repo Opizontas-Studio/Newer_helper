@@ -2,10 +2,10 @@ package scanner
 
 import (
 	"context"
-	"discord-bot/model"
-	"discord-bot/utils/database"
 	"fmt"
 	"log"
+	"newer_helper/model"
+	"newer_helper/utils/database"
 	"strings"
 	"sync"
 	"sync/atomic"

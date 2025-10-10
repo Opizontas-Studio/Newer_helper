@@ -2,13 +2,13 @@ package punish
 
 import (
 	"crypto/rand"
-	"discord-bot/bot"
-	preset_pkg "discord-bot/handlers/preset"
-	"discord-bot/utils"
-	punishments_db "discord-bot/utils/database/punishments"
 	"encoding/hex"
 	"fmt"
 	"log"
+	"newer_helper/bot"
+	preset_pkg "newer_helper/handlers/preset"
+	"newer_helper/utils"
+	punishments_db "newer_helper/utils/database/punishments"
 	"strings"
 	"time"
 

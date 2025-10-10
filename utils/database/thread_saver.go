@@ -2,8 +2,8 @@ package database
 
 import (
 	"database/sql"
-	"discord-bot/model"
 	"fmt"
+	"newer_helper/model"
 	"os"
 	"path/filepath"
 )

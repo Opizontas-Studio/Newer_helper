@@ -1,11 +1,11 @@
 package handlers
 
 import (
-	"discord-bot/bot"
-	"discord-bot/handlers/preset"
-	"discord-bot/handlers/punish"
-	punish_admin "discord-bot/handlers/punish/admin"
-	"discord-bot/handlers/rollcard"
+	"newer_helper/bot"
+	"newer_helper/handlers/preset"
+	"newer_helper/handlers/punish"
+	punish_admin "newer_helper/handlers/punish/admin"
+	"newer_helper/handlers/rollcard"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"

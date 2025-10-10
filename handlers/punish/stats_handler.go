@@ -2,12 +2,12 @@ package punish
 
 import (
 	"database/sql"
-	"discord-bot/model"
-	"discord-bot/tasks"
-	"discord-bot/utils"
-	"discord-bot/utils/database"
 	"fmt"
 	"log"
+	"newer_helper/model"
+	"newer_helper/tasks"
+	"newer_helper/utils"
+	"newer_helper/utils/database"
 	"time"
 
 	"github.com/bwmarrin/discordgo"

@@ -1,10 +1,10 @@
 package utils
 
 import (
-	"discord-bot/model"
-	"discord-bot/utils/database"
 	"fmt"
 	"log"
+	"newer_helper/model"
+	"newer_helper/utils/database"
 	"sort"
 	"strings"
 	"time"

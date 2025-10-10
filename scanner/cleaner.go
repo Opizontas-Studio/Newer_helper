@@ -3,11 +3,11 @@ package scanner
 import (
 	"context"
 	"database/sql"
-	"discord-bot/model"
-	"discord-bot/utils"
-	"discord-bot/utils/database"
 	"fmt"
 	"log"
+	"newer_helper/model"
+	"newer_helper/utils"
+	"newer_helper/utils/database"
 	"time"
 
 	"github.com/bwmarrin/discordgo"

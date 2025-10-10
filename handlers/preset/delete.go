@@ -2,10 +2,10 @@ package preset
 
 import (
 	"database/sql"
-	"discord-bot/model"
-	"discord-bot/utils"
-	"discord-bot/utils/database"
 	"fmt"
+	"newer_helper/model"
+	"newer_helper/utils"
+	"newer_helper/utils/database"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"

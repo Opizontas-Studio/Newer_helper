@@ -2,18 +2,18 @@ package handlers
 
 import (
 	"context"
-	"discord-bot/bot"
-	"discord-bot/handlers/admin"
-	"discord-bot/handlers/auto_trigger"
-	"discord-bot/handlers/leaderboard"
-	"discord-bot/handlers/preset"
-	"discord-bot/handlers/punish"
-	punish_admin "discord-bot/handlers/punish/admin"
-	"discord-bot/handlers/rollcard"
-	"discord-bot/scanner"
-	"discord-bot/utils"
 	"fmt"
 	"log"
+	"newer_helper/bot"
+	"newer_helper/handlers/admin"
+	"newer_helper/handlers/auto_trigger"
+	"newer_helper/handlers/leaderboard"
+	"newer_helper/handlers/preset"
+	"newer_helper/handlers/punish"
+	punish_admin "newer_helper/handlers/punish/admin"
+	"newer_helper/handlers/rollcard"
+	"newer_helper/scanner"
+	"newer_helper/utils"
 
 	"github.com/bwmarrin/discordgo"
 )

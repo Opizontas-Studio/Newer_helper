@@ -2,12 +2,12 @@ package punish_admin
 
 import (
 	"bytes"
-	"discord-bot/model"
-	"discord-bot/utils"
-	punishments_db "discord-bot/utils/database/punishments"
 	"encoding/json"
 	"fmt"
 	"log"
+	"newer_helper/model"
+	"newer_helper/utils"
+	punishments_db "newer_helper/utils/database/punishments"
 	"strconv"
 
 	"github.com/bwmarrin/discordgo"

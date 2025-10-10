@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"discord-bot/bot"
-	"discord-bot/handlers/rollcard"
 	"log"
+	"newer_helper/bot"
+	"newer_helper/handlers/rollcard"
 
 	"github.com/bwmarrin/discordgo"
 )

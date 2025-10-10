@@ -1,12 +1,12 @@
 package latest_posts
 
 import (
-	"discord-bot/config"
-	"discord-bot/utils"
-	"discord-bot/utils/database"
 	"encoding/json"
 	"fmt"
 	"log"
+	"newer_helper/config"
+	"newer_helper/utils"
+	"newer_helper/utils/database"
 	"os"
 	"path/filepath"
 	"strings"
