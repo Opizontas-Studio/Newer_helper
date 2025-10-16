@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.8
 // 	protoc        v6.32.1
-// source: grpc/proto/registry.proto
+// source: registry.proto
 
 package proto
 
@@ -62,11 +62,11 @@ func (x StreamingInfo_StreamType) String() string {
 }
 
 func (StreamingInfo_StreamType) Descriptor() protoreflect.EnumDescriptor {
-	return file_grpc_proto_registry_proto_enumTypes[0].Descriptor()
+	return file_registry_proto_enumTypes[0].Descriptor()
 }
 
 func (StreamingInfo_StreamType) Type() protoreflect.EnumType {
-	return &file_grpc_proto_registry_proto_enumTypes[0]
+	return &file_registry_proto_enumTypes[0]
 }
 
 func (x StreamingInfo_StreamType) Number() protoreflect.EnumNumber {
@@ -75,7 +75,7 @@ func (x StreamingInfo_StreamType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use StreamingInfo_StreamType.Descriptor instead.
 func (StreamingInfo_StreamType) EnumDescriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{5, 0}
+	return file_registry_proto_rawDescGZIP(), []int{5, 0}
 }
 
 // 状态类型
@@ -112,11 +112,11 @@ func (x ConnectionStatus_StatusType) String() string {
 }
 
 func (ConnectionStatus_StatusType) Descriptor() protoreflect.EnumDescriptor {
-	return file_grpc_proto_registry_proto_enumTypes[1].Descriptor()
+	return file_registry_proto_enumTypes[1].Descriptor()
 }
 
 func (ConnectionStatus_StatusType) Type() protoreflect.EnumType {
-	return &file_grpc_proto_registry_proto_enumTypes[1]
+	return &file_registry_proto_enumTypes[1]
 }
 
 func (x ConnectionStatus_StatusType) Number() protoreflect.EnumNumber {
@@ -125,7 +125,7 @@ func (x ConnectionStatus_StatusType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ConnectionStatus_StatusType.Descriptor instead.
 func (ConnectionStatus_StatusType) EnumDescriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{9, 0}
+	return file_registry_proto_rawDescGZIP(), []int{9, 0}
 }
 
 // 操作类型
@@ -161,11 +161,11 @@ func (x SubscriptionRequest_Action) String() string {
 }
 
 func (SubscriptionRequest_Action) Descriptor() protoreflect.EnumDescriptor {
-	return file_grpc_proto_registry_proto_enumTypes[2].Descriptor()
+	return file_registry_proto_enumTypes[2].Descriptor()
 }
 
 func (SubscriptionRequest_Action) Type() protoreflect.EnumType {
-	return &file_grpc_proto_registry_proto_enumTypes[2]
+	return &file_registry_proto_enumTypes[2]
 }
 
 func (x SubscriptionRequest_Action) Number() protoreflect.EnumNumber {
@@ -174,7 +174,7 @@ func (x SubscriptionRequest_Action) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SubscriptionRequest_Action.Descriptor instead.
 func (SubscriptionRequest_Action) EnumDescriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{11, 0}
+	return file_registry_proto_rawDescGZIP(), []int{11, 0}
 }
 
 type RegisterRequest struct {
@@ -191,7 +191,7 @@ type RegisterRequest struct {
 
 func (x *RegisterRequest) Reset() {
 	*x = RegisterRequest{}
-	mi := &file_grpc_proto_registry_proto_msgTypes[0]
+	mi := &file_registry_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -203,7 +203,7 @@ func (x *RegisterRequest) String() string {
 func (*RegisterRequest) ProtoMessage() {}
 
 func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_proto_registry_proto_msgTypes[0]
+	mi := &file_registry_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -216,7 +216,7 @@ func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
 func (*RegisterRequest) Descriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{0}
+	return file_registry_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *RegisterRequest) GetApiKey() string {
@@ -252,7 +252,7 @@ type RegisterResponse struct {
 
 func (x *RegisterResponse) Reset() {
 	*x = RegisterResponse{}
-	mi := &file_grpc_proto_registry_proto_msgTypes[1]
+	mi := &file_registry_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -264,7 +264,7 @@ func (x *RegisterResponse) String() string {
 func (*RegisterResponse) ProtoMessage() {}
 
 func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_proto_registry_proto_msgTypes[1]
+	mi := &file_registry_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -277,7 +277,7 @@ func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterResponse.ProtoReflect.Descriptor instead.
 func (*RegisterResponse) Descriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{1}
+	return file_registry_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *RegisterResponse) GetSuccess() bool {
@@ -313,7 +313,7 @@ type ConnectionMessage struct {
 
 func (x *ConnectionMessage) Reset() {
 	*x = ConnectionMessage{}
-	mi := &file_grpc_proto_registry_proto_msgTypes[2]
+	mi := &file_registry_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -325,7 +325,7 @@ func (x *ConnectionMessage) String() string {
 func (*ConnectionMessage) ProtoMessage() {}
 
 func (x *ConnectionMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_proto_registry_proto_msgTypes[2]
+	mi := &file_registry_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -338,7 +338,7 @@ func (x *ConnectionMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConnectionMessage.ProtoReflect.Descriptor instead.
 func (*ConnectionMessage) Descriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{2}
+	return file_registry_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ConnectionMessage) GetMessageType() isConnectionMessage_MessageType {
@@ -479,7 +479,7 @@ type ConnectionRegister struct {
 
 func (x *ConnectionRegister) Reset() {
 	*x = ConnectionRegister{}
-	mi := &file_grpc_proto_registry_proto_msgTypes[3]
+	mi := &file_registry_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -491,7 +491,7 @@ func (x *ConnectionRegister) String() string {
 func (*ConnectionRegister) ProtoMessage() {}
 
 func (x *ConnectionRegister) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_proto_registry_proto_msgTypes[3]
+	mi := &file_registry_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -504,7 +504,7 @@ func (x *ConnectionRegister) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConnectionRegister.ProtoReflect.Descriptor instead.
 func (*ConnectionRegister) Descriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{3}
+	return file_registry_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ConnectionRegister) GetApiKey() string {
@@ -549,7 +549,7 @@ type ForwardRequest struct {
 
 func (x *ForwardRequest) Reset() {
 	*x = ForwardRequest{}
-	mi := &file_grpc_proto_registry_proto_msgTypes[4]
+	mi := &file_registry_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -561,7 +561,7 @@ func (x *ForwardRequest) String() string {
 func (*ForwardRequest) ProtoMessage() {}
 
 func (x *ForwardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_proto_registry_proto_msgTypes[4]
+	mi := &file_registry_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -574,7 +574,7 @@ func (x *ForwardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardRequest.ProtoReflect.Descriptor instead.
 func (*ForwardRequest) Descriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{4}
+	return file_registry_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ForwardRequest) GetRequestId() string {
@@ -635,7 +635,7 @@ type StreamingInfo struct {
 
 func (x *StreamingInfo) Reset() {
 	*x = StreamingInfo{}
-	mi := &file_grpc_proto_registry_proto_msgTypes[5]
+	mi := &file_registry_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -647,7 +647,7 @@ func (x *StreamingInfo) String() string {
 func (*StreamingInfo) ProtoMessage() {}
 
 func (x *StreamingInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_proto_registry_proto_msgTypes[5]
+	mi := &file_registry_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -660,7 +660,7 @@ func (x *StreamingInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamingInfo.ProtoReflect.Descriptor instead.
 func (*StreamingInfo) Descriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{5}
+	return file_registry_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *StreamingInfo) GetStreamType() StreamingInfo_StreamType {
@@ -714,7 +714,7 @@ type ForwardResponse struct {
 
 func (x *ForwardResponse) Reset() {
 	*x = ForwardResponse{}
-	mi := &file_grpc_proto_registry_proto_msgTypes[6]
+	mi := &file_registry_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -726,7 +726,7 @@ func (x *ForwardResponse) String() string {
 func (*ForwardResponse) ProtoMessage() {}
 
 func (x *ForwardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_proto_registry_proto_msgTypes[6]
+	mi := &file_registry_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -739,7 +739,7 @@ func (x *ForwardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardResponse.ProtoReflect.Descriptor instead.
 func (*ForwardResponse) Descriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{6}
+	return file_registry_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ForwardResponse) GetRequestId() string {
@@ -810,7 +810,7 @@ type ResponseStreamInfo struct {
 
 func (x *ResponseStreamInfo) Reset() {
 	*x = ResponseStreamInfo{}
-	mi := &file_grpc_proto_registry_proto_msgTypes[7]
+	mi := &file_registry_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -822,7 +822,7 @@ func (x *ResponseStreamInfo) String() string {
 func (*ResponseStreamInfo) ProtoMessage() {}
 
 func (x *ResponseStreamInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_proto_registry_proto_msgTypes[7]
+	mi := &file_registry_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -835,7 +835,7 @@ func (x *ResponseStreamInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResponseStreamInfo.ProtoReflect.Descriptor instead.
 func (*ResponseStreamInfo) Descriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{7}
+	return file_registry_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ResponseStreamInfo) GetIsStreamed() bool {
@@ -886,7 +886,7 @@ type Heartbeat struct {
 
 func (x *Heartbeat) Reset() {
 	*x = Heartbeat{}
-	mi := &file_grpc_proto_registry_proto_msgTypes[8]
+	mi := &file_registry_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -898,7 +898,7 @@ func (x *Heartbeat) String() string {
 func (*Heartbeat) ProtoMessage() {}
 
 func (x *Heartbeat) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_proto_registry_proto_msgTypes[8]
+	mi := &file_registry_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -911,7 +911,7 @@ func (x *Heartbeat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Heartbeat.ProtoReflect.Descriptor instead.
 func (*Heartbeat) Descriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{8}
+	return file_registry_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Heartbeat) GetTimestamp() int64 {
@@ -942,7 +942,7 @@ type ConnectionStatus struct {
 
 func (x *ConnectionStatus) Reset() {
 	*x = ConnectionStatus{}
-	mi := &file_grpc_proto_registry_proto_msgTypes[9]
+	mi := &file_registry_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -954,7 +954,7 @@ func (x *ConnectionStatus) String() string {
 func (*ConnectionStatus) ProtoMessage() {}
 
 func (x *ConnectionStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_proto_registry_proto_msgTypes[9]
+	mi := &file_registry_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -967,7 +967,7 @@ func (x *ConnectionStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConnectionStatus.ProtoReflect.Descriptor instead.
 func (*ConnectionStatus) Descriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{9}
+	return file_registry_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ConnectionStatus) GetConnectionId() string {
@@ -1012,7 +1012,7 @@ type EventMessage struct {
 
 func (x *EventMessage) Reset() {
 	*x = EventMessage{}
-	mi := &file_grpc_proto_registry_proto_msgTypes[10]
+	mi := &file_registry_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1024,7 +1024,7 @@ func (x *EventMessage) String() string {
 func (*EventMessage) ProtoMessage() {}
 
 func (x *EventMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_proto_registry_proto_msgTypes[10]
+	mi := &file_registry_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1037,7 +1037,7 @@ func (x *EventMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventMessage.ProtoReflect.Descriptor instead.
 func (*EventMessage) Descriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{10}
+	return file_registry_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *EventMessage) GetEventId() string {
@@ -1096,7 +1096,7 @@ type SubscriptionRequest struct {
 
 func (x *SubscriptionRequest) Reset() {
 	*x = SubscriptionRequest{}
-	mi := &file_grpc_proto_registry_proto_msgTypes[11]
+	mi := &file_registry_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1108,7 +1108,7 @@ func (x *SubscriptionRequest) String() string {
 func (*SubscriptionRequest) ProtoMessage() {}
 
 func (x *SubscriptionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_proto_registry_proto_msgTypes[11]
+	mi := &file_registry_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1121,7 +1121,7 @@ func (x *SubscriptionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscriptionRequest.ProtoReflect.Descriptor instead.
 func (*SubscriptionRequest) Descriptor() ([]byte, []int) {
-	return file_grpc_proto_registry_proto_rawDescGZIP(), []int{11}
+	return file_registry_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SubscriptionRequest) GetAction() SubscriptionRequest_Action {
@@ -1145,11 +1145,11 @@ func (x *SubscriptionRequest) GetSubscriberId() string {
 	return ""
 }
 
-var File_grpc_proto_registry_proto protoreflect.FileDescriptor
+var File_registry_proto protoreflect.FileDescriptor
 
-const file_grpc_proto_registry_proto_rawDesc = "" +
+const file_registry_proto_rawDesc = "" +
 	"\n" +
-	"\x19grpc/proto/registry.proto\x12\bregistry\"`\n" +
+	"\x0eregistry.proto\x12\bregistry\"`\n" +
 	"\x0fRegisterRequest\x12\x17\n" +
 	"\aapi_key\x18\x01 \x01(\tR\x06apiKey\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x1a\n" +
@@ -1255,20 +1255,20 @@ const file_grpc_proto_registry_proto_rawDesc = "" +
 	"\x13EstablishConnection\x12\x1b.registry.ConnectionMessage\x1a\x1b.registry.ConnectionMessage(\x010\x01B\x14Z\x12newer_helper/protob\x06proto3"
 
 var (
-	file_grpc_proto_registry_proto_rawDescOnce sync.Once
-	file_grpc_proto_registry_proto_rawDescData []byte
+	file_registry_proto_rawDescOnce sync.Once
+	file_registry_proto_rawDescData []byte
 )
 
-func file_grpc_proto_registry_proto_rawDescGZIP() []byte {
-	file_grpc_proto_registry_proto_rawDescOnce.Do(func() {
-		file_grpc_proto_registry_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_grpc_proto_registry_proto_rawDesc), len(file_grpc_proto_registry_proto_rawDesc)))
+func file_registry_proto_rawDescGZIP() []byte {
+	file_registry_proto_rawDescOnce.Do(func() {
+		file_registry_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_registry_proto_rawDesc), len(file_registry_proto_rawDesc)))
 	})
-	return file_grpc_proto_registry_proto_rawDescData
+	return file_registry_proto_rawDescData
 }
 
-var file_grpc_proto_registry_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_grpc_proto_registry_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
-var file_grpc_proto_registry_proto_goTypes = []any{
+var file_registry_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_registry_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_registry_proto_goTypes = []any{
 	(StreamingInfo_StreamType)(0),    // 0: registry.StreamingInfo.StreamType
 	(ConnectionStatus_StatusType)(0), // 1: registry.ConnectionStatus.StatusType
 	(SubscriptionRequest_Action)(0),  // 2: registry.SubscriptionRequest.Action
@@ -1288,7 +1288,7 @@ var file_grpc_proto_registry_proto_goTypes = []any{
 	nil,                              // 16: registry.ForwardResponse.HeadersEntry
 	nil,                              // 17: registry.EventMessage.MetadataEntry
 }
-var file_grpc_proto_registry_proto_depIdxs = []int32{
+var file_registry_proto_depIdxs = []int32{
 	6,  // 0: registry.ConnectionMessage.register:type_name -> registry.ConnectionRegister
 	7,  // 1: registry.ConnectionMessage.request:type_name -> registry.ForwardRequest
 	9,  // 2: registry.ConnectionMessage.response:type_name -> registry.ForwardResponse
@@ -1316,12 +1316,12 @@ var file_grpc_proto_registry_proto_depIdxs = []int32{
 	0,  // [0:16] is the sub-list for field type_name
 }
 
-func init() { file_grpc_proto_registry_proto_init() }
-func file_grpc_proto_registry_proto_init() {
-	if File_grpc_proto_registry_proto != nil {
+func init() { file_registry_proto_init() }
+func file_registry_proto_init() {
+	if File_registry_proto != nil {
 		return
 	}
-	file_grpc_proto_registry_proto_msgTypes[2].OneofWrappers = []any{
+	file_registry_proto_msgTypes[2].OneofWrappers = []any{
 		(*ConnectionMessage_Register)(nil),
 		(*ConnectionMessage_Request)(nil),
 		(*ConnectionMessage_Response)(nil),
@@ -1330,23 +1330,23 @@ func file_grpc_proto_registry_proto_init() {
 		(*ConnectionMessage_Event)(nil),
 		(*ConnectionMessage_Subscription)(nil),
 	}
-	file_grpc_proto_registry_proto_msgTypes[7].OneofWrappers = []any{}
+	file_registry_proto_msgTypes[7].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grpc_proto_registry_proto_rawDesc), len(file_grpc_proto_registry_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_registry_proto_rawDesc), len(file_registry_proto_rawDesc)),
 			NumEnums:      3,
 			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_grpc_proto_registry_proto_goTypes,
-		DependencyIndexes: file_grpc_proto_registry_proto_depIdxs,
-		EnumInfos:         file_grpc_proto_registry_proto_enumTypes,
-		MessageInfos:      file_grpc_proto_registry_proto_msgTypes,
+		GoTypes:           file_registry_proto_goTypes,
+		DependencyIndexes: file_registry_proto_depIdxs,
+		EnumInfos:         file_registry_proto_enumTypes,
+		MessageInfos:      file_registry_proto_msgTypes,
 	}.Build()
-	File_grpc_proto_registry_proto = out.File
-	file_grpc_proto_registry_proto_goTypes = nil
-	file_grpc_proto_registry_proto_depIdxs = nil
+	File_registry_proto = out.File
+	file_registry_proto_goTypes = nil
+	file_registry_proto_depIdxs = nil
 }

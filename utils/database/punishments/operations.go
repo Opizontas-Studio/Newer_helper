@@ -186,8 +186,8 @@ func GetActivePunishments(db *sqlx.DB) ([]model.PunishmentRecord, error) {
 	var records []model.PunishmentRecord
 	query := `SELECT * FROM punishments
 			  WHERE punishment_status = 'active'
-			  AND roles_remove_at != '{}'
-			  AND roles_remove_at != ''`
+			  AND temp_roles_json != '[]'
+			  AND temp_roles_json != ''`
 	err := db.Select(&records, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active punishments: %w", err)

@@ -1,0 +1,59 @@
+syntax = "proto3";
+package punish;
+option go_package = "github.com/go-micro-protos/punish";
+
+service PunishServer{
+    // GetPunishStatus 获取用户当前的处罚状态。
+    rpc GetPunishStatus(GetPunishStatusRequest) returns (GetPunishStatusResponse) {}
+
+    // GetPunishHistory 获取用户的所有历史处罚记录。
+    rpc GetPunishHistory(GetPunishHistoryRequest) returns (GetPunishHistoryResponse) {}
+}
+
+// Punishment 代表一条单独的处罚记录。
+// 它的字段与 model.PunishmentRecord 中的字段一一对应。
+message Punishment {
+    int64 punishment_id = 1;
+    string message_id = 2;
+    string admin_id = 3;
+    string user_id = 4;
+    string user_username = 5;
+    string reason = 6;
+    string guild_id = 7;
+    int64 timestamp = 8;
+    string evidence = 9;           // 包含消息内容和文件路径的 JSON 字符串
+    string action_type = 10;       // 例如: "re-answer", "cheat", "tag"
+    string temp_roles_json = 11;   // 临时身份组 ID 的 JSON 数组
+    string roles_remove_at = 12;   // 身份组 ID 到其移除时间戳的 JSON 对象映射
+    string punishment_status = 13; // "active", "completed", "cancelled"
+}
+
+// GetPunishStatusRequest 请求获取用户在特定服务器中的处罚状态。
+message GetPunishStatusRequest {
+    string user_id = 1;
+    string guild_id = 2;
+}
+
+// GetPunishStatusResponse 返回用户当前的处罚状态。
+message GetPunishStatusResponse {
+    // 用户当前的总状态，例如 "active", "none"。
+    string status = 1;
+    // 当前所有生效的处罚列表。
+    repeated Punishment active_punishments = 2;
+}
+
+// GetPunishHistoryRequest 请求获取用户的处罚历史记录，支持分页。
+message GetPunishHistoryRequest {
+    string user_id = 1;
+    string guild_id = 2;
+    int32 page = 3;
+    int32 page_size = 4;
+}
+
+// GetPunishHistoryResponse 返回分页后的处罚记录列表。
+message GetPunishHistoryResponse {
+    repeated Punishment punishments = 1;
+    int32 total_records = 2;
+    int32 total_pages = 3;
+    int32 current_page = 4;
+}

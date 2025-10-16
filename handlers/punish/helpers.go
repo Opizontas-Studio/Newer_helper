@@ -343,16 +343,16 @@ func applyPunishmentLevel(s *discordgo.Session, i *discordgo.InteractionCreate, 
 		log.Printf("[DEBUG] Successfully added role %s to user %s", roleID, targetUser.ID)
 		tempRoles = append(tempRoles, roleID)
 
-		// Schedule role removal if timeout is specified
+		// Schedule role removal if timeout is specified (interpreted as days)
 		if level.AddRoleTimeoutTime != "" && level.AddRoleTimeoutTime != "0" && level.AddRoleTimeoutTime != "-1" {
-			timeoutMinutes := parseIntSafe(level.AddRoleTimeoutTime)
-			log.Printf("[DEBUG] parseIntSafe('%s') = %d", level.AddRoleTimeoutTime, timeoutMinutes)
-			if timeoutMinutes > 0 {
-				removeAt := time.Now().Add(time.Duration(timeoutMinutes) * time.Minute)
+			timeoutDays := parseIntSafe(level.AddRoleTimeoutTime)
+			log.Printf("[DEBUG] parseIntSafe('%s') = %d (days)", level.AddRoleTimeoutTime, timeoutDays)
+			if timeoutDays > 0 {
+				removeAt := time.Now().Add(time.Duration(timeoutDays) * 24 * time.Hour)
 				rolesRemoveAt[roleID] = removeAt
 				log.Printf("[DEBUG] Scheduled role %s removal at %v", roleID, removeAt)
 			} else {
-				log.Printf("[DEBUG] timeoutMinutes <= 0, not scheduling removal")
+				log.Printf("[DEBUG] timeoutDays <= 0, not scheduling removal")
 			}
 		} else {
 			log.Printf("[DEBUG] AddRoleTimeoutTime check failed: '%s' is empty, 0, or -1", level.AddRoleTimeoutTime)
@@ -362,13 +362,15 @@ func applyPunishmentLevel(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	// 如果成功添加了临时身份组，但上面流程没有写入移除时间，这里补上一遍以避免数据库空白。
 	if len(tempRoles) > 0 && len(rolesRemoveAt) == 0 && level.AddRoleTimeoutTime != "" && level.AddRoleTimeoutTime != "0" && level.AddRoleTimeoutTime != "-1" {
 		log.Printf("[DEBUG] Fallback: tempRoles=%d, rolesRemoveAt=%d, trying to add removal times", len(tempRoles), len(rolesRemoveAt))
-		timeoutMinutes := parseIntSafe(level.AddRoleTimeoutTime)
-		if timeoutMinutes > 0 {
-			removeAt := time.Now().Add(time.Duration(timeoutMinutes) * time.Minute)
+		timeoutDays := parseIntSafe(level.AddRoleTimeoutTime)
+		if timeoutDays > 0 {
+			removeAt := time.Now().Add(time.Duration(timeoutDays) * 24 * time.Hour)
 			for _, roleID := range tempRoles {
 				rolesRemoveAt[roleID] = removeAt
 				log.Printf("[DEBUG] Fallback: Added removal time for role %s at %v", roleID, removeAt)
 			}
+		} else {
+			log.Printf("[DEBUG] Fallback skipped: timeoutDays <= 0")
 		}
 	}
 
