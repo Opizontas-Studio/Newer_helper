@@ -7,6 +7,7 @@ import (
 	"newer_helper/bot"
 	"newer_helper/config"
 	grpcclient "newer_helper/grpc/client"
+	grpcserver "newer_helper/grpc/server"
 	"newer_helper/handlers"
 	"newer_helper/utils"
 	"newer_helper/utils/database"
@@ -76,8 +77,12 @@ func main() {
 		log.Fatalf("Error running bot: %v", err)
 	}
 
-	// Initialize and connect gRPC client
-	grpcClient, err := grpcclient.NewClient()
+	// Initialize gRPC punish server with punishment database
+	punishServer := grpcserver.NewPunishServer(punishDB)
+	log.Println("Initialized gRPC Punish Server")
+
+	// Initialize and connect gRPC client with punish server
+	grpcClient, err := grpcclient.NewClient(punishServer)
 	if err != nil {
 		log.Printf("Warning: Failed to create gRPC client: %v", err)
 		log.Println("Continuing without gRPC connection...")
@@ -87,6 +92,7 @@ func main() {
 			log.Println("Continuing without gRPC connection...")
 		} else {
 			defer grpcClient.Close()
+			log.Println("gRPC client connected and ready to handle punish service requests")
 		}
 	}
 

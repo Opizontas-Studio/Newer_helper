@@ -2,16 +2,20 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	punishpb "newer_helper/grpc/proto/gen/punish"
 	proto "newer_helper/grpc/proto/gen/registry"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // Client represents a gRPC client that connects to the gateway
@@ -26,10 +30,11 @@ type Client struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	done         chan struct{}
+	punishServer punishpb.PunishServerServer // Punish service handler
 }
 
 // NewClient creates a new gRPC client instance
-func NewClient() (*Client, error) {
+func NewClient(punishServer punishpb.PunishServerServer) (*Client, error) {
 	serverAddr := os.Getenv("GRPC_SERVER_ADDRESS")
 	clientName := os.Getenv("GRPC_CLIENT_NAME")
 	token := os.Getenv("GRPC_TOKEN")
@@ -41,12 +46,13 @@ func NewClient() (*Client, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Client{
-		serverAddr: serverAddr,
-		clientName: clientName,
-		token:      token,
-		ctx:        ctx,
-		cancel:     cancel,
-		done:       make(chan struct{}),
+		serverAddr:   serverAddr,
+		clientName:   clientName,
+		token:        token,
+		ctx:          ctx,
+		cancel:       cancel,
+		done:         make(chan struct{}),
+		punishServer: punishServer,
 	}, nil
 }
 
@@ -125,23 +131,10 @@ func (c *Client) receiveLoop() {
 func (c *Client) handleMessage(msg *proto.ConnectionMessage) {
 	switch m := msg.MessageType.(type) {
 	case *proto.ConnectionMessage_Request:
-		// TODO: Handle forwarded requests
 		log.Printf("Received request: %s (method: %s)", m.Request.RequestId, m.Request.MethodPath)
 
-		// For now, send empty response
-		response := &proto.ConnectionMessage{
-			MessageType: &proto.ConnectionMessage_Response{
-				Response: &proto.ForwardResponse{
-					RequestId:    m.Request.RequestId,
-					StatusCode:   501, // Not Implemented
-					ErrorMessage: "Service not implemented yet",
-				},
-			},
-		}
-
-		if err := c.stream.Send(response); err != nil {
-			log.Printf("Failed to send response: %v", err)
-		}
+		// Route to appropriate service handler
+		c.handleServiceRequest(m.Request)
 
 	case *proto.ConnectionMessage_Status:
 		log.Printf("Received status: %v - %s", m.Status.Status, m.Status.Message)
@@ -164,6 +157,161 @@ func (c *Client) handleMessage(msg *proto.ConnectionMessage) {
 
 	default:
 		log.Printf("Received unknown message type")
+	}
+}
+
+// handleServiceRequest routes requests to appropriate service handlers
+func (c *Client) handleServiceRequest(req *proto.ForwardRequest) {
+	var response *proto.ConnectionMessage
+
+	// Parse method path: expected format is "/{client_name}.{package}/{Method}"
+	// Example: "/discord_bot.punish/GetPunishStatus"
+	// where client_name is configured in the gateway, and package is from the proto file
+	log.Printf("Routing request with method path: %s", req.MethodPath)
+
+	// Route based on method path suffix (after the package name)
+	// We check if the path ends with our service methods
+	switch {
+	case strings.HasSuffix(req.MethodPath, "/GetPunishStatus"):
+		response = c.handleGetPunishStatus(req)
+	case strings.HasSuffix(req.MethodPath, "/GetPunishHistory"):
+		response = c.handleGetPunishHistory(req)
+	default:
+		log.Printf("Unknown method path: %s", req.MethodPath)
+		response = &proto.ConnectionMessage{
+			MessageType: &proto.ConnectionMessage_Response{
+				Response: &proto.ForwardResponse{
+					RequestId:    req.RequestId,
+					StatusCode:   404,
+					ErrorMessage: fmt.Sprintf("method not found: %s", req.MethodPath),
+				},
+			},
+		}
+	}
+
+	// Send response back through the stream
+	c.mu.Lock()
+	err := c.stream.Send(response)
+	c.mu.Unlock()
+
+	if err != nil {
+		log.Printf("Failed to send response for request %s: %v", req.RequestId, err)
+	}
+}
+
+// handleGetPunishStatus handles GetPunishStatus requests
+func (c *Client) handleGetPunishStatus(req *proto.ForwardRequest) *proto.ConnectionMessage {
+	// Unmarshal request body
+	var punishReq punishpb.GetPunishStatusRequest
+	if err := json.Unmarshal(req.Payload, &punishReq); err != nil {
+		log.Printf("Failed to unmarshal GetPunishStatus request: %v", err)
+		return &proto.ConnectionMessage{
+			MessageType: &proto.ConnectionMessage_Response{
+				Response: &proto.ForwardResponse{
+					RequestId:    req.RequestId,
+					StatusCode:   400,
+					ErrorMessage: fmt.Sprintf("invalid request body: %v", err),
+				},
+			},
+		}
+	}
+
+	// Call the service handler
+	resp, err := c.punishServer.GetPunishStatus(context.Background(), &punishReq)
+	if err != nil {
+		log.Printf("GetPunishStatus failed: %v", err)
+		return &proto.ConnectionMessage{
+			MessageType: &proto.ConnectionMessage_Response{
+				Response: &proto.ForwardResponse{
+					RequestId:    req.RequestId,
+					StatusCode:   500,
+					ErrorMessage: fmt.Sprintf("service error: %v", err),
+				},
+			},
+		}
+	}
+
+	// Marshal response
+	respBody, err := protojson.Marshal(resp)
+	if err != nil {
+		log.Printf("Failed to marshal GetPunishStatus response: %v", err)
+		return &proto.ConnectionMessage{
+			MessageType: &proto.ConnectionMessage_Response{
+				Response: &proto.ForwardResponse{
+					RequestId:    req.RequestId,
+					StatusCode:   500,
+					ErrorMessage: fmt.Sprintf("failed to marshal response: %v", err),
+				},
+			},
+		}
+	}
+
+	return &proto.ConnectionMessage{
+		MessageType: &proto.ConnectionMessage_Response{
+			Response: &proto.ForwardResponse{
+				RequestId:  req.RequestId,
+				StatusCode: 200,
+				Payload:    respBody,
+			},
+		},
+	}
+}
+
+// handleGetPunishHistory handles GetPunishHistory requests
+func (c *Client) handleGetPunishHistory(req *proto.ForwardRequest) *proto.ConnectionMessage {
+	// Unmarshal request body
+	var punishReq punishpb.GetPunishHistoryRequest
+	if err := json.Unmarshal(req.Payload, &punishReq); err != nil {
+		log.Printf("Failed to unmarshal GetPunishHistory request: %v", err)
+		return &proto.ConnectionMessage{
+			MessageType: &proto.ConnectionMessage_Response{
+				Response: &proto.ForwardResponse{
+					RequestId:    req.RequestId,
+					StatusCode:   400,
+					ErrorMessage: fmt.Sprintf("invalid request body: %v", err),
+				},
+			},
+		}
+	}
+
+	// Call the service handler
+	resp, err := c.punishServer.GetPunishHistory(context.Background(), &punishReq)
+	if err != nil {
+		log.Printf("GetPunishHistory failed: %v", err)
+		return &proto.ConnectionMessage{
+			MessageType: &proto.ConnectionMessage_Response{
+				Response: &proto.ForwardResponse{
+					RequestId:    req.RequestId,
+					StatusCode:   500,
+					ErrorMessage: fmt.Sprintf("service error: %v", err),
+				},
+			},
+		}
+	}
+
+	// Marshal response
+	respBody, err := protojson.Marshal(resp)
+	if err != nil {
+		log.Printf("Failed to marshal GetPunishHistory response: %v", err)
+		return &proto.ConnectionMessage{
+			MessageType: &proto.ConnectionMessage_Response{
+				Response: &proto.ForwardResponse{
+					RequestId:    req.RequestId,
+					StatusCode:   500,
+					ErrorMessage: fmt.Sprintf("failed to marshal response: %v", err),
+				},
+			},
+		}
+	}
+
+	return &proto.ConnectionMessage{
+		MessageType: &proto.ConnectionMessage_Response{
+			Response: &proto.ForwardResponse{
+				RequestId:  req.RequestId,
+				StatusCode: 200,
+				Payload:    respBody,
+			},
+		},
 	}
 }
 
