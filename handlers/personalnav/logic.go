@@ -5,8 +5,11 @@ import (
 	"log"
 	"newer_helper/bot"
 	"newer_helper/model"
+	"newer_helper/utils"
 	"newer_helper/utils/database"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -279,4 +282,232 @@ func resolveChannelChoice(b *bot.Bot, guildID, tableName string) (channelChoice,
 		}
 	}
 	return channelChoice{}, fmt.Errorf("无法解析导航所属的分区。")
+}
+
+// buildSafeDescription 构建一个带长度限制的 description，确保不超过 Discord 的限制
+func buildSafeDescription(prefix string, lines []string, fallback string, maxLength int) string {
+	if len(lines) == 0 {
+		return prefix + fallback
+	}
+
+	// 从完整内容开始，逐步减少行数直到满足长度限制
+	for numLines := len(lines); numLines > 0; numLines-- {
+		currentLines := lines[:numLines]
+		description := prefix + strings.Join(currentLines, "\n")
+
+		if len(description) <= maxLength {
+			// 如果被截断了，添加提示
+			if numLines < len(lines) {
+				truncated := fmt.Sprintf("\n\n_（显示前 %d 个，共 %d 个）_", numLines, len(lines))
+				if len(description)+len(truncated) <= maxLength {
+					description += truncated
+				}
+			}
+			log.Printf("personal-nav: buildSafeDescription used %d/%d lines, length=%d/%d", numLines, len(lines), len(description), maxLength)
+			return description
+		}
+	}
+
+	// 如果连一行都放不下，返回后备文本
+	log.Printf("personal-nav: WARNING - even single line exceeds limit, using fallback")
+	return prefix + fallback
+}
+
+func buildEmbeds(guildID string, channelInfos []channelChoice, latestPosts []model.Post, topPosts []model.Post) (myWorksEmbeds []*discordgo.MessageEmbed, topWorks, latest *discordgo.MessageEmbed) {
+	// 按分区分组作品
+	postsByPartition := groupPostsByPartition(latestPosts, channelInfos)
+
+	// 为每个分区构建 embed（可能多个）
+	for _, ci := range channelInfos {
+		posts := postsByPartition[ci.TableName]
+
+		// 构建该分区的 embed（自动分页处理所有作品）
+		partitionEmbeds := buildPartitionEmbeds(ci.ChannelName, ci.ChannelID, guildID, posts, len(posts))
+		myWorksEmbeds = append(myWorksEmbeds, partitionEmbeds...)
+	}
+
+	displayTop := topPosts
+	if len(displayTop) > maxLatestPostsToDisplay {
+		displayTop = displayTop[:maxLatestPostsToDisplay]
+	}
+	topLines := make([]string, 0, len(displayTop))
+	for _, post := range displayTop {
+		topLines = append(topLines, formatPostLineWithStats(guildID, post))
+	}
+
+	const maxEmbedDescriptionLength = 3800 // Discord 限制 4096，使用 3800 作为安全阈值
+	topDescription := buildSafeDescription(
+		"根据消息数量 (MessageCount) 排序。\n\n",
+		topLines,
+		"暂无数据。",
+		maxEmbedDescriptionLength,
+	)
+
+	topWorks = &discordgo.MessageEmbed{
+		Title:       "🔥 最高消息作品",
+		Description: topDescription,
+		Color:       embedColorHighlight,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	displayRecent := latestPosts
+	if len(displayRecent) > maxLatestPostsToDisplay {
+		displayRecent = displayRecent[:maxLatestPostsToDisplay]
+	}
+	latestLines := make([]string, 0, len(displayRecent))
+	for _, post := range displayRecent {
+		latestLines = append(latestLines, formatPostLineWithDate(guildID, post))
+	}
+
+	latestDescription := buildSafeDescription(
+		"按时间倒序展示最新作品。\n\n",
+		latestLines,
+		"暂无数据。",
+		maxEmbedDescriptionLength,
+	)
+
+	latest = &discordgo.MessageEmbed{
+		Title:       "🆕 最新作品",
+		Description: latestDescription,
+		Color:       embedColorSecondary,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	return myWorksEmbeds, topWorks, latest
+}
+
+func formatPostLine(guildID string, post model.Post) string {
+	title := post.Title
+	if strings.TrimSpace(title) == "" {
+		title = "未命名作品"
+	}
+	return fmt.Sprintf("[%s](%s) · 💬 %d · <t:%d:R>", utils.TruncateString(title, 70), post.URL(guildID), post.MessageCount, post.Timestamp)
+}
+
+func formatPostLineWithStats(guildID string, post model.Post) string {
+	title := post.Title
+	if strings.TrimSpace(title) == "" {
+		title = "未命名作品"
+	}
+	return fmt.Sprintf("[%s](%s)\n> 💬 %d · <t:%d:R>", utils.TruncateString(title, 70), post.URL(guildID), post.MessageCount, post.Timestamp)
+}
+
+func formatPostLineWithDate(guildID string, post model.Post) string {
+	title := post.Title
+	if strings.TrimSpace(title) == "" {
+		title = "未命名作品"
+	}
+	return fmt.Sprintf("[%s](%s)\n> <t:%d:F>", utils.TruncateString(title, 70), post.URL(guildID), post.Timestamp)
+}
+
+// groupPostsByPartition 按分区分组作品
+func groupPostsByPartition(posts []model.Post, channelInfos []channelChoice) map[string][]model.Post {
+	result := make(map[string][]model.Post)
+
+	for _, post := range posts {
+		for _, ci := range channelInfos {
+			if post.ChannelID == ci.ChannelID {
+				result[ci.TableName] = append(result[ci.TableName], post)
+				break
+			}
+		}
+	}
+
+	return result
+}
+
+// buildPartitionEmbeds 为单个分区构建一个或多个 embed（超过限制时拆分）
+func buildPartitionEmbeds(partitionName, channelID, guildID string, posts []model.Post, totalCount int) []*discordgo.MessageEmbed {
+	const maxDescriptionLength = 4000 // 优化阈值，Discord description 限制为 4096，保留96字符安全边距
+
+	if len(posts) == 0 {
+		// 没有作品，返回一个空的 embed
+		embed := &discordgo.MessageEmbed{
+			Title:       fmt.Sprintf("📁 我的作品 - %s (%d个投稿)", partitionName, totalCount),
+			Description: fmt.Sprintf("频道：<#%s>\n\n暂无作品记录。", channelID),
+			Color:       embedColorPrimary,
+			Timestamp:   time.Now().Format(time.RFC3339),
+		}
+		return []*discordgo.MessageEmbed{embed}
+	}
+
+	// 构建作品行
+	lines := make([]string, 0, len(posts))
+	for _, post := range posts {
+		lines = append(lines, formatPostLine(guildID, post))
+	}
+
+	// 计算是否需要拆分
+	var embeds []*discordgo.MessageEmbed
+	var currentLines []string
+	channelPrefix := fmt.Sprintf("频道：<#%s>\n\n", channelID)
+
+	for _, line := range lines {
+		// 模拟拼接后的内容来检查长度
+		var testValue string
+		if len(currentLines) == 0 {
+			testValue = channelPrefix + line
+		} else {
+			testValue = channelPrefix + strings.Join(currentLines, "\n") + "\n" + line
+		}
+
+		// 如果加入这一行会超过限制，先保存当前的 embed
+		if len(testValue) > maxDescriptionLength && len(currentLines) > 0 {
+			embeds = append(embeds, createPartitionEmbed(partitionName, channelID, totalCount, currentLines, len(embeds)+1, 0))
+			currentLines = []string{line}
+		} else {
+			currentLines = append(currentLines, line)
+		}
+	}
+
+	// 添加最后一个 embed
+	if len(currentLines) > 0 {
+		totalPages := len(embeds) + 1
+		embeds = append(embeds, createPartitionEmbed(partitionName, channelID, totalCount, currentLines, len(embeds)+1, totalPages))
+	}
+
+	// 如果有多页，需要更新之前的 embed 标题以显示页码
+	if len(embeds) > 1 {
+		for i := 0; i < len(embeds)-1; i++ {
+			embeds[i].Title = fmt.Sprintf("📁 我的作品 - %s (第%d/%d页)", partitionName, i+1, len(embeds))
+		}
+		embeds[len(embeds)-1].Title = fmt.Sprintf("📁 我的作品 - %s (第%d/%d页)", partitionName, len(embeds), len(embeds))
+	}
+
+	return embeds
+}
+
+// createPartitionEmbed 创建一个分区 embed
+func createPartitionEmbed(partitionName, channelID string, totalCount int, lines []string, pageNum, totalPages int) *discordgo.MessageEmbed {
+	title := fmt.Sprintf("📁 我的作品 - %s (%d个投稿)", partitionName, totalCount)
+	if totalPages > 1 {
+		title = fmt.Sprintf("📁 我的作品 - %s (第%d/%d页)", partitionName, pageNum, totalPages)
+	}
+
+	// 构建 description：频道信息 + 作品列表
+	description := fmt.Sprintf("频道：<#%s>\n\n%s", channelID, strings.Join(lines, "\n"))
+
+	// 安全检查：确保不超过 Discord 限制（description 最大 4096 字符）
+	if len(description) > 4096 {
+		log.Printf("personal-nav: WARNING - description exceeds 4096 chars (%d), truncating", len(description))
+		// 截断到 4090 字节（留出省略号的空间），并确保不破坏 UTF-8 字符
+		maxLen := 4090
+		for maxLen > 0 && maxLen < len(description) {
+			// 检查是否在 UTF-8 字符边界上
+			if utf8.ValidString(description[:maxLen]) {
+				break
+			}
+			maxLen--
+		}
+		description = description[:maxLen] + "\n..."
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       embedColorPrimary,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	return embed
 }

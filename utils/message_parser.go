@@ -43,3 +43,12 @@ func ParseMessageLink(link string) (guildID, channelID, messageID string, err er
 func ReplaceMacro(text, macro, value string) string {
 	return regexp.MustCompile(regexp.QuoteMeta(macro)).ReplaceAllString(text, value)
 }
+
+// TruncateString shortens a string to a maximum length, handling runes correctly.
+func TruncateString(input string, maxLen int) string {
+	if len([]rune(input)) <= maxLen {
+		return input
+	}
+	runes := []rune(input)
+	return string(runes[:maxLen])
+}
