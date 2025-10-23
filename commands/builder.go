@@ -34,5 +34,6 @@ func GenerateCommands(_ *model.ServerConfig) []*discordgo.ApplicationCommand {
 		defs.GuildsAdmin,
 		defs.QuickPreset,
 		defs.QuickPresetReplyForAPP,
+		defs.PersonalNavigation,
 	}
 }

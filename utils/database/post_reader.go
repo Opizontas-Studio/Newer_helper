@@ -420,3 +420,70 @@ func GetPostsInLast24Hours(db *sql.DB, tableNames []string) ([]model.Post, error
 	}
 	return posts, nil
 }
+
+// CountPostsByAuthorInTable returns the number of posts a user has in a specific table.
+func CountPostsByAuthorInTable(db *sql.DB, tableName, authorID string) (int, error) {
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM "`+tableName+`" WHERE author_id = ?`, authorID).Scan(&count)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return count, nil
+}
+
+// GetPostsByAuthor retrieves posts created by the given author ordered by newest first.
+func GetPostsByAuthor(db *sql.DB, tableName, authorID string, limit int) ([]model.Post, error) {
+	query := `SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM "` + tableName + `" WHERE author_id = ? ORDER BY timestamp DESC`
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", limit)
+	}
+	rows, err := db.Query(query, authorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []model.Post
+	for rows.Next() {
+		var post model.Post
+		if err := rows.Scan(&post.ID, &post.Title, &post.Author, &post.AuthorID, &post.Content, &post.Tags, &post.MessageCount, &post.Timestamp, &post.CoverImageURL); err != nil {
+			return nil, err
+		}
+		post.ChannelID = "" // channel is not stored per row; caller should set if needed
+		posts = append(posts, post)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return posts, nil
+}
+
+// GetTopPostsByAuthor retrieves the top posts for the given author ordered by message count.
+func GetTopPostsByAuthor(db *sql.DB, tableName, authorID string, limit int) ([]model.Post, error) {
+	query := `SELECT id, title, author, author_id, content, tags, message_count, timestamp, cover_image_url FROM "` + tableName + `" WHERE author_id = ? ORDER BY message_count DESC, timestamp DESC`
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", limit)
+	}
+	rows, err := db.Query(query, authorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []model.Post
+	for rows.Next() {
+		var post model.Post
+		if err := rows.Scan(&post.ID, &post.Title, &post.Author, &post.AuthorID, &post.Content, &post.Tags, &post.MessageCount, &post.Timestamp, &post.CoverImageURL); err != nil {
+			return nil, err
+		}
+		post.ChannelID = ""
+		posts = append(posts, post)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return posts, nil
+}

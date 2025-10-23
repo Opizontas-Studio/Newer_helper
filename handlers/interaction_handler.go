@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"log"
 	"newer_helper/bot"
+	"newer_helper/handlers/personalnav"
 	"newer_helper/handlers/preset"
 	"newer_helper/handlers/punish"
 	punish_admin "newer_helper/handlers/punish/admin"
@@ -54,6 +56,10 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 			rollcard.HandleEditPools(s, i, b)
 		} else if customID == "select_pools_menu" {
 			rollcard.HandlePoolSelectionResponse(s, i, b)
+		} else if strings.HasPrefix(customID, "personal_nav") {
+			if !personalnav.HandlePersonalNavComponent(s, i, b, customID) {
+				log.Printf("Unhandled personal navigation component: %s", customID)
+			}
 		}
 	case discordgo.InteractionModalSubmit:
 		customID := i.ModalSubmitData().CustomID

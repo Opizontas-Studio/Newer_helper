@@ -5,7 +5,7 @@ import (
 	"newer_helper/model"
 )
 
-func CreateTable(db *sql.DB, tableName string) error {
+func EnsurePostTableSchema(db *sql.DB, tableName string) error {
 	createTableSQL := `CREATE TABLE IF NOT EXISTS "` + tableName + `" (
 		"id" TEXT NOT NULL PRIMARY KEY,
 		"title" TEXT,
@@ -19,11 +19,20 @@ func CreateTable(db *sql.DB, tableName string) error {
 	);`
 
 	_, err := db.Exec(createTableSQL)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Attempt to add the cover_image_url column to older tables.
+	// This will fail if the column already exists, which is fine.
+	alterTableSQL := `ALTER TABLE "` + tableName + `" ADD COLUMN "cover_image_url" TEXT;`
+	_, _ = db.Exec(alterTableSQL)
+
+	return nil
 }
 
 func InsertPost(db *sql.DB, post model.Post, tableName string) error {
-	if err := CreateTable(db, tableName); err != nil {
+	if err := EnsurePostTableSchema(db, tableName); err != nil {
 		return err
 	}
 

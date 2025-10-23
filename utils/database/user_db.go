@@ -2,15 +2,27 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
+	"newer_helper/model"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const userDbPath = "./data/user.db"
+const (
+	userDbPath = "./data/user.db"
+	userDbDSN  = "file:./data/user.db?_busy_timeout=8000&_journal_mode=WAL&_sync=NORMAL"
+)
+
+var (
+	userDBEnsureOnce sync.Once
+	userDBEnsureErr  error
+)
 
 // InitUserDB initializes the user database.
 // It creates the database file and the necessary tables if they don't exist.
@@ -20,21 +32,63 @@ func InitUserDB() (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", userDbPath)
+	db, err := sql.Open("sqlite3", userDbDSN)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open user database: %w", err)
 	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxIdleTime(2 * time.Minute)
 
-	if err := createUserTables(db); err != nil {
+	if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
+		log.Printf("Failed to enable foreign keys on user.db: %v", err)
+	}
+
+	userDBEnsureOnce.Do(func() {
+		start := time.Now()
+		log.Printf("personal-nav: ensuring user db schema...")
+		userDBEnsureErr = ensureUserTables(db)
+		if userDBEnsureErr != nil {
+			log.Printf("personal-nav: ensure user db schema failed after %s: %v", time.Since(start), userDBEnsureErr)
+		} else {
+			log.Printf("personal-nav: ensure user db schema completed in %s", time.Since(start))
+		}
+	})
+	if userDBEnsureErr != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to create user tables: %w", err)
+		return nil, fmt.Errorf("failed to create user tables: %w", userDBEnsureErr)
 	}
 
 	return db, nil
 }
 
-// createUserTables creates and alters the necessary tables in the user database.
-func createUserTables(db *sql.DB) error {
+// ensureUserTables ensures required tables and columns exist, retrying if locked.
+func ensureUserTables(db *sql.DB) error {
+	satisfied, err := userSchemaSatisfied(db)
+	if err != nil {
+		log.Printf("personal-nav: schema verification failed, attempting migration: %v", err)
+	} else if satisfied {
+		log.Printf("personal-nav: user db schema already satisfied, skipping migrations.")
+		return nil
+	}
+
+	const maxAttempts = 3
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if err := createOrUpdateUserTables(db); err != nil {
+			if isSQLiteBusyError(err) && attempt < maxAttempts {
+				log.Printf("personal-nav: ensure schema attempt %d hit busy, retrying...", attempt)
+				time.Sleep(time.Duration(attempt) * 150 * time.Millisecond)
+				continue
+			}
+			return err
+		}
+		return nil
+	}
+	return fmt.Errorf("unable to ensure user tables after retries")
+}
+
+// createOrUpdateUserTables creates and alters the necessary tables in the user database.
+func createOrUpdateUserTables(db *sql.DB) error {
 	query := `
     CREATE TABLE IF NOT EXISTS user_preferences (
         user_id TEXT NOT NULL,
@@ -79,7 +133,144 @@ func createUserTables(db *sql.DB) error {
 		}
 	}
 
+	personalNavQuery := `
+	CREATE TABLE IF NOT EXISTS personal_navigation (
+		user_id TEXT NOT NULL,
+		guild_id TEXT NOT NULL,
+		nav_id INTEGER NOT NULL,
+		channel_id TEXT NOT NULL,
+		table_name TEXT NOT NULL,
+		channel_name TEXT,
+		message_channel_id TEXT NOT NULL,
+		message_id_my_works TEXT NOT NULL,
+		message_id_top_works TEXT NOT NULL,
+		message_id_latest_works TEXT NOT NULL,
+		PRIMARY KEY(user_id, guild_id, nav_id)
+	);`
+	if _, err := db.Exec(personalNavQuery); err != nil {
+		return fmt.Errorf("failed to ensure personal_navigation table: %w", err)
+	}
+
+	// Ensure the channel_name column exists (older versions may miss it).
+	if err := ensureColumnExists(db, "personal_navigation", "channel_name", "ALTER TABLE personal_navigation ADD COLUMN channel_name TEXT;"); err != nil {
+		return err
+	}
+	if err := ensureColumnExists(db, "personal_navigation", "message_channel_id", "ALTER TABLE personal_navigation ADD COLUMN message_channel_id TEXT DEFAULT '';"); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func ensureColumnExists(db *sql.DB, table, column, alterStmt string) error {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s);", table))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var type_ string
+		var notnull bool
+		var dfltValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &type_, &notnull, &dfltValue, &pk); err != nil {
+			return err
+		}
+		if name == column {
+			return nil
+		}
+	}
+
+	if alterStmt == "" {
+		return nil
+	}
+
+	if _, err := db.Exec(alterStmt); err != nil {
+		return fmt.Errorf("failed to add '%s' column to '%s': %w", column, table, err)
+	}
+	return nil
+}
+
+func isSQLiteBusyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "database is locked") || strings.Contains(err.Error(), "database is busy")
+}
+
+func userSchemaSatisfied(db *sql.DB) (bool, error) {
+	requiredTables := map[string][]string{
+		"user_preferences": {
+			"user_id", "guild_id", "preferred_pools", "skip_preset_confirmation",
+		},
+		"personal_navigation": {
+			"user_id", "guild_id", "nav_id", "channel_id", "table_name",
+			"channel_name", "message_channel_id", "message_id_my_works",
+			"message_id_top_works", "message_id_latest_works",
+		},
+	}
+
+	for table, columns := range requiredTables {
+		exists, err := tableExists(db, table)
+		if err != nil {
+			return false, err
+		}
+		if !exists {
+			return false, nil
+		}
+		ok, err := tableHasColumns(db, table, columns)
+		if err != nil {
+			return false, err
+		}
+		if !ok {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func tableExists(db *sql.DB, table string) (bool, error) {
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func tableHasColumns(db *sql.DB, table string, columns []string) (bool, error) {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s);", table))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	found := make(map[string]bool)
+	for rows.Next() {
+		var cid int
+		var name string
+		var type_ string
+		var notnull bool
+		var dfltValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &type_, &notnull, &dfltValue, &pk); err != nil {
+			return false, err
+		}
+		found[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+
+	for _, col := range columns {
+		if !found[col] {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // GetUserPreferredPools retrieves the preferred pools for a given user in a specific guild.
@@ -189,4 +380,155 @@ func SetUserPresetConfirmationPreference(userID, guildID string, skip bool) erro
 	}
 
 	return nil
+}
+
+// GetPersonalNavigations returns all personal navigations for a user within a guild ordered by nav_id.
+func GetPersonalNavigations(userID, guildID string) ([]model.PersonalNavigation, error) {
+	log.Printf("personal-nav: db -> GetPersonalNavigations guild=%s user=%s", guildID, userID)
+	db, err := InitUserDB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize user db: %w", err)
+	}
+	defer db.Close()
+
+	rows, err := db.Query(`
+		SELECT nav_id, channel_id, table_name, COALESCE(channel_name, ''), message_channel_id, message_id_my_works, message_id_top_works, message_id_latest_works
+		FROM personal_navigation
+		WHERE user_id = ? AND guild_id = ?
+		ORDER BY nav_id ASC`, userID, guildID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query personal navigation: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []model.PersonalNavigation
+	for rows.Next() {
+		var nav model.PersonalNavigation
+		if err := rows.Scan(&nav.NavID, &nav.ChannelID, &nav.TableName, &nav.ChannelName, &nav.MessageChannelID, &nav.MessageIDMyWorks, &nav.MessageIDTopWorks, &nav.MessageIDLatestWorks); err != nil {
+			return nil, err
+		}
+		nav.UserID = userID
+		nav.GuildID = guildID
+		entries = append(entries, nav)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	log.Printf("personal-nav: db <- GetPersonalNavigations guild=%s user=%s count=%d", guildID, userID, len(entries))
+	return entries, nil
+}
+
+// GetPersonalNavigation retrieves a single navigation entry.
+func GetPersonalNavigation(userID, guildID string, navID int) (*model.PersonalNavigation, error) {
+	db, err := InitUserDB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize user db: %w", err)
+	}
+	defer db.Close()
+
+	row := db.QueryRow(`
+		SELECT channel_id, table_name, COALESCE(channel_name, ''), message_channel_id, message_id_my_works, message_id_top_works, message_id_latest_works
+		FROM personal_navigation
+		WHERE user_id = ? AND guild_id = ? AND nav_id = ?`, userID, guildID, navID)
+
+	var nav model.PersonalNavigation
+	nav.UserID = userID
+	nav.GuildID = guildID
+	nav.NavID = navID
+	err = row.Scan(&nav.ChannelID, &nav.TableName, &nav.ChannelName, &nav.MessageChannelID, &nav.MessageIDMyWorks, &nav.MessageIDTopWorks, &nav.MessageIDLatestWorks)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &nav, nil
+}
+
+// UpsertPersonalNavigation inserts or updates a navigation entry.
+func UpsertPersonalNavigation(nav model.PersonalNavigation) error {
+	db, err := InitUserDB()
+	if err != nil {
+		return fmt.Errorf("failed to initialize user db: %w", err)
+	}
+	defer db.Close()
+
+	query := `
+	INSERT INTO personal_navigation (
+		user_id, guild_id, nav_id, channel_id, table_name, channel_name, message_channel_id,
+		message_id_my_works, message_id_top_works, message_id_latest_works
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(user_id, guild_id, nav_id) DO UPDATE SET
+		channel_id = excluded.channel_id,
+		table_name = excluded.table_name,
+		channel_name = excluded.channel_name,
+		message_channel_id = excluded.message_channel_id,
+		message_id_my_works = excluded.message_id_my_works,
+		message_id_top_works = excluded.message_id_top_works,
+		message_id_latest_works = excluded.message_id_latest_works;
+	`
+
+	_, err = db.Exec(query,
+		nav.UserID,
+		nav.GuildID,
+		nav.NavID,
+		nav.ChannelID,
+		nav.TableName,
+		nav.ChannelName,
+		nav.MessageChannelID,
+		nav.MessageIDMyWorks,
+		nav.MessageIDTopWorks,
+		nav.MessageIDLatestWorks,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to upsert personal navigation: %w", err)
+	}
+	return nil
+}
+
+// DeletePersonalNavigation removes a navigation entry.
+func DeletePersonalNavigation(userID, guildID string, navID int) error {
+	db, err := InitUserDB()
+	if err != nil {
+		return fmt.Errorf("failed to initialize user db: %w", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`DELETE FROM personal_navigation WHERE user_id = ? AND guild_id = ? AND nav_id = ?`, userID, guildID, navID)
+	if err != nil {
+		return fmt.Errorf("failed to delete personal navigation: %w", err)
+	}
+	return nil
+}
+
+// GetPersonalNavigationByMessageID finds the navigation entry that contains the given message ID.
+func GetPersonalNavigationByMessageID(guildID, messageID string) (*model.PersonalNavigation, error) {
+	db, err := InitUserDB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize user db: %w", err)
+	}
+	defer db.Close()
+
+	row := db.QueryRow(`
+		SELECT user_id, nav_id, channel_id, table_name, COALESCE(channel_name, ''),
+			   message_channel_id,
+			   message_id_my_works, message_id_top_works, message_id_latest_works
+		FROM personal_navigation
+		WHERE guild_id = ? AND (
+			message_id_my_works LIKE '%' || ? || '%' OR
+			message_id_top_works = ? OR
+			message_id_latest_works = ?
+		)`,
+		guildID, messageID, messageID, messageID)
+
+	var nav model.PersonalNavigation
+	nav.GuildID = guildID
+	err = row.Scan(&nav.UserID, &nav.NavID, &nav.ChannelID, &nav.TableName, &nav.ChannelName, &nav.MessageChannelID, &nav.MessageIDMyWorks, &nav.MessageIDTopWorks, &nav.MessageIDLatestWorks)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &nav, nil
 }

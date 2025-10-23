@@ -8,6 +8,7 @@ import (
 	"newer_helper/handlers/admin"
 	"newer_helper/handlers/auto_trigger"
 	"newer_helper/handlers/leaderboard"
+	"newer_helper/handlers/personalnav"
 	"newer_helper/handlers/preset"
 	"newer_helper/handlers/punish"
 	punish_admin "newer_helper/handlers/punish/admin"
@@ -247,6 +248,9 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 		},
 		"guilds_admin": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			admin.HandleGuildsAdminCommand(s, i, b.GetDB(), b.GetConfig())
+		},
+		"personal-nav": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			personalnav.HandlePersonalNavCommand(s, i, b)
 		},
 	}
 }
