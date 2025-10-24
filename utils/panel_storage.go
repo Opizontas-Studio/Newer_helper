@@ -3,7 +3,6 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"newer_helper/model"
 	"os"
@@ -40,7 +39,7 @@ func LoadPanelData() error {
 		return savePanelDataInternal()
 	}
 
-	data, err := ioutil.ReadFile(panelDataFile)
+	data, err := os.ReadFile(panelDataFile)
 	if err != nil {
 		return fmt.Errorf("failed to read panel data file: %v", err)
 	}
@@ -69,7 +68,7 @@ func savePanelDataInternal() error {
 		return fmt.Errorf("failed to marshal panel data: %v", err)
 	}
 
-	if err := ioutil.WriteFile(panelDataFile, data, 0644); err != nil {
+	if err := os.WriteFile(panelDataFile, data, 0644); err != nil {
 		return fmt.Errorf("failed to write panel data file: %v", err)
 	}
 

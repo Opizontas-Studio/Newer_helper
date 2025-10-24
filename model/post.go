@@ -19,5 +19,5 @@ type Post struct {
 
 // URL generates a Discord message link for the post.
 func (p *Post) URL(guildID string) string {
-	return fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, p.ChannelID, p.ID)
+	return fmt.Sprintf("https://discord.com/channels/%s/%s", guildID, p.ID)
 }
