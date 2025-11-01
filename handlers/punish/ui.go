@@ -10,7 +10,7 @@ import (
 )
 
 // buildPunishmentEmbedNew creates the rich embed message for the punishment announcement using new config.
-func buildPunishmentEmbedNew(i *discordgo.InteractionCreate, targetUser *discordgo.User, actionConfig *model.ActionConfig, reason string, allEvidence []Evidence, currentGuildHistory []model.PunishmentRecord, otherGuildsHistory map[string][]model.PunishmentRecord, timeoutApplied bool, timeoutDurationStr string, punishmentID int64, punishLevel *model.PunishLevel) *discordgo.MessageEmbed {
+func buildPunishmentEmbedNew(i *discordgo.InteractionCreate, targetUser *discordgo.User, actionConfig *model.ActionConfig, reason string, allEvidence []Evidence, currentGuildHistory []model.PunishmentRecord, otherGuildsHistory map[string][]model.PunishmentRecord, timeoutApplied bool, timeoutDurationStr string, punishmentID int64, punishLevel *model.PunishLevel, isSelfPunish bool) *discordgo.MessageEmbed {
 	// Get display name, fallback to type if actionConfig is nil
 	displayName := "未知处罚"
 	if actionConfig != nil {
@@ -40,10 +40,9 @@ func buildPunishmentEmbedNew(i *discordgo.InteractionCreate, targetUser *discord
 		Color:     getEmbedColor(punishLevel),
 	}
 
-	if punishmentID == -1 {
-		embed.Description = "用户进行了一次自我处罚，本次操作不会被记录。"
+	if isSelfPunish {
 		embed.Footer = &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("由 %s 操作", i.Member.User.Username),
+			Text: fmt.Sprintf("自我处罚 by %s | 处罚ID: %d | ⚠️ 已修改逻辑：自我处罚现已入库", i.Member.User.Username, punishmentID),
 		}
 	} else {
 		embed.Footer = &discordgo.MessageEmbedFooter{
@@ -96,7 +95,7 @@ func buildPunishmentEmbedNew(i *discordgo.InteractionCreate, targetUser *discord
 
 // buildSoftPunishmentEmbed creates a softer embed message using the description macro from config.
 // This embed is sent to private messages and command execution channel.
-func buildSoftPunishmentEmbed(targetUser *discordgo.User, punishLevel *model.PunishLevel, reason string, timeoutDurationStr string, adminUsername string, punishmentID int64) *discordgo.MessageEmbed {
+func buildSoftPunishmentEmbed(targetUser *discordgo.User, punishLevel *model.PunishLevel, reason string, timeoutDurationStr string, adminUsername string, punishmentID int64, isSelfPunish bool) *discordgo.MessageEmbed {
 	// Replace macros in description
 	description := punishLevel.Description
 	description = utils.ReplaceMacro(description, "${user}", targetUser.Mention())
@@ -104,11 +103,18 @@ func buildSoftPunishmentEmbed(targetUser *discordgo.User, punishLevel *model.Pun
 	description = utils.ReplaceMacro(description, "${timeout}", timeoutDurationStr)
 	description = utils.ReplaceMacro(description, "${add_role_timeout_time}", punishLevel.AddRoleTimeoutTime)
 
+	var footerText string
+	if isSelfPunish {
+		footerText = fmt.Sprintf("自我处罚（已入库） | 处罚ID: %d | ⚠️ 如需撤销请联系管理员", punishmentID)
+	} else {
+		footerText = fmt.Sprintf("由 %s 操作 | 处罚ID: %d", adminUsername, punishmentID)
+	}
+
 	embed := &discordgo.MessageEmbed{
 		Description: description,
 		Color:       getEmbedColor(punishLevel),
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("由 %s 操作 | 处罚ID: %d", adminUsername, punishmentID),
+			Text: footerText,
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}

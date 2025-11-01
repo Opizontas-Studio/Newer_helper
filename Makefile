@@ -1,4 +1,4 @@
-.PHONY: proto proto-clean help run build
+.PHONY: proto proto-clean help run run-restart build
 
 # 默认目标
 .DEFAULT_GOAL := help
@@ -43,6 +43,41 @@ run: proto
 	@echo "运行项目..."
 	@go run .
 
+# 运行项目并在异常退出时自动重启
+run-restart: proto
+	@echo "运行项目（带自动重启）..."
+	@echo "按 Ctrl+C 可以完全停止"
+	@restart_count=0; \
+	while true; do \
+		echo ""; \
+		echo "========================================"; \
+		if [ $$restart_count -eq 0 ]; then \
+			echo "启动程序..."; \
+		else \
+			echo "第 $$restart_count 次重启..."; \
+		fi; \
+		echo "========================================"; \
+		start_time=$$(date +%s); \
+		go run .; \
+		exit_code=$$?; \
+		end_time=$$(date +%s); \
+		runtime=$$((end_time - start_time)); \
+		echo ""; \
+		echo "程序退出，退出码: $$exit_code"; \
+		if [ $$exit_code -eq 0 ]; then \
+			echo "程序正常退出，不再重启"; \
+			break; \
+		fi; \
+		restart_count=$$((restart_count + 1)); \
+		if [ $$runtime -lt 5 ]; then \
+			echo "程序运行时间过短（$$runtime 秒），等待 5 秒后重启..."; \
+			sleep 5; \
+		else \
+			echo "等待 2 秒后重启..."; \
+			sleep 2; \
+		fi; \
+	done
+
 # 显示帮助信息
 help:
 	@echo "可用的 make 命令："
@@ -50,4 +85,5 @@ help:
 	@echo "  make proto-clean  - 清理生成的 proto 文件"
 	@echo "  make build        - 编译 proto 文件并构建项目"
 	@echo "  make run          - 编译 proto 文件并运行项目"
+	@echo "  make run-restart  - 运行项目并在异常退出时自动重启"
 	@echo "  make help         - 显示此帮助信息"

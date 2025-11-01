@@ -9,6 +9,7 @@ import (
 	"newer_helper/model"
 	"newer_helper/scanner"
 	"newer_helper/tasks"
+	tasks_emoji "newer_helper/tasks/new_card_emoji"
 	"newer_helper/utils"
 	"os"
 	"sync"
@@ -51,7 +52,7 @@ func NewScheduler(bot BotProvider) *Scheduler {
 
 // Start begins all scheduled tasks.
 func (s *Scheduler) Start() {
-	s.wg.Add(5) // 5 background goroutines
+	s.wg.Add(6) // 6 background goroutines
 
 	// Start the initial scan
 	go s.runInitialScan()
@@ -67,6 +68,9 @@ func (s *Scheduler) Start() {
 
 	// Start daily tasks
 	go s.startDailyTasks()
+
+	// Start new card emoji system
+	go s.startNewCardEmojiSystem()
 }
 
 // Stop terminates all scheduled tasks gracefully.
@@ -290,4 +294,25 @@ func (s *Scheduler) runDailyPunishmentReport() {
 	for _, channelConfig := range cfg.PunishmentStatsChannels {
 		go tasks.UpdatePunishmentStats(s.bot.GetSession(), s.bot.GetDB(), s.bot.GetDBX(), channelConfig, 24*time.Hour)
 	}
+}
+
+func (s *Scheduler) startNewCardEmojiSystem() {
+	defer s.wg.Done()
+
+	log.Println("[NewCardEmoji] Initializing new card emoji system...")
+
+	// 初始化队列和状态
+	if err := tasks_emoji.InitQueue(); err != nil {
+		log.Printf("[NewCardEmoji] Error initializing queue: %v", err)
+		return
+	}
+
+	// 重建启动时的计时器
+	if err := tasks_emoji.RebuildTimersOnStartup(s.bot.GetSession(), s.bot.GetConfig()); err != nil {
+		log.Printf("[NewCardEmoji] Error rebuilding timers: %v", err)
+	}
+
+	// 启动队列处理器
+	log.Println("[NewCardEmoji] Starting queue processor...")
+	tasks_emoji.StartQueueProcessor(s.bot.GetSession(), s.bot.GetConfig(), s.ctx)
 }

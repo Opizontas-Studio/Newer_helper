@@ -283,8 +283,8 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 		return
 	}
 
-	// Check admin rate limit
-	if !utils.CheckAndIncrementAdminAction(i.Member.User.ID, action, actionConfig.PeeUserLimit, 24*time.Hour) {
+	// Check admin rate limit (exclude self-punishment)
+	if !isSelfPunish && !utils.CheckAndIncrementAdminAction(i.Member.User.ID, action, actionConfig.PeeUserLimit, 24*time.Hour) {
 		utils.SendFollowUpError(s, i.Interaction, fmt.Sprintf("您今天执行 '%s' 操作的次数已达上限。", actionConfig.Name))
 		return
 	}
@@ -308,14 +308,6 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 	if err != nil {
 		log.Printf("Error processing evidence: %v", err)
 		utils.SendFollowUpError(s, i.Interaction, "Failed to process evidence.")
-		return
-	}
-
-	if isSelfPunish {
-		// For self-punishment, just remove roles and show message
-		removePunishmentRoles(s, i.GuildID, targetUser.ID, actionConfig.RemoveRoleID)
-		embed := buildPunishmentEmbedNew(i, targetUser, &actionConfig, reason, allEvidence, nil, nil, false, "", -1, nil)
-		sendResponseMessages(s, i, targetUser, embed, false, "", reason)
 		return
 	}
 
@@ -343,6 +335,13 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 		punishLevel = getHighestPunishmentLevel(actionConfig)
 	}
 
+	// Check if we still don't have a punishment level (config might be empty)
+	if punishLevel == nil {
+		log.Printf("No punishment levels configured for action '%s' in guild %s", action, i.GuildID)
+		utils.SendFollowUpError(s, i.Interaction, fmt.Sprintf("❌ 处罚类型 '%s' 未配置任何惩罚等级", actionConfig.Name))
+		return
+	}
+
 	// Apply punishments according to the level
 	timeoutApplied, timeoutDurationStr, tempRoles, rolesRemoveAt := applyPunishmentLevel(s, i, targetUser, *punishLevel)
 
@@ -361,10 +360,10 @@ func applyAndLogPunishment(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 
 	// Build soft embed for private message and command channel
-	softEmbed := buildSoftPunishmentEmbed(targetUser, punishLevel, reason, timeoutDurationStr, i.Member.User.Username, punishmentID)
+	softEmbed := buildSoftPunishmentEmbed(targetUser, punishLevel, reason, timeoutDurationStr, i.Member.User.Username, punishmentID, isSelfPunish)
 
 	// Build detailed embed for admin log channel
-	adminEmbed := buildPunishmentEmbedNew(i, targetUser, &actionConfig, reason, allEvidence, currentGuildHistory, otherGuildsHistory, timeoutApplied, timeoutDurationStr, punishmentID, punishLevel)
+	adminEmbed := buildPunishmentEmbedNew(i, targetUser, &actionConfig, reason, allEvidence, currentGuildHistory, otherGuildsHistory, timeoutApplied, timeoutDurationStr, punishmentID, punishLevel, isSelfPunish)
 
 	// Prepare preset message if configured
 	var presetContent string

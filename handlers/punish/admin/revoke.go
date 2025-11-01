@@ -8,6 +8,7 @@ import (
 	"newer_helper/utils"
 	punishments_db "newer_helper/utils/database/punishments"
 	"strconv"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/jmoiron/sqlx"
@@ -164,8 +165,51 @@ func revokePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, db *
 		return
 	}
 
+	// 发送撤销通知到admin channel
+	if actionConfig.AdminChannelID != "" {
+		revocationEmbed := buildRevocationEmbed(record, actionConfig, i.Member.User.Username)
+		_, err = s.ChannelMessageSendEmbed(actionConfig.AdminChannelID, revocationEmbed)
+		if err != nil {
+			log.Printf("无法发送撤销通知到admin channel %s: %v", actionConfig.AdminChannelID, err)
+			// 不影响主流程，继续执行
+		}
+	}
+
 	content := fmt.Sprintf("✅ 成功撤销并删除ID为 %d 的惩罚记录。", record.PunishmentID)
 	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Content: &content,
 	})
+}
+
+// buildRevocationEmbed creates an embed message for punishment revocation notification.
+func buildRevocationEmbed(record *model.PunishmentRecord, actionConfig model.ActionConfig, adminUsername string) *discordgo.MessageEmbed {
+	embed := &discordgo.MessageEmbed{
+		Title: "✅ 处罚撤销通知",
+		Color: 0x00FF00, // Green color for revocation
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:  "处罚ID",
+				Value: fmt.Sprintf("%d", record.PunishmentID),
+			},
+			{
+				Name:  "被处罚用户",
+				Value: fmt.Sprintf("<@%s> (`%s`)", record.UserID, record.UserUsername),
+			},
+			{
+				Name:  "处罚类型",
+				Value: actionConfig.Name,
+			},
+			{
+				Name:  "原处罚原因",
+				Value: record.Reason,
+			},
+			{
+				Name:  "撤销操作人",
+				Value: adminUsername,
+			},
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	return embed
 }

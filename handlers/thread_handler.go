@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"newer_helper/model"
+	tasks_emoji "newer_helper/tasks/new_card_emoji"
 	"newer_helper/utils"
 	"newer_helper/utils/database"
 	"os"
@@ -80,6 +81,8 @@ func HandleThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate, cfg *mo
 		utils.LogInfo(s, logChannelID, "NewPost", "Save", fmt.Sprintf("Successfully saved new post <#%s> to channel <#%s>", post.ID, post.ChannelID))
 		if rollCardGuildConfig, ok := cfg.RollCardConfigs[guildID]; ok {
 			go utils.PushNewCard(s, guildID, post, &rollCardGuildConfig)
+			// 为新帖子创建emoji发送计时器
+			go tasks_emoji.CreateTimersForNewPost(s, guildID, &post)
 		}
 	}
 }
