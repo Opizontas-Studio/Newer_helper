@@ -3,38 +3,36 @@ package personalnav
 import (
 	"fmt"
 	"log"
-	"newer_helper/bot"
 	"newer_helper/model"
-	"newer_helper/utils"
 	"newer_helper/utils/database"
 	"strings"
-	"time"
-	"unicode/utf8"
+	"sync"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-// This file will contain the core business logic for creating, refreshing,
-// and managing personal navigation embeds.
-
-// fetchNavigationData retrieves all necessary post data from the database for a given user and set of tables.
-func fetchNavigationData(b *bot.Bot, guildID, userID string, tableNames []string) ([]model.Post, []model.Post, []channelChoice, error) {
+// fetchNavigationData 从数据库中为指定用户和分区（表）检索所有必要的帖子数据。
+// 它返回用户的最新帖子、热门帖子以及所选分区的详细信息。
+func fetchNavigationData(cfg *model.Config, guildID, userID string, tableNames []string) ([]model.Post, []model.Post, []ChannelChoice, error) {
 	var allLatestPosts, allTopPosts []model.Post
-	var channelInfos []channelChoice
+	var channelInfos []ChannelChoice
 
+	// 遍历用户选择的所有分区
 	for _, tableName := range tableNames {
 		tableName = strings.TrimSpace(tableName)
 		if tableName == "" {
 			continue
 		}
 
-		channelInfo, err := resolveChannelChoice(b, guildID, tableName)
+		// 从配置中解析分区信息（频道ID、名称等）
+		channelInfo, err := resolveChannelChoice(cfg, guildID, tableName)
 		if err != nil {
 			log.Printf("personal-nav: failed to resolve channel for table %s: %v", tableName, err)
-			continue // Skip if a table can't be resolved
+			continue // 如果无法解析某个分区，则跳过
 		}
-		channelInfos = append(channelInfos, channelInfo)
+		channelInfos = append(channelInfos, *channelInfo)
 
+		// 初始化数据库连接
 		dbPath := fmt.Sprintf("data/%s.db", guildID)
 		db, err := database.InitDB(dbPath)
 		if err != nil {
@@ -42,23 +40,25 @@ func fetchNavigationData(b *bot.Bot, guildID, userID string, tableNames []string
 		}
 		defer db.Close()
 
+		// 确保帖子表结构存在
 		if err := database.EnsurePostTableSchema(db, tableName); err != nil {
 			log.Printf("personal-nav: failed to ensure schema for table %s: %v", tableName, err)
 			continue
 		}
 
-		// Fetch latest posts
+		// 获取最新帖子
 		latestPosts, err := database.GetPostsByAuthor(db, tableName, userID, 0)
 		if err != nil {
 			log.Printf("personal-nav: failed to get posts for table %s: %v", tableName, err)
 			continue
 		}
+		// 为每个帖子附加频道ID，以便后续生成跳转链接
 		for idx := range latestPosts {
 			latestPosts[idx].ChannelID = channelInfo.ChannelID
 		}
 		allLatestPosts = append(allLatestPosts, latestPosts...)
 
-		// Fetch top posts
+		// 获取热门帖子
 		topPosts, err := database.GetTopPostsByAuthor(db, tableName, userID, 0)
 		if err != nil {
 			log.Printf("personal-nav: failed to get top posts for table %s: %v", tableName, err)
@@ -70,6 +70,7 @@ func fetchNavigationData(b *bot.Bot, guildID, userID string, tableNames []string
 		allTopPosts = append(allTopPosts, topPosts...)
 	}
 
+	// 如果在所有选定分区中都找不到用户的任何作品，则返回错误
 	if len(allLatestPosts) == 0 {
 		return nil, nil, nil, fmt.Errorf("在所选分区中没有找到属于您的作品")
 	}
@@ -77,29 +78,47 @@ func fetchNavigationData(b *bot.Bot, guildID, userID string, tableNames []string
 	return allLatestPosts, allTopPosts, channelInfos, nil
 }
 
-// updateNavigation is the core logic for creating or refreshing a navigation.
-// It fetches data, builds embeds, and applies them.
-func updateNavigation(s *discordgo.Session, b *bot.Bot, i *discordgo.InteractionCreate, navID int, tableNames []string, userID string) error {
-	guildID := i.GuildID
-	log.Printf("personal-nav: updating navigation guild=%s user=%s nav=%d tables=%v", guildID, userID, navID, tableNames)
+// updateNavigation 是创建或刷新导航的核心逻辑。
+// 它执行以下步骤：
+// 1. 获取数据 (fetchNavigationData)
+// 2. 获取旧的导航记录（如果存在）
+// 3. 构建 Embeds (buildEmbeds)
+// 4. 应用 Embeds（发送或编辑消息） (applyNavigationEmbeds)
+// 5. 将新的导航状态保存到数据库
+//
+// 参数:
+// - guildID: 导航所在的服务器ID。
+// - fallbackChannelID: 如果是首次创建或找不到旧消息，导航消息将发送到此频道。
+// - navID: 导航槽位ID (1, 2, or 3)。
+// - tableNames: 用户选择的分区列表。
+// - userID: 导航所属的用户ID。
+// - updateMode: 更新模式 ("edit" 或 "delete")。
+func updateNavigation(s *discordgo.Session, cfg *model.Config, guildID, fallbackChannelID string, navID int, tableNames []string, userID, updateMode string) error {
+	log.Printf("personal-nav: updating navigation guild=%s user=%s nav=%d tables=%v updateMode=%s", guildID, userID, navID, tableNames, updateMode)
 
-	// 1. Fetch all necessary data
-	allLatestPosts, allTopPosts, channelInfos, err := fetchNavigationData(b, guildID, userID, tableNames)
+	// 1. 获取所有需要的数据
+	allLatestPosts, allTopPosts, channelInfos, err := fetchNavigationData(cfg, guildID, userID, tableNames)
 	if err != nil {
 		return err
 	}
 
-	// 2. Build embeds
-	myWorksEmbeds, embedTop, embedLatest := buildEmbeds(guildID, channelInfos, allLatestPosts, allTopPosts)
-
-	// 3. Find existing navigation to update
+	// 2. 查找现有的导航记录以获取其数据库唯一ID
 	existing, err := database.GetPersonalNavigation(userID, guildID, navID)
 	if err != nil {
 		return fmt.Errorf("读取旧导航记录失败: %w", err)
 	}
 
-	// 4. Apply embeds (send or edit messages)
-	messageChannel, myWorksIDs, topWorkID, latestWorkID, err := applyNavigationEmbeds(s, i.ChannelID, existing, myWorksEmbeds, embedTop, embedLatest)
+	// 获取数据库唯一ID，用于在Embed的页脚中显示，方便调试和管理
+	var navigationID int64
+	if existing != nil {
+		navigationID = existing.ID
+	}
+
+	// 3. 构建所有导航消息的 Embeds
+	myWorksEmbeds, embedTop, embedLatest := buildEmbeds(guildID, channelInfos, allLatestPosts, allTopPosts, navigationID, navID)
+
+	// 4. 应用 Embeds（发送新消息或编辑旧消息）
+	messageChannel, myWorksIDs, topWorkID, latestWorkID, err := applyNavigationEmbeds(s, fallbackChannelID, existing, myWorksEmbeds, embedTop, embedLatest, updateMode)
 	if err != nil {
 		return err
 	}
@@ -107,7 +126,7 @@ func updateNavigation(s *discordgo.Session, b *bot.Bot, i *discordgo.Interaction
 		return fmt.Errorf("未能成功创建或更新所有导航消息")
 	}
 
-	// 5. Prepare and save the navigation record
+	// 5. 准备导航记录并保存到数据库
 	var tableNamesStr, channelIDsStr, channelNamesStr string
 	if len(tableNames) > 0 {
 		tableNamesStr = strings.Join(tableNames, ",")
@@ -133,32 +152,41 @@ func updateNavigation(s *discordgo.Session, b *bot.Bot, i *discordgo.Interaction
 		MessageIDMyWorks:     strings.Join(myWorksIDs, ","),
 		MessageIDTopWorks:    topWorkID,
 		MessageIDLatestWorks: latestWorkID,
+		UpdateMode:           updateMode,
 	}
 
 	if err := database.UpsertPersonalNavigation(record); err != nil {
 		return fmt.Errorf("保存导航记录失败: %w", err)
 	}
 
-	log.Printf("personal-nav: navigation slot %d saved successfully", navID)
+	log.Printf("personal-nav: navigation slot %d saved successfully with updateMode=%s", navID, updateMode)
 	return nil
 }
 
-func applyNavigationEmbeds(s *discordgo.Session, fallbackChannelID string, existing *model.PersonalNavigation, myWorksEmbeds []*discordgo.MessageEmbed, embedTop, embedLatest *discordgo.MessageEmbed) (messageChannelID string, myWorksIDs []string, topWorkID, latestWorkID string, err error) {
+// applyNavigationEmbeds 负责将构建好的 Embeds 发送到 Discord。
+// 它会根据 updateMode 和是否存在旧消息来决定是发送新消息、编辑旧消息还是先删后发。
+func applyNavigationEmbeds(s *discordgo.Session, fallbackChannelID string, existing *model.PersonalNavigation, myWorksEmbeds []*discordgo.MessageEmbed, embedTop, embedLatest *discordgo.MessageEmbed, updateMode string) (messageChannelID string, myWorksIDs []string, topWorkID, latestWorkID string, err error) {
+	// 确定目标频道
 	targetChannelID := fallbackChannelID
 	if existing != nil && existing.MessageChannelID != "" {
 		targetChannelID = existing.MessageChannelID
 	}
 	if targetChannelID == "" && existing != nil {
-		targetChannelID = existing.ChannelID
+		// 作为备用，尝试使用旧记录中的第一个分区频道
+		channelIDs := strings.Split(existing.ChannelID, ",")
+		if len(channelIDs) > 0 {
+			targetChannelID = strings.TrimSpace(channelIDs[0])
+		}
 	}
 	if targetChannelID == "" {
-		return "", nil, "", "", fmt.Errorf("无法确定导航消息要发送的频道。")
+		return "", nil, "", "", fmt.Errorf("无法确定导航消息要发送的频道")
 	}
 
 	messageChannelID = targetChannelID
 
-	log.Printf("personal-nav: apply embeds targetChannel=%s fallback=%s hasExisting=%t myWorksCount=%d", targetChannelID, fallbackChannelID, existing != nil, len(myWorksEmbeds))
+	log.Printf("personal-nav: apply embeds targetChannel=%s fallback=%s hasExisting=%t myWorksCount=%d updateMode=%s", targetChannelID, fallbackChannelID, existing != nil, len(myWorksEmbeds), updateMode)
 
+	// sendOrEdit 是一个辅助函数，用于处理单个消息的发送或编辑
 	sendOrEdit := func(existingMessageID string, embed *discordgo.MessageEmbed) (string, error) {
 		// 记录 embed 大小信息用于调试
 		descLen := 0
@@ -166,9 +194,28 @@ func applyNavigationEmbeds(s *discordgo.Session, fallbackChannelID string, exist
 			descLen = len(embed.Description)
 		}
 		fieldsCount := len(embed.Fields)
-		log.Printf("personal-nav: sendOrEdit embed title=%q descLen=%d fieldsCount=%d", embed.Title, descLen, fieldsCount)
+		log.Printf("personal-nav: sendOrEdit embed title=%q descLen=%d fieldsCount=%d updateMode=%s", embed.Title, descLen, fieldsCount, updateMode)
 
-		if existing != nil && existingMessageID != "" {
+		// 如果是“删除更新”模式，并且存在旧消息，则先删除旧消息
+		if updateMode == "delete" && existing != nil && existingMessageID != "" {
+			log.Printf("personal-nav: delete mode - deleting existing message %s", existingMessageID)
+			err := s.ChannelMessageDelete(targetChannelID, existingMessageID)
+			if err != nil {
+				// 如果消息已不存在 (404)，则忽略错误继续执行
+				if restErr, ok := err.(*discordgo.RESTError); ok && restErr.Response != nil && restErr.Response.StatusCode == 404 {
+					log.Printf("personal-nav: existing message %s already deleted", existingMessageID)
+				} else {
+					log.Printf("personal-nav: failed to delete message %s: %v", existingMessageID, err)
+				}
+			} else {
+				log.Printf("personal-nav: deleted existing message %s", existingMessageID)
+			}
+			// 清空旧消息ID，强制后续逻辑发送新消息
+			existingMessageID = ""
+		}
+
+		// 如果是“编辑”模式，并且存在旧消息，则尝试编辑
+		if updateMode == "edit" && existing != nil && existingMessageID != "" {
 			msg, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 				Channel: targetChannelID,
 				ID:      existingMessageID,
@@ -179,23 +226,26 @@ func applyNavigationEmbeds(s *discordgo.Session, fallbackChannelID string, exist
 				log.Printf("personal-nav: edited existing message %s in channel %s", msg.ID, msg.ChannelID)
 				return msg.ID, nil
 			}
+			// 如果编辑失败是因为消息不存在 (404)，则继续执行发送新消息的逻辑
 			if restErr, ok := err.(*discordgo.RESTError); !ok || restErr.Response == nil || restErr.Response.StatusCode != 404 {
 				return "", fmt.Errorf("编辑导航消息失败: %w", err)
 			}
 			log.Printf("personal-nav: existing message %s missing, sending new one", existingMessageID)
 		}
 
+		// 发送新消息
 		msg, err := s.ChannelMessageSendComplex(targetChannelID, &discordgo.MessageSend{
 			Embeds: []*discordgo.MessageEmbed{embed},
 		})
 		if err != nil {
+			// 如果在目标频道发送失败，并且提供了备用频道，则尝试在备用频道发送
 			if targetChannelID != fallbackChannelID && fallbackChannelID != "" {
 				log.Printf("personal-nav: send to targetChannel %s failed, attempting fallback to %s", targetChannelID, fallbackChannelID)
 				msg, err = s.ChannelMessageSendComplex(fallbackChannelID, &discordgo.MessageSend{
 					Embeds: []*discordgo.MessageEmbed{embed},
 				})
 				if err == nil {
-					targetChannelID = fallbackChannelID
+					targetChannelID = fallbackChannelID // 更新目标频道为备用频道
 					messageChannelID = msg.ChannelID
 					log.Printf("personal-nav: fallback send succeeded message=%s channel=%s", msg.ID, msg.ChannelID)
 					return msg.ID, nil
@@ -208,13 +258,13 @@ func applyNavigationEmbeds(s *discordgo.Session, fallbackChannelID string, exist
 		return msg.ID, nil
 	}
 
-	// 解析旧的"我的作品"消息 ID（逗号分隔）
+	// 解析旧的“我的作品”消息ID列表（逗号分隔）
 	var existingMyWorksIDs []string
 	if existing != nil && existing.MessageIDMyWorks != "" {
 		existingMyWorksIDs = strings.Split(existing.MessageIDMyWorks, ",")
 	}
 
-	// 处理"我的作品" embeds
+	// 循环处理“我的作品” embeds，发送或编辑消息
 	for i, embed := range myWorksEmbeds {
 		var existingID string
 		if i < len(existingMyWorksIDs) {
@@ -228,7 +278,7 @@ func applyNavigationEmbeds(s *discordgo.Session, fallbackChannelID string, exist
 		myWorksIDs = append(myWorksIDs, newID)
 	}
 
-	// 删除多余的旧"我的作品"消息
+	// 如果新的“我的作品”消息数量少于旧的，则删除多余的旧消息
 	for i := len(myWorksEmbeds); i < len(existingMyWorksIDs); i++ {
 		oldID := strings.TrimSpace(existingMyWorksIDs[i])
 		if oldID != "" {
@@ -240,7 +290,7 @@ func applyNavigationEmbeds(s *discordgo.Session, fallbackChannelID string, exist
 		}
 	}
 
-	// 处理"最高消息作品"
+	// 处理“最高热度作品”
 	var existingTopID string
 	if existing != nil {
 		existingTopID = existing.MessageIDTopWorks
@@ -250,7 +300,7 @@ func applyNavigationEmbeds(s *discordgo.Session, fallbackChannelID string, exist
 		return "", nil, "", "", err
 	}
 
-	// 处理"最新作品"
+	// 处理“最新作品”
 	var existingLatestID string
 	if existing != nil {
 		existingLatestID = existing.MessageIDLatestWorks
@@ -263,251 +313,121 @@ func applyNavigationEmbeds(s *discordgo.Session, fallbackChannelID string, exist
 	return messageChannelID, myWorksIDs, topWorkID, latestWorkID, nil
 }
 
-func resolveChannelChoice(b *bot.Bot, guildID, tableName string) (channelChoice, error) {
-	guildTask, ok := b.GetConfig().TaskConfig[guildID]
+// resolveChannelChoice 根据分区表名（如 "作品_1234"）从服务器配置中解析出对应的频道信息。
+func resolveChannelChoice(cfg *model.Config, guildID, tableName string) (*ChannelChoice, error) {
+	guildTask, ok := cfg.TaskConfig[guildID]
 	if !ok {
-		return channelChoice{}, fmt.Errorf("未配置该服务器的分区信息。")
+		return nil, fmt.Errorf("未配置该服务器的分区信息。")
 	}
 	for name, channelTask := range guildTask.Data {
 		if len(channelTask.ChannelID) < 4 {
 			continue
 		}
+		// 表名是根据分区名和频道ID后四位生成的
 		expected := fmt.Sprintf("%s_%s", name, channelTask.ChannelID[len(channelTask.ChannelID)-4:])
 		if expected == tableName {
-			return channelChoice{
+			return &ChannelChoice{
 				TableName:   tableName,
 				ChannelID:   channelTask.ChannelID,
 				ChannelName: name,
 			}, nil
 		}
 	}
-	return channelChoice{}, fmt.Errorf("无法解析导航所属的分区。")
+	return nil, fmt.Errorf("无法解析导航所属的分区。")
 }
 
-// buildSafeDescription 构建一个带长度限制的 description，确保不超过 Discord 的限制
-func buildSafeDescription(prefix string, lines []string, fallback string, maxLength int) string {
-	if len(lines) == 0 {
-		return prefix + fallback
+// UpdateNavigationScheduled 在计划任务上下文中更新单个导航（没有用户交互）。
+// 这是由 bot 包中的定时器调用的公共函数。
+func UpdateNavigationScheduled(s *discordgo.Session, cfg *model.Config, nav model.PersonalNavigation) error {
+	tableNames := strings.Split(nav.TableName, ",")
+
+	// 使用存储的更新模式，如果未设置则默认为 "edit"
+	updateMode := nav.UpdateMode
+	if updateMode == "" {
+		updateMode = updateModeEdit
+		log.Printf("personal-nav: nav %d has no UpdateMode, defaulting to edit", nav.NavID)
 	}
 
-	// 从完整内容开始，逐步减少行数直到满足长度限制
-	for numLines := len(lines); numLines > 0; numLines-- {
-		currentLines := lines[:numLines]
-		description := prefix + strings.Join(currentLines, "\n")
+	// 使用存储的消息频道ID作为目标频道。
+	// 在计划更新中，我们没有交互上下文，因此完全依赖于数据库中存储的频道ID。
+	fallbackChannelID := nav.MessageChannelID
+	if fallbackChannelID == "" {
+		// 如果消息频道ID因故丢失，则尝试使用分区频道列表中的第一个作为备用。
+		channelIDs := strings.Split(nav.ChannelID, ",")
+		if len(channelIDs) > 0 {
+			fallbackChannelID = strings.TrimSpace(channelIDs[0])
+		}
+	}
 
-		if len(description) <= maxLength {
-			// 如果被截断了，添加提示
-			if numLines < len(lines) {
-				truncated := fmt.Sprintf("\n\n_（显示前 %d 个，共 %d 个）_", numLines, len(lines))
-				if len(description)+len(truncated) <= maxLength {
-					description += truncated
+	if fallbackChannelID == "" {
+		return fmt.Errorf("no valid channel ID found for nav %d (guild=%s user=%s)",
+			nav.NavID, nav.GuildID, nav.UserID)
+	}
+
+	// 调用核心更新逻辑
+	return updateNavigation(s, cfg, nav.GuildID, fallbackChannelID, nav.NavID, tableNames, nav.UserID, updateMode)
+}
+
+// deleteNavigation handles the deletion of a personal navigation.
+// It removes all associated Discord messages and the database record.
+func deleteNavigation(s *discordgo.Session, nav model.PersonalNavigation) error {
+	log.Printf("personal-nav: delete navigation start guild=%s user=%s nav=%d", nav.GuildID, nav.UserID, nav.NavID)
+
+	// Determine the channel where messages are located.
+	channelID := nav.MessageChannelID
+	if channelID == "" {
+		// Fallback to the first channel in the list if MessageChannelID is missing.
+		channelIDs := strings.Split(nav.ChannelID, ",")
+		if len(channelIDs) > 0 && strings.TrimSpace(channelIDs[0]) != "" {
+			channelID = strings.TrimSpace(channelIDs[0])
+		}
+	}
+
+	if channelID == "" {
+		log.Printf("personal-nav: cannot determine channel for nav %d, proceeding to delete DB record", nav.ID)
+	} else {
+		// Collect all message IDs to be deleted.
+		var allIDs []string
+		if nav.MessageIDMyWorks != "" {
+			for _, id := range strings.Split(nav.MessageIDMyWorks, ",") {
+				if trimmedID := strings.TrimSpace(id); trimmedID != "" {
+					allIDs = append(allIDs, trimmedID)
 				}
 			}
-			log.Printf("personal-nav: buildSafeDescription used %d/%d lines, length=%d/%d", numLines, len(lines), len(description), maxLength)
-			return description
 		}
-	}
-
-	// 如果连一行都放不下，返回后备文本
-	log.Printf("personal-nav: WARNING - even single line exceeds limit, using fallback")
-	return prefix + fallback
-}
-
-func buildEmbeds(guildID string, channelInfos []channelChoice, latestPosts []model.Post, topPosts []model.Post) (myWorksEmbeds []*discordgo.MessageEmbed, topWorks, latest *discordgo.MessageEmbed) {
-	// 按分区分组作品
-	postsByPartition := groupPostsByPartition(latestPosts, channelInfos)
-
-	// 为每个分区构建 embed（可能多个）
-	for _, ci := range channelInfos {
-		posts := postsByPartition[ci.TableName]
-
-		// 构建该分区的 embed（自动分页处理所有作品）
-		partitionEmbeds := buildPartitionEmbeds(ci.ChannelName, ci.ChannelID, guildID, posts, len(posts))
-		myWorksEmbeds = append(myWorksEmbeds, partitionEmbeds...)
-	}
-
-	displayTop := topPosts
-	if len(displayTop) > maxLatestPostsToDisplay {
-		displayTop = displayTop[:maxLatestPostsToDisplay]
-	}
-	topLines := make([]string, 0, len(displayTop))
-	for _, post := range displayTop {
-		topLines = append(topLines, formatPostLineWithStats(guildID, post))
-	}
-
-	const maxEmbedDescriptionLength = 3800 // Discord 限制 4096，使用 3800 作为安全阈值
-	topDescription := buildSafeDescription(
-		"根据消息数量 (MessageCount) 排序。\n\n",
-		topLines,
-		"暂无数据。",
-		maxEmbedDescriptionLength,
-	)
-
-	topWorks = &discordgo.MessageEmbed{
-		Title:       "🔥 最高消息作品",
-		Description: topDescription,
-		Color:       embedColorHighlight,
-		Timestamp:   time.Now().Format(time.RFC3339),
-	}
-
-	displayRecent := latestPosts
-	if len(displayRecent) > maxLatestPostsToDisplay {
-		displayRecent = displayRecent[:maxLatestPostsToDisplay]
-	}
-	latestLines := make([]string, 0, len(displayRecent))
-	for _, post := range displayRecent {
-		latestLines = append(latestLines, formatPostLineWithDate(guildID, post))
-	}
-
-	latestDescription := buildSafeDescription(
-		"按时间倒序展示最新作品。\n\n",
-		latestLines,
-		"暂无数据。",
-		maxEmbedDescriptionLength,
-	)
-
-	latest = &discordgo.MessageEmbed{
-		Title:       "🆕 最新作品",
-		Description: latestDescription,
-		Color:       embedColorSecondary,
-		Timestamp:   time.Now().Format(time.RFC3339),
-	}
-
-	return myWorksEmbeds, topWorks, latest
-}
-
-func formatPostLine(guildID string, post model.Post) string {
-	title := post.Title
-	if strings.TrimSpace(title) == "" {
-		title = "未命名作品"
-	}
-	return fmt.Sprintf("[%s](%s) · 💬 %d · <t:%d:R>", utils.TruncateString(title, 70), post.URL(guildID), post.MessageCount, post.Timestamp)
-}
-
-func formatPostLineWithStats(guildID string, post model.Post) string {
-	title := post.Title
-	if strings.TrimSpace(title) == "" {
-		title = "未命名作品"
-	}
-	return fmt.Sprintf("[%s](%s)\n> 💬 %d · <t:%d:R>", utils.TruncateString(title, 70), post.URL(guildID), post.MessageCount, post.Timestamp)
-}
-
-func formatPostLineWithDate(guildID string, post model.Post) string {
-	title := post.Title
-	if strings.TrimSpace(title) == "" {
-		title = "未命名作品"
-	}
-	return fmt.Sprintf("[%s](%s)\n> <t:%d:F>", utils.TruncateString(title, 70), post.URL(guildID), post.Timestamp)
-}
-
-// groupPostsByPartition 按分区分组作品
-func groupPostsByPartition(posts []model.Post, channelInfos []channelChoice) map[string][]model.Post {
-	result := make(map[string][]model.Post)
-
-	for _, post := range posts {
-		for _, ci := range channelInfos {
-			if post.ChannelID == ci.ChannelID {
-				result[ci.TableName] = append(result[ci.TableName], post)
-				break
-			}
+		if nav.MessageIDTopWorks != "" {
+			allIDs = append(allIDs, nav.MessageIDTopWorks)
 		}
-	}
-
-	return result
-}
-
-// buildPartitionEmbeds 为单个分区构建一个或多个 embed（超过限制时拆分）
-func buildPartitionEmbeds(partitionName, channelID, guildID string, posts []model.Post, totalCount int) []*discordgo.MessageEmbed {
-	const maxDescriptionLength = 4000 // 优化阈值，Discord description 限制为 4096，保留96字符安全边距
-
-	if len(posts) == 0 {
-		// 没有作品，返回一个空的 embed
-		embed := &discordgo.MessageEmbed{
-			Title:       fmt.Sprintf("📁 我的作品 - %s (%d个投稿)", partitionName, totalCount),
-			Description: fmt.Sprintf("频道：<#%s>\n\n暂无作品记录。", channelID),
-			Color:       embedColorPrimary,
-			Timestamp:   time.Now().Format(time.RFC3339),
-		}
-		return []*discordgo.MessageEmbed{embed}
-	}
-
-	// 构建作品行
-	lines := make([]string, 0, len(posts))
-	for _, post := range posts {
-		lines = append(lines, formatPostLine(guildID, post))
-	}
-
-	// 计算是否需要拆分
-	var embeds []*discordgo.MessageEmbed
-	var currentLines []string
-	channelPrefix := fmt.Sprintf("频道：<#%s>\n\n", channelID)
-
-	for _, line := range lines {
-		// 模拟拼接后的内容来检查长度
-		var testValue string
-		if len(currentLines) == 0 {
-			testValue = channelPrefix + line
-		} else {
-			testValue = channelPrefix + strings.Join(currentLines, "\n") + "\n" + line
+		if nav.MessageIDLatestWorks != "" {
+			allIDs = append(allIDs, nav.MessageIDLatestWorks)
 		}
 
-		// 如果加入这一行会超过限制，先保存当前的 embed
-		if len(testValue) > maxDescriptionLength && len(currentLines) > 0 {
-			embeds = append(embeds, createPartitionEmbed(partitionName, channelID, totalCount, currentLines, len(embeds)+1, 0))
-			currentLines = []string{line}
-		} else {
-			currentLines = append(currentLines, line)
+		// Concurrently delete all messages.
+		var wg sync.WaitGroup
+		for _, msgID := range allIDs {
+			wg.Add(1)
+			go func(id string) {
+				defer wg.Done()
+				if err := s.ChannelMessageDelete(channelID, id); err != nil {
+					// Tolerate "not found" errors as the message might have been deleted manually.
+					if restErr, ok := err.(*discordgo.RESTError); ok && restErr.Response != nil && restErr.Response.StatusCode == 404 {
+						log.Printf("personal-nav: message %s in channel %s already deleted.", id, channelID)
+					} else {
+						log.Printf("personal-nav: failed to delete message %s in channel %s: %v", id, channelID, err)
+					}
+				} else {
+					log.Printf("personal-nav: deleted message %s in channel %s", id, channelID)
+				}
+			}(msgID)
 		}
+		wg.Wait()
 	}
 
-	// 添加最后一个 embed
-	if len(currentLines) > 0 {
-		totalPages := len(embeds) + 1
-		embeds = append(embeds, createPartitionEmbed(partitionName, channelID, totalCount, currentLines, len(embeds)+1, totalPages))
+	// Finally, delete the navigation record from the database.
+	if err := database.DeletePersonalNavigation(nav.UserID, nav.GuildID, nav.NavID); err != nil {
+		return fmt.Errorf("删除数据库中的导航记录失败: %w", err)
 	}
 
-	// 如果有多页，需要更新之前的 embed 标题以显示页码
-	if len(embeds) > 1 {
-		for i := 0; i < len(embeds)-1; i++ {
-			embeds[i].Title = fmt.Sprintf("📁 我的作品 - %s (第%d/%d页)", partitionName, i+1, len(embeds))
-		}
-		embeds[len(embeds)-1].Title = fmt.Sprintf("📁 我的作品 - %s (第%d/%d页)", partitionName, len(embeds), len(embeds))
-	}
-
-	return embeds
-}
-
-// createPartitionEmbed 创建一个分区 embed
-func createPartitionEmbed(partitionName, channelID string, totalCount int, lines []string, pageNum, totalPages int) *discordgo.MessageEmbed {
-	title := fmt.Sprintf("📁 我的作品 - %s (%d个投稿)", partitionName, totalCount)
-	if totalPages > 1 {
-		title = fmt.Sprintf("📁 我的作品 - %s (第%d/%d页)", partitionName, pageNum, totalPages)
-	}
-
-	// 构建 description：频道信息 + 作品列表
-	description := fmt.Sprintf("频道：<#%s>\n\n%s", channelID, strings.Join(lines, "\n"))
-
-	// 安全检查：确保不超过 Discord 限制（description 最大 4096 字符）
-	if len(description) > 4096 {
-		log.Printf("personal-nav: WARNING - description exceeds 4096 chars (%d), truncating", len(description))
-		// 截断到 4090 字节（留出省略号的空间），并确保不破坏 UTF-8 字符
-		maxLen := 4090
-		for maxLen > 0 && maxLen < len(description) {
-			// 检查是否在 UTF-8 字符边界上
-			if utf8.ValidString(description[:maxLen]) {
-				break
-			}
-			maxLen--
-		}
-		description = description[:maxLen] + "\n..."
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Title:       title,
-		Description: description,
-		Color:       embedColorPrimary,
-		Timestamp:   time.Now().Format(time.RFC3339),
-	}
-
-	return embed
+	log.Printf("personal-nav: delete navigation finished for nav=%d", nav.NavID)
+	return nil
 }

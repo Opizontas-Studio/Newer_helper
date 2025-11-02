@@ -57,7 +57,7 @@ func handleInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreat
 		} else if customID == "select_pools_menu" {
 			rollcard.HandlePoolSelectionResponse(s, i, b)
 		} else if strings.HasPrefix(customID, "personal_nav") {
-			if !personalnav.HandlePersonalNavComponent(s, i, b, customID) {
+			if !personalnav.HandlePersonalNavComponent(s, i, b.GetConfig(), customID) {
 				log.Printf("Unhandled personal navigation component: %s", customID)
 			}
 		}

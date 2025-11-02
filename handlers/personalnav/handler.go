@@ -3,11 +3,9 @@ package personalnav
 import (
 	"fmt"
 	"log"
-	"sort"
 	"strconv"
 	"strings"
 
-	"newer_helper/bot"
 	"newer_helper/model"
 	"newer_helper/utils"
 	"newer_helper/utils/database"
@@ -16,28 +14,32 @@ import (
 )
 
 const (
-	componentSelectSlot           = "personal_nav:slot"
-	componentSelectAreaPrefix     = "personal_nav:area:"
-	componentSubmitAreaPrefix     = "personal_nav:submit_area:"
-	componentRefreshSelect        = "personal_nav:refresh"
-	componentDeleteSelect         = "personal_nav:delete"
-	maxNavigationSlots            = 3
-	maxLatestPostsToDisplay       = 10
-	maxMyWorksToDisplay           = 999 // 实际移除限制，由自动分页处理
-	embedColorPrimary         int = 0x5865F2
-	embedColorHighlight       int = 0xFEE75C
-	embedColorSecondary       int = 0x57F287
+	componentSelectSlot                 = "personal_nav:slot"
+	componentSelectAreaPrefix           = "personal_nav:area:"
+	componentSubmitAreaPrefix           = "personal_nav:submit_area:"
+	componentSubmitUpdateModePrefix     = "personal_nav:submit_update_mode:"
+	componentRefreshSelect              = "personal_nav:refresh"
+	componentDeleteSelect               = "personal_nav:delete"
+	maxNavigationSlots                  = 3
+	maxLatestPostsToDisplay             = 10
+	embedColorPrimary               int = 0x5865F2
+	embedColorHighlight             int = 0xFEE75C
+	embedColorSecondary             int = 0x57F287
+	updateModeEdit                      = "edit"   // 修改消息模式
+	updateModeDelete                    = "delete" // 删除更新模式
 )
 
-type channelChoice struct {
+type ChannelChoice struct {
 	TableName   string
 	ChannelID   string
 	ChannelName string
 	PostCount   int
 }
 
-// HandlePersonalNavCommand is the entry point for /personal-nav.
-func HandlePersonalNavCommand(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot) {
+// HandlePersonalNavCommand 是处理 `/personal-nav` 斜杠命令的入口函数。
+// 它负责解析命令、验证权限，并根据子命令（action）将请求分发到相应的处理函数。
+func HandlePersonalNavCommand(s *discordgo.Session, i *discordgo.InteractionCreate, cfg *model.Config) {
+	// 验证用户是否在允许的上下文（例如，自己创建的子区或有管理权限的频道）中使用此命令。
 	if !validateUsageContext(s, i) {
 		utils.SendEphemeralResponse(s, i, "该命令只能在您管理的频道或您创建的子区内使用。")
 		return
@@ -52,10 +54,12 @@ func HandlePersonalNavCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		optionMap[opt.Name] = opt
 	}
 
+	// 开发者可以通过 `userid` 参数为其他用户操作导航。
 	if userIDOpt, ok := optionMap["userid"]; ok {
 		specifiedUserID := strings.TrimSpace(userIDOpt.StringValue())
 		if specifiedUserID != "" {
-			isDev := utils.CheckPermission(nil, requesterID, nil, nil, b.GetConfig().DeveloperUserIDs, nil) == utils.DeveloperPermission
+			// 检查执行者是否是开发者
+			isDev := utils.CheckPermission(nil, requesterID, nil, nil, cfg.DeveloperUserIDs, nil) == utils.DeveloperPermission
 			if isDev {
 				targetUserID = specifiedUserID
 				log.Printf("personal-nav: developer %s is acting on behalf of user %s", requesterID, targetUserID)
@@ -80,33 +84,37 @@ func HandlePersonalNavCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	action := actionOpt.StringValue()
 	log.Printf("personal-nav: received action=%s guild=%s user=%s channel=%s", action, guildID, targetUserID, i.ChannelID)
 
+	// 根据 action 参数分发到不同的处理函数
 	switch action {
 	case "create":
-		handleCreateAction(s, i, b, targetUserID)
+		handleCreateAction(s, i, cfg, targetUserID)
 	case "refresh":
-		handleRefreshAction(s, i, b, input, targetUserID)
+		handleRefreshAction(s, i, cfg, input, targetUserID)
 	case "delete":
-		handleDeleteAction(s, i, b, input, targetUserID)
+		handleDeleteAction(s, i, input, targetUserID)
 	default:
 		utils.SendEphemeralResponse(s, i, "未知的操作类型。")
 	}
 }
 
-func handleCreateAction(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, userID string) {
+// handleCreateAction 处理创建导航的逻辑。
+// 它会检查用户的可用导航槽位，并引导用户进入分区选择流程。
+func handleCreateAction(s *discordgo.Session, i *discordgo.InteractionCreate, cfg *model.Config, userID string) {
 	guildID := i.GuildID
 	log.Printf("personal-nav: handleCreateAction guild=%s user=%s", guildID, userID)
 
-	log.Printf("personal-nav: loading existing navigation entries...")
+	// 加载用户已有的导航
 	navigations, err := database.GetPersonalNavigations(userID, guildID)
 	if err != nil {
 		log.Printf("Failed to load personal navigations for %s/%s: %v", guildID, userID, err)
 		utils.SendEphemeralResponse(s, i, "读取导航数据时出错。")
 		return
 	}
-	log.Printf("personal-nav: existing navigations count=%d", len(navigations))
 
+	// 查找第一个可用的导航槽位
 	slot := findFirstAvailableSlot(navigations)
 	if slot == 0 {
+		// 如果没有可用槽位，则显示一个选择菜单，让用户选择要覆盖的槽位。
 		data := buildSlotSelectionResponse(navigations, userID)
 		if data == nil {
 			utils.SendEphemeralResponse(s, i, "无法加载现有导航。")
@@ -124,7 +132,8 @@ func handleCreateAction(s *discordgo.Session, i *discordgo.InteractionCreate, b 
 		return
 	}
 
-	data, err := buildAreaSelectionResponse(b, guildID, userID, slot)
+	// 如果有可用槽位，直接进入分区选择界面。
+	data, err := buildAreaSelectionResponse(cfg, guildID, userID, slot)
 	if err != nil {
 		utils.SendEphemeralResponse(s, i, err.Error())
 		return
@@ -143,29 +152,29 @@ func handleCreateAction(s *discordgo.Session, i *discordgo.InteractionCreate, b 
 	}
 }
 
-func handleRefreshAction(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, messageID, userID string) {
+// handleRefreshAction 处理刷新导航的逻辑。
+// 如果提供了 input（导航ID或消息ID），则直接刷新；否则，显示一个选择菜单让用户选择。
+func handleRefreshAction(s *discordgo.Session, i *discordgo.InteractionCreate, cfg *model.Config, input, userID string) {
 	guildID := i.GuildID
 
-	// Direct refresh via message id.
-	if messageID != "" {
-		nav, err := database.GetPersonalNavigationByMessageID(guildID, messageID)
+	if input != "" {
+		// 通过输入（ID或消息ID）查找导航
+		nav, err := findNavigationFromInput(guildID, userID, input)
 		if err != nil {
-			log.Printf("Failed to locate navigation by message id %s: %v", messageID, err)
-			utils.SendEphemeralResponse(s, i, "查询导航记录时出错。")
-			return
-		}
-		if nav == nil || nav.UserID != userID {
-			utils.SendEphemeralResponse(s, i, "找不到与该消息关联的导航，或您没有权限。")
-			return
-		}
-		if err := refreshNavigation(s, b, i, *nav); err != nil {
 			utils.SendEphemeralResponse(s, i, err.Error())
 			return
 		}
-		utils.SendEphemeralResponse(s, i, "导航已刷新。")
+
+		// 调用核心刷新逻辑
+		if err := refreshNavigation(s, cfg, i, *nav); err != nil {
+			utils.SendEphemeralResponse(s, i, err.Error())
+			return
+		}
+		utils.SendEphemeralResponse(s, i, fmt.Sprintf("导航 ID %d 已刷新。", nav.ID))
 		return
 	}
 
+	// 如果没有提供 input，则显示选择菜单
 	navigations, err := database.GetPersonalNavigations(userID, guildID)
 	if err != nil {
 		log.Printf("Failed to query navigations for refresh: %v", err)
@@ -178,7 +187,6 @@ func handleRefreshAction(s *discordgo.Session, i *discordgo.InteractionCreate, b
 	}
 
 	log.Printf("personal-nav: prompting user %s to select navigation for refresh (count=%d)", userID, len(navigations))
-
 	data := buildNavigationSelectionResponse(navigations, "选择需要刷新的导航", componentRefreshSelect, userID)
 	if data == nil {
 		utils.SendEphemeralResponse(s, i, "无法加载导航列表。")
@@ -194,28 +202,29 @@ func handleRefreshAction(s *discordgo.Session, i *discordgo.InteractionCreate, b
 	}
 }
 
-func handleDeleteAction(s *discordgo.Session, i *discordgo.InteractionCreate, b *bot.Bot, messageID, userID string) {
+// handleDeleteAction 处理删除导航的逻辑。
+// 如果提供了 input（导航ID或消息ID），则直接删除；否则，显示一个选择菜单让用户选择。
+func handleDeleteAction(s *discordgo.Session, i *discordgo.InteractionCreate, input, userID string) {
 	guildID := i.GuildID
 
-	if messageID != "" {
-		nav, err := database.GetPersonalNavigationByMessageID(guildID, messageID)
+	if input != "" {
+		// 通过输入（ID或消息ID）查找导航
+		nav, err := findNavigationFromInput(guildID, userID, input)
 		if err != nil {
-			log.Printf("Failed to locate navigation by message id %s: %v", messageID, err)
-			utils.SendEphemeralResponse(s, i, "查询导航记录时出错。")
+			utils.SendEphemeralResponse(s, i, err.Error())
 			return
 		}
-		if nav == nil || nav.UserID != userID {
-			utils.SendEphemeralResponse(s, i, "找不到与该消息关联的导航，或您没有权限。")
-			return
-		}
+
+		// 调用核心删除逻辑
 		if err := deleteNavigation(s, *nav); err != nil {
 			utils.SendEphemeralResponse(s, i, err.Error())
 			return
 		}
-		utils.SendEphemeralResponse(s, i, "导航已删除。")
+		utils.SendEphemeralResponse(s, i, fmt.Sprintf("导航 ID %d 已删除。", nav.ID))
 		return
 	}
 
+	// 如果没有提供 input，则显示选择菜单
 	navigations, err := database.GetPersonalNavigations(userID, guildID)
 	if err != nil {
 		log.Printf("Failed to query navigations for deletion: %v", err)
@@ -228,7 +237,6 @@ func handleDeleteAction(s *discordgo.Session, i *discordgo.InteractionCreate, b 
 	}
 
 	log.Printf("personal-nav: prompting user %s to select navigation for delete (count=%d)", userID, len(navigations))
-
 	data := buildNavigationSelectionResponse(navigations, "选择需要删除的导航", componentDeleteSelect, userID)
 	if data == nil {
 		utils.SendEphemeralResponse(s, i, "无法加载导航列表。")
@@ -244,6 +252,45 @@ func handleDeleteAction(s *discordgo.Session, i *discordgo.InteractionCreate, b 
 	}
 }
 
+// findNavigationFromInput 根据用户输入查找导航记录。
+// 输入可以是唯一的导航数据库ID，也可以是导航消息的ID。
+// 此函数还会检查用户是否有权操作该导航。
+func findNavigationFromInput(guildID, userID, input string) (*model.PersonalNavigation, error) {
+	// 首先尝试将输入解析为唯一的数据库ID (int64)
+	if navID, err := strconv.ParseInt(input, 10, 64); err == nil {
+		nav, err := database.GetPersonalNavigationByID(navID)
+		if err != nil {
+			log.Printf("Failed to locate navigation by id %d: %v", navID, err)
+			return nil, fmt.Errorf("查询导航记录时出错。")
+		}
+		if nav == nil {
+			return nil, fmt.Errorf("找不到ID为 %d 的导航。", navID)
+		}
+		// 验证所有权
+		if nav.UserID != userID {
+			return nil, fmt.Errorf("您没有权限操作此导航。")
+		}
+		return nav, nil
+	}
+
+	// 如果不是有效的数字，则尝试将其作为消息ID进行查找
+	nav, err := database.GetPersonalNavigationByMessageID(guildID, input)
+	if err != nil {
+		log.Printf("Failed to locate navigation by message id %s: %v", input, err)
+		return nil, fmt.Errorf("查询导航记录时出错。")
+	}
+	if nav == nil {
+		return nil, fmt.Errorf("找不到与该消息ID关联的导航。")
+	}
+	// 验证所有权
+	if nav.UserID != userID {
+		return nil, fmt.Errorf("您没有权限操作此导航。")
+	}
+	return nav, nil
+}
+
+// findFirstAvailableSlot 查找用户第一个可用的导航槽位 (1 到 maxNavigationSlots)。
+// 如果所有槽位都被占用，则返回 0。
 func findFirstAvailableSlot(existing []model.PersonalNavigation) int {
 	occupied := make(map[int]bool, len(existing))
 	for _, nav := range existing {
@@ -257,174 +304,52 @@ func findFirstAvailableSlot(existing []model.PersonalNavigation) int {
 	return 0
 }
 
-func buildSlotSelectionResponse(navigations []model.PersonalNavigation, userID string) *discordgo.InteractionResponseData {
-	if len(navigations) == 0 {
-		return nil
-	}
-
-	sort.Slice(navigations, func(i, j int) bool {
-		return navigations[i].NavID < navigations[j].NavID
-	})
-
-	options := make([]discordgo.SelectMenuOption, 0, len(navigations))
-	for _, nav := range navigations {
-		label := fmt.Sprintf("导航 %d", nav.NavID)
-		if nav.ChannelName != "" {
-			label = fmt.Sprintf("导航 %d · %s", nav.NavID, nav.ChannelName)
-		}
-		desc := fmt.Sprintf("位于 <#%s>", nav.MessageChannelID)
-		if nav.MessageChannelID == "" {
-			desc = "频道未知"
-		}
-		options = append(options, discordgo.SelectMenuOption{
-			Label:       utils.TruncateString(label, 100),
-			Value:       strconv.Itoa(nav.NavID),
-			Description: utils.TruncateString(desc, 100),
-		})
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Title:       "导航上限已满",
-		Description: "请选择一个导航槽位进行覆盖。",
-		Color:       embedColorHighlight,
-	}
-
-	return &discordgo.InteractionResponseData{
-		Flags:  discordgo.MessageFlagsEphemeral,
-		Embeds: []*discordgo.MessageEmbed{embed},
-		Components: []discordgo.MessageComponent{
-			discordgo.ActionsRow{
-				Components: []discordgo.MessageComponent{
-					discordgo.SelectMenu{
-						CustomID:    fmt.Sprintf("%s:%s", componentSelectSlot, userID),
-						Placeholder: "选择需要覆盖的导航",
-						MinValues:   &[]int{1}[0],
-						MaxValues:   1,
-						Options:     options,
-					},
-				},
-			},
-		},
-	}
-}
-
-func buildNavigationSelectionResponse(navigations []model.PersonalNavigation, title, customID, userID string) *discordgo.InteractionResponseData {
-	if len(navigations) == 0 {
-		return nil
-	}
-
-	sort.Slice(navigations, func(i, j int) bool {
-		return navigations[i].NavID < navigations[j].NavID
-	})
-
-	options := make([]discordgo.SelectMenuOption, 0, len(navigations))
-	for _, nav := range navigations {
-		label := fmt.Sprintf("导航 %d", nav.NavID)
-		if nav.ChannelName != "" {
-			label = fmt.Sprintf("导航 %d · %s", nav.NavID, nav.ChannelName)
-		}
-		desc := fmt.Sprintf("<#%s>", nav.MessageChannelID)
-		if nav.MessageChannelID == "" {
-			desc = "创建位置未知"
-		}
-		options = append(options, discordgo.SelectMenuOption{
-			Label:       utils.TruncateString(label, 100),
-			Value:       strconv.Itoa(nav.NavID),
-			Description: utils.TruncateString(desc, 100),
-		})
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Title:       title,
-		Description: "请选择一个导航槽位。",
-		Color:       embedColorPrimary,
-	}
-
-	return &discordgo.InteractionResponseData{
-		Flags:  discordgo.MessageFlagsEphemeral,
-		Embeds: []*discordgo.MessageEmbed{embed},
-		Components: []discordgo.MessageComponent{
-			discordgo.ActionsRow{
-				Components: []discordgo.MessageComponent{
-					discordgo.SelectMenu{
-						CustomID:    fmt.Sprintf("%s:%s", customID, userID),
-						Placeholder: "选择一个导航",
-						MinValues:   &[]int{1}[0],
-						MaxValues:   1,
-						Options:     options,
-					},
-				},
-			},
-		},
-	}
-}
-
-func buildAreaSelectionResponse(b *bot.Bot, guildID, userID string, navID int) (*discordgo.InteractionResponseData, error) {
-	choices, err := buildChannelChoices(b, guildID, userID)
+// validateUsageContext 验证命令是否在允许的上下文中使用。
+// 允许的上下文包括：
+// 1. 用户拥有“管理频道”权限的任何频道。
+// 2. 用户是所有者（创建者）的任何子区。
+// 3. 在用户拥有“管理频道”权限的父频道下创建的任何子区。
+func validateUsageContext(s *discordgo.Session, i *discordgo.InteractionCreate) bool {
+	userID := i.Member.User.ID
+	channel, err := s.State.Channel(i.ChannelID)
 	if err != nil {
-		return nil, err
-	}
-	if len(choices) == 0 {
-		log.Printf("personal-nav: user %s has no channel choices in guild %s", userID, guildID)
-		return nil, nil
-	}
-
-	log.Printf("personal-nav: user %s has %d channel choices in guild %s", userID, len(choices), guildID)
-
-	options := make([]discordgo.SelectMenuOption, 0, len(choices))
-	for _, choice := range choices {
-		label := fmt.Sprintf("%s · %d", choice.ChannelName, choice.PostCount)
-		options = append(options, discordgo.SelectMenuOption{
-			Label:       utils.TruncateString(label, 100),
-			Value:       choice.TableName,
-			Description: utils.TruncateString(fmt.Sprintf("频道: %s", choice.ChannelName), 100),
-		})
+		// 如果状态中没有，则从API获取
+		channel, err = s.Channel(i.ChannelID)
+		if err != nil {
+			log.Printf("Failed to fetch channel %s for personal nav command: %v", i.ChannelID, err)
+			return false
+		}
 	}
 
-	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("选择渲染区域 · 导航槽 %d", navID),
-		Description: "仅显示您在其中发布过作品的分区，请选择一个或多个需要生成导航的分区。",
-		Color:       embedColorPrimary,
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: "提示：最多同时保存 3 个导航，再次选择会覆盖旧导航。",
-		},
+	// 检查在当前频道或父频道是否有管理权限
+	perms, err := s.UserChannelPermissions(userID, i.ChannelID)
+	if err == nil && perms&discordgo.PermissionManageChannels != 0 {
+		return true
 	}
 
-	maxValues := len(options)
-	if maxValues > 25 {
-		maxValues = 25
+	// 检查是否是子区的所有者
+	switch channel.Type {
+	case discordgo.ChannelTypeGuildPublicThread,
+		discordgo.ChannelTypeGuildPrivateThread,
+		discordgo.ChannelTypeGuildNewsThread:
+		if channel.OwnerID == userID {
+			return true
+		}
+		// 检查在父频道是否有管理权限
+		if channel.ParentID != "" {
+			perms, err = s.UserChannelPermissions(userID, channel.ParentID)
+			if err == nil && perms&discordgo.PermissionManageChannels != 0 {
+				return true
+			}
+		}
+	default:
+		// 对于普通频道，已在前面检查过直接的管理权限。
 	}
-
-	return &discordgo.InteractionResponseData{
-		Flags:  discordgo.MessageFlagsEphemeral,
-		Embeds: []*discordgo.MessageEmbed{embed},
-		Components: []discordgo.MessageComponent{
-			discordgo.ActionsRow{
-				Components: []discordgo.MessageComponent{
-					discordgo.SelectMenu{
-						CustomID:    fmt.Sprintf("%s%d:%s", componentSelectAreaPrefix, navID, userID),
-						Placeholder: "选择一个或多个分区",
-						MinValues:   &[]int{1}[0],
-						MaxValues:   maxValues,
-						Options:     options,
-					},
-				},
-			},
-			discordgo.ActionsRow{
-				Components: []discordgo.MessageComponent{
-					discordgo.Button{
-						Label:    "提交选择",
-						Style:    discordgo.PrimaryButton,
-						CustomID: fmt.Sprintf("%s%d:%s", componentSubmitAreaPrefix, navID, userID),
-					},
-				},
-			},
-		},
-	}, nil
+	return false
 }
 
-func buildChannelChoices(b *bot.Bot, guildID, userID string) ([]channelChoice, error) {
-	cfg := b.GetConfig()
+// BuildChannelChoices collects all channels where the user has posted at least one work.
+func BuildChannelChoices(cfg *model.Config, guildID, userID string) ([]ChannelChoice, error) {
 	guildTask, ok := cfg.TaskConfig[guildID]
 	if !ok {
 		return nil, fmt.Errorf("未配置该服务器的分区信息。")
@@ -433,75 +358,42 @@ func buildChannelChoices(b *bot.Bot, guildID, userID string) ([]channelChoice, e
 	dbPath := fmt.Sprintf("data/%s.db", guildID)
 	db, err := database.InitDB(dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("打开数据库失败。")
+		return nil, fmt.Errorf("打开数据库失败: %w", err)
 	}
 	defer db.Close()
 
-	log.Printf("personal-nav: scanning channel choices for user %s in guild %s", userID, guildID)
-
-	var choices []channelChoice
+	var choices []ChannelChoice
 	for name, channelTask := range guildTask.Data {
 		if len(channelTask.ChannelID) < 4 {
 			continue
 		}
 		tableName := fmt.Sprintf("%s_%s", name, channelTask.ChannelID[len(channelTask.ChannelID)-4:])
+
+		if err := database.EnsurePostTableSchema(db, tableName); err != nil {
+			log.Printf("personal-nav: failed to ensure schema for table %s when building choices: %v", tableName, err)
+			continue
+		}
+
 		count, err := database.CountPostsByAuthorInTable(db, tableName, userID)
 		if err != nil {
-			log.Printf("Failed to count posts for user %s table %s: %v", userID, tableName, err)
+			log.Printf("personal-nav: failed to count posts for user %s in table %s: %v", userID, tableName, err)
 			continue
 		}
-		if count == 0 {
-			log.Printf("personal-nav: skip table %s for user %s (no posts)", tableName, userID)
-			continue
+
+		if count > 0 {
+			choices = append(choices, ChannelChoice{
+				TableName:   tableName,
+				ChannelID:   channelTask.ChannelID,
+				ChannelName: name,
+				PostCount:   count,
+			})
 		}
-		choices = append(choices, channelChoice{
-			TableName:   tableName,
-			ChannelID:   channelTask.ChannelID,
-			ChannelName: name,
-			PostCount:   count,
-		})
 	}
 
-	log.Printf("personal-nav: total channel choices gathered=%d", len(choices))
-
-	sort.Slice(choices, func(i, j int) bool {
-		return choices[i].ChannelName < choices[j].ChannelName
-	})
+	if len(choices) == 0 {
+		// This is not an error, just means the user has no posts. The UI should handle this.
+		return []ChannelChoice{}, nil
+	}
 
 	return choices, nil
-}
-
-func validateUsageContext(s *discordgo.Session, i *discordgo.InteractionCreate) bool {
-	userID := i.Member.User.ID
-	channel, err := s.State.Channel(i.ChannelID)
-	if err != nil {
-		channel, err = s.Channel(i.ChannelID)
-		if err != nil {
-			log.Printf("Failed to fetch channel %s for personal nav command: %v", i.ChannelID, err)
-			return false
-		}
-	}
-
-	perms, err := s.UserChannelPermissions(userID, i.ChannelID)
-	if err == nil && perms&discordgo.PermissionManageChannels != 0 {
-		return true
-	}
-
-	switch channel.Type {
-	case discordgo.ChannelTypeGuildPublicThread,
-		discordgo.ChannelTypeGuildPrivateThread,
-		discordgo.ChannelTypeGuildNewsThread:
-		if channel.OwnerID == userID {
-			return true
-		}
-		if channel.ParentID != "" {
-			perms, err = s.UserChannelPermissions(userID, channel.ParentID)
-			if err == nil && perms&discordgo.PermissionManageChannels != 0 {
-				return true
-			}
-		}
-	default:
-		// Already checked direct manage permission.
-	}
-	return false
 }

@@ -202,7 +202,7 @@ func (s *Scheduler) updateLeaderboard() {
 
 func (s *Scheduler) startDailyTasks() {
 	defer s.wg.Done()
-	runHours := []int{4, 5, 13, 21} // 4 AM, 5 AM, 1 PM, 9 PM
+	runHours := []int{3, 4, 5, 13, 21} // 3 AM (nav update), 4 AM, 5 AM, 1 PM, 9 PM
 
 	for {
 		now := time.Now()
@@ -226,6 +226,8 @@ func (s *Scheduler) startDailyTasks() {
 		case <-time.After(next.Sub(now)):
 			// Check the hour to decide which task to run
 			switch next.Hour() {
+			case 3:
+				s.runPersonalNavAutoUpdate()
 			case 4:
 				s.runDailyEvidenceCleaner()
 			case 5, 13, 21:
@@ -315,4 +317,15 @@ func (s *Scheduler) startNewCardEmojiSystem() {
 	// 启动队列处理器
 	log.Println("[NewCardEmoji] Starting queue processor...")
 	tasks_emoji.StartQueueProcessor(s.bot.GetSession(), s.bot.GetConfig(), s.ctx)
+}
+
+func (s *Scheduler) runPersonalNavAutoUpdate() {
+	log.Println("Starting scheduled personal navigation auto-update...")
+
+	// Call the Bot's UpdateAllNavigations method
+	if bot, ok := s.bot.(*Bot); ok {
+		bot.UpdateAllNavigations()
+	} else {
+		log.Println("ERROR: Unable to cast bot to *Bot for personal navigation auto-update")
+	}
 }

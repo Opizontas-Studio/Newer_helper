@@ -250,7 +250,7 @@ func commandHandlers(b *bot.Bot) map[string]func(s *discordgo.Session, i *discor
 			admin.HandleGuildsAdminCommand(s, i, b.GetDB(), b.GetConfig())
 		},
 		"personal-nav": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-			personalnav.HandlePersonalNavCommand(s, i, b)
+			personalnav.HandlePersonalNavCommand(s, i, b.GetConfig())
 		},
 	}
 }
