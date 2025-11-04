@@ -31,6 +31,12 @@ type Client struct {
 	cancel       context.CancelFunc
 	done         chan struct{}
 	punishServer punishpb.PunishServerServer // Punish service handler
+
+	// Reconnection settings
+	reconnecting        bool
+	maxReconnectAttempts int
+	reconnectDelay      time.Duration
+	maxReconnectDelay   time.Duration
 }
 
 // NewClient creates a new gRPC client instance
@@ -53,14 +59,33 @@ func NewClient(punishServer punishpb.PunishServerServer) (*Client, error) {
 		cancel:       cancel,
 		done:         make(chan struct{}),
 		punishServer: punishServer,
+
+		// Initialize reconnection settings
+		maxReconnectAttempts: 10,
+		reconnectDelay:      2 * time.Second,
+		maxReconnectDelay:   60 * time.Second,
 	}, nil
 }
 
 // Connect establishes connection to the gateway server
 func (c *Client) Connect() error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	err := c.doConnect()
+	c.mu.Unlock()
 
+	if err != nil {
+		return err
+	}
+
+	// Start background goroutines
+	go c.receiveLoop()
+	go c.heartbeatLoop()
+
+	return nil
+}
+
+// doConnect performs the actual connection logic (must be called with lock held)
+func (c *Client) doConnect() error {
 	// Create connection to the server
 	conn, err := grpc.NewClient(
 		c.serverAddr,
@@ -87,7 +112,7 @@ func (c *Client) Connect() error {
 		MessageType: &proto.ConnectionMessage_Register{
 			Register: &proto.ConnectionRegister{
 				ApiKey:   c.token,
-				Services: []string{}, // Empty for now - will add services later
+				Services: []string{fmt.Sprintf("%s.punish", c.clientName)},
 			},
 		},
 	}
@@ -99,28 +124,112 @@ func (c *Client) Connect() error {
 
 	log.Printf("Connected to gateway at %s as %s", c.serverAddr, c.clientName)
 
-	// Start background goroutines
-	go c.receiveLoop()
-	go c.heartbeatLoop()
-
 	return nil
+}
+
+// reconnect attempts to reconnect to the gateway with exponential backoff
+func (c *Client) reconnect() {
+	c.mu.Lock()
+	if c.reconnecting {
+		// Already reconnecting, don't start another attempt
+		c.mu.Unlock()
+		return
+	}
+	c.reconnecting = true
+	c.mu.Unlock()
+
+	defer func() {
+		c.mu.Lock()
+		c.reconnecting = false
+		c.mu.Unlock()
+	}()
+
+	log.Println("Starting reconnection process...")
+
+	delay := c.reconnectDelay
+	for attempt := 1; attempt <= c.maxReconnectAttempts; attempt++ {
+		// Check if context was cancelled (user called Close())
+		select {
+		case <-c.ctx.Done():
+			log.Println("Reconnection cancelled by user")
+			return
+		default:
+		}
+
+		log.Printf("Reconnection attempt %d/%d (waiting %v)...", attempt, c.maxReconnectAttempts, delay)
+		time.Sleep(delay)
+
+		// Clean up old connection
+		c.mu.Lock()
+		if c.stream != nil {
+			c.stream.CloseSend()
+			c.stream = nil
+		}
+		if c.conn != nil {
+			c.conn.Close()
+			c.conn = nil
+		}
+		c.connectionID = ""
+
+		// Attempt to reconnect
+		err := c.doConnect()
+		c.mu.Unlock()
+
+		if err != nil {
+			log.Printf("Reconnection attempt %d failed: %v", attempt, err)
+			// Exponential backoff: double the delay, up to max
+			delay = delay * 2
+			if delay > c.maxReconnectDelay {
+				delay = c.maxReconnectDelay
+			}
+			continue
+		}
+
+		// Success! Restart background goroutines
+		log.Printf("Reconnection successful on attempt %d", attempt)
+		go c.receiveLoop()
+		go c.heartbeatLoop()
+		return
+	}
+
+	// Max attempts reached
+	log.Printf("Failed to reconnect after %d attempts. Giving up.", c.maxReconnectAttempts)
+	close(c.done)
 }
 
 // receiveLoop handles incoming messages from the gateway
 func (c *Client) receiveLoop() {
-	defer func() {
-		close(c.done)
-	}()
-
 	for {
+		// Check if we should exit (user called Close())
+		select {
+		case <-c.ctx.Done():
+			log.Println("receiveLoop: context cancelled, exiting")
+			close(c.done)
+			return
+		default:
+		}
+
 		msg, err := c.stream.Recv()
 		if err != nil {
 			if err == io.EOF {
-				log.Println("Gateway closed the connection")
+				log.Println("Gateway closed the connection (EOF)")
+			} else {
+				log.Printf("Error receiving message: %v", err)
+			}
+
+			// Check if context is cancelled before attempting reconnect
+			select {
+			case <-c.ctx.Done():
+				log.Println("receiveLoop: context cancelled, not reconnecting")
+				close(c.done)
+				return
+			default:
+				// Trigger reconnection and exit this loop
+				// A new receiveLoop will be started upon successful reconnect
+				log.Println("receiveLoop: triggering reconnection...")
+				go c.reconnect()
 				return
 			}
-			log.Printf("Error receiving message: %v", err)
-			return
 		}
 
 		c.handleMessage(msg)
@@ -323,15 +432,22 @@ func (c *Client) heartbeatLoop() {
 	for {
 		select {
 		case <-c.ctx.Done():
+			log.Println("heartbeatLoop: context cancelled, exiting")
 			return
 		case <-ticker.C:
 			c.mu.Lock()
 			connID := c.connectionID
+			stream := c.stream
 			c.mu.Unlock()
 
-			// Only send heartbeat if we have a connection ID
+			// Skip heartbeat if connection is not ready
 			if connID == "" {
 				log.Printf("Skipping heartbeat - no connection_id yet")
+				continue
+			}
+
+			if stream == nil {
+				log.Printf("Skipping heartbeat - stream not available (reconnecting?)")
 				continue
 			}
 
@@ -350,6 +466,7 @@ func (c *Client) heartbeatLoop() {
 
 			if err != nil {
 				log.Printf("Failed to send heartbeat: %v", err)
+				log.Println("heartbeatLoop: exiting due to send error")
 				return
 			}
 			log.Printf("Sent heartbeat to gateway with connection_id: %s", connID)

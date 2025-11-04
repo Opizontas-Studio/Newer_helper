@@ -313,11 +313,11 @@ func createOrReplaceNavigation(s *discordgo.Session, i *discordgo.InteractionCre
 // refreshNavigation 是一个包装器，调用核心的 updateNavigation 逻辑来刷新现有导航。
 func refreshNavigation(s *discordgo.Session, cfg *model.Config, i *discordgo.InteractionCreate, nav model.PersonalNavigation) error {
 	tableNames := strings.Split(nav.TableName, ",")
-	// 从数据库记录中读取更新模式，如果为空（旧数据）则默认使用 edit 模式。
+	// 从数据库记录中读取更新模式，如果为空（旧数据）则默认使用 delete 模式。
 	updateMode := nav.UpdateMode
 	if updateMode == "" {
-		updateMode = updateModeEdit
-		log.Printf("personal-nav: nav %d has no UpdateMode, defaulting to edit", nav.NavID)
+		updateMode = updateModeDelete
+		log.Printf("personal-nav: nav %d has no UpdateMode, defaulting to delete", nav.NavID)
 	}
 	// 使用存储在导航记录中的消息频道ID。
 	fallbackChannelID := nav.MessageChannelID

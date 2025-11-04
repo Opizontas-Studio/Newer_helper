@@ -180,7 +180,7 @@ func buildAreaSelectionResponse(cfg *model.Config, guildID, userID string, navID
 func buildUpdateModeSelectionResponse(navID int, userID string) *discordgo.InteractionResponseData {
 	embed := &discordgo.MessageEmbed{
 		Title:       fmt.Sprintf("② 选择更新方式 · 导航槽 %d", navID),
-		Description: "请选择导航的更新方式：\n\n**修改消息 (推荐)**\n刷新时直接编辑现有的导航消息，体验更流畅。\n\n**删除更新**\n刷新时删除旧消息并发送新消息，适用于消息权限复杂的频道。",
+		Description: "请选择导航的更新方式：\n\n**删除更新 (推荐)**\n刷新时删除旧消息并发送新消息，确保导航始终位于频道底部，适用于大多数情况。\n\n**修改消息**\n刷新时直接编辑现有的导航消息，适用于希望保留消息位置的特殊场景。",
 		Color:       embedColorPrimary,
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: "提示：创建后无法修改更新方式",
@@ -194,14 +194,14 @@ func buildUpdateModeSelectionResponse(navID int, userID string) *discordgo.Inter
 			discordgo.ActionsRow{
 				Components: []discordgo.MessageComponent{
 					discordgo.Button{
-						Label:    "修改消息 (推荐)",
+						Label:    "删除更新 (推荐)",
 						Style:    discordgo.PrimaryButton,
-						CustomID: fmt.Sprintf("%s%d:%s:%s", componentSubmitUpdateModePrefix, navID, updateModeEdit, userID),
+						CustomID: fmt.Sprintf("%s%d:%s:%s", componentSubmitUpdateModePrefix, navID, updateModeDelete, userID),
 					},
 					discordgo.Button{
-						Label:    "删除更新",
+						Label:    "修改消息",
 						Style:    discordgo.SecondaryButton,
-						CustomID: fmt.Sprintf("%s%d:%s:%s", componentSubmitUpdateModePrefix, navID, updateModeDelete, userID),
+						CustomID: fmt.Sprintf("%s%d:%s:%s", componentSubmitUpdateModePrefix, navID, updateModeEdit, userID),
 					},
 				},
 			},

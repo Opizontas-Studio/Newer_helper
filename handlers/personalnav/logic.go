@@ -1,14 +1,25 @@
 package personalnav
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"newer_helper/model"
+	"newer_helper/utils"
 	"newer_helper/utils/database"
 	"strings"
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
+)
+
+const (
+	endMarkerContent = "--- 个人导航结束 ---"
+)
+
+var (
+	// ErrStaleNavigation indicates that the navigation message is missing and the record should be deleted.
+	ErrStaleNavigation = errors.New("stale navigation record due to missing message")
 )
 
 // fetchNavigationData 从数据库中为指定用户和分区（表）检索所有必要的帖子数据。
@@ -120,6 +131,15 @@ func updateNavigation(s *discordgo.Session, cfg *model.Config, guildID, fallback
 	// 4. 应用 Embeds（发送新消息或编辑旧消息）
 	messageChannel, myWorksIDs, topWorkID, latestWorkID, err := applyNavigationEmbeds(s, fallbackChannelID, existing, myWorksEmbeds, embedTop, embedLatest, updateMode)
 	if err != nil {
+		if errors.Is(err, ErrStaleNavigation) {
+			log.Printf("personal-nav: navigation for user %s (slot %d) is stale, deleting record.", userID, navID)
+			if delErr := database.DeletePersonalNavigation(userID, guildID, navID); delErr != nil {
+				log.Printf("personal-nav: failed to delete stale navigation record for user %s (slot %d): %v", userID, navID, delErr)
+				return delErr // Return the deletion error
+			}
+			// Return nil to indicate the issue is handled and not a failure for the batch job.
+			return nil
+		}
 		return err
 	}
 	if len(myWorksIDs) == 0 || topWorkID == "" || latestWorkID == "" {
@@ -184,6 +204,21 @@ func applyNavigationEmbeds(s *discordgo.Session, fallbackChannelID string, exist
 
 	messageChannelID = targetChannelID
 
+	// 在“删除更新”模式下，清理旧的结束标记
+	if updateMode == "delete" && existing != nil {
+		if marker := findEndMarkerMessage(s, existing.MessageChannelID, existing.MessageIDLatestWorks); marker != nil {
+			// Unpin before deleting
+			if err := s.ChannelMessageUnpin(marker.ChannelID, marker.ID); err != nil {
+				log.Printf("personal-nav: failed to unpin old end marker %s (ignoring): %v", marker.ID, err)
+			}
+			if err := s.ChannelMessageDelete(marker.ChannelID, marker.ID); err != nil {
+				log.Printf("personal-nav: failed to delete old end marker %s: %v", marker.ID, err)
+			} else {
+				log.Printf("personal-nav: deleted old end marker %s", marker.ID)
+			}
+		}
+	}
+
 	log.Printf("personal-nav: apply embeds targetChannel=%s fallback=%s hasExisting=%t myWorksCount=%d updateMode=%s", targetChannelID, fallbackChannelID, existing != nil, len(myWorksEmbeds), updateMode)
 
 	// sendOrEdit 是一个辅助函数，用于处理单个消息的发送或编辑
@@ -226,11 +261,16 @@ func applyNavigationEmbeds(s *discordgo.Session, fallbackChannelID string, exist
 				log.Printf("personal-nav: edited existing message %s in channel %s", msg.ID, msg.ChannelID)
 				return msg.ID, nil
 			}
-			// 如果编辑失败是因为消息不存在 (404)，则继续执行发送新消息的逻辑
-			if restErr, ok := err.(*discordgo.RESTError); !ok || restErr.Response == nil || restErr.Response.StatusCode != 404 {
-				return "", fmt.Errorf("编辑导航消息失败: %w", err)
+			// 如果编辑失败是因为消息不存在 (404)
+			if restErr, ok := err.(*discordgo.RESTError); ok && restErr.Response != nil && restErr.Response.StatusCode == 404 {
+				log.Printf("personal-nav: existing message %s missing, flagging for deletion.", existingMessageID)
+				if logErr := utils.LogStaleMessage(existing.GuildID, existing.UserID, targetChannelID, existingMessageID, "personal-nav"); logErr != nil {
+					log.Printf("personal-nav: failed to log stale message: %v", logErr)
+				}
+				return "", ErrStaleNavigation
 			}
-			log.Printf("personal-nav: existing message %s missing, sending new one", existingMessageID)
+			// 对于其他编辑错误
+			return "", fmt.Errorf("编辑导航消息失败: %w", err)
 		}
 
 		// 发送新消息
@@ -310,6 +350,21 @@ func applyNavigationEmbeds(s *discordgo.Session, fallbackChannelID string, exist
 		return "", nil, "", "", err
 	}
 
+	// 只有在首次创建或“删除更新”模式下才发送新的结束标记
+	if existing == nil || updateMode == "delete" {
+		if msg, err := s.ChannelMessageSend(messageChannelID, endMarkerContent); err != nil {
+			log.Printf("personal-nav: failed to send end marker: %v", err)
+			// 不将此视为致命错误
+		} else {
+			log.Printf("personal-nav: sent end marker %s in channel %s", msg.ID, messageChannelID)
+			if err := s.ChannelMessagePin(messageChannelID, msg.ID); err != nil {
+				log.Printf("personal-nav: failed to pin end marker message %s: %v", msg.ID, err)
+			} else {
+				log.Printf("personal-nav: pinned end marker message %s", msg.ID)
+			}
+		}
+	}
+
 	return messageChannelID, myWorksIDs, topWorkID, latestWorkID, nil
 }
 
@@ -341,11 +396,11 @@ func resolveChannelChoice(cfg *model.Config, guildID, tableName string) (*Channe
 func UpdateNavigationScheduled(s *discordgo.Session, cfg *model.Config, nav model.PersonalNavigation) error {
 	tableNames := strings.Split(nav.TableName, ",")
 
-	// 使用存储的更新模式，如果未设置则默认为 "edit"
+	// 使用存储的更新模式，如果未设置则默认为 "delete"
 	updateMode := nav.UpdateMode
 	if updateMode == "" {
-		updateMode = updateModeEdit
-		log.Printf("personal-nav: nav %d has no UpdateMode, defaulting to edit", nav.NavID)
+		updateMode = updateModeDelete
+		log.Printf("personal-nav: nav %d has no UpdateMode, defaulting to delete", nav.NavID)
 	}
 
 	// 使用存储的消息频道ID作为目标频道。
@@ -402,6 +457,15 @@ func deleteNavigation(s *discordgo.Session, nav model.PersonalNavigation) error 
 			allIDs = append(allIDs, nav.MessageIDLatestWorks)
 		}
 
+		// Find and add the end marker message to the deletion list.
+		if marker := findEndMarkerMessage(s, channelID, nav.MessageIDLatestWorks); marker != nil {
+			if err := s.ChannelMessageUnpin(marker.ChannelID, marker.ID); err != nil {
+				log.Printf("personal-nav: failed to unpin end marker %s (ignoring): %v", marker.ID, err)
+			}
+			allIDs = append(allIDs, marker.ID)
+			log.Printf("personal-nav: queued end marker message %s for deletion", marker.ID)
+		}
+
 		// Concurrently delete all messages.
 		var wg sync.WaitGroup
 		for _, msgID := range allIDs {
@@ -429,5 +493,35 @@ func deleteNavigation(s *discordgo.Session, nav model.PersonalNavigation) error 
 	}
 
 	log.Printf("personal-nav: delete navigation finished for nav=%d", nav.NavID)
+	return nil
+}
+
+// findEndMarkerMessage finds the message that acts as an end marker for a navigation.
+// It looks for a specific message sent by the bot right after the 'latest works' message.
+func findEndMarkerMessage(s *discordgo.Session, channelID, afterMessageID string) *discordgo.Message {
+	if channelID == "" || afterMessageID == "" {
+		return nil
+	}
+
+	// Fetch the message that comes immediately after the latest works message.
+	messages, err := s.ChannelMessages(channelID, 1, "", afterMessageID, "")
+	if err != nil {
+		log.Printf("personal-nav: failed to fetch messages after %s in channel %s: %v", afterMessageID, channelID, err)
+		return nil
+	}
+
+	// We expect exactly one message.
+	if len(messages) != 1 {
+		return nil
+	}
+
+	markerMsg := messages[0]
+
+	// Validate that the message is the one we're looking for.
+	// It must be sent by the bot and have the specific marker content.
+	if markerMsg.Author.ID == s.State.User.ID && markerMsg.Content == endMarkerContent {
+		return markerMsg
+	}
+
 	return nil
 }

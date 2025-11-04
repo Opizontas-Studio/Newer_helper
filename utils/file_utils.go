@@ -2,9 +2,11 @@ package utils
 
 import (
 	"encoding/json"
+	"fmt"
 	"newer_helper/model"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // LoadTagMapping loads the tag name mapping from a JSON file.
@@ -122,4 +124,31 @@ func CountPostsInJSON(guildID string, startTime, endTime int64) (int, error) {
 		}
 	}
 	return count, nil
+}
+
+// LogStaleMessage logs information about a stale (404 Not Found) message to a local file.
+func LogStaleMessage(guildID, userID, channelID, messageID, context string) error {
+	logDir := filepath.Join("temp", "log")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
+	}
+
+	logFile := filepath.Join(logDir, "stale_nav_messages.log")
+	file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %w", err)
+	}
+	defer file.Close()
+
+	timestamp := time.Now().Format(time.RFC3339)
+	logLine := fmt.Sprintf(
+		"[%s] Stale message detected in %s | Guild: %s, User: %s, Channel: %s, Message: %s\n",
+		timestamp, context, guildID, userID, channelID, messageID,
+	)
+
+	if _, err := file.WriteString(logLine); err != nil {
+		return fmt.Errorf("failed to write to log file: %w", err)
+	}
+
+	return nil
 }
