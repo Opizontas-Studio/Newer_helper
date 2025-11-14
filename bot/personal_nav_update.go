@@ -18,6 +18,7 @@ type UpdateResult struct {
 	Total     int
 	Success   int
 	Failed    int
+	Skipped   int      // 跳过的数量（如因帖子已归档）
 	Errors    []string
 	StartTime time.Time
 	EndTime   time.Time
@@ -99,18 +100,24 @@ func (b *Bot) UpdateAllNavigations() {
 	// Collect results
 	for err := range resultChan {
 		if err != nil {
-			result.Failed++
-			errMsg := err.Error()
-			result.Errors = append(result.Errors, errMsg)
-			log.Printf("personal-nav: auto-update error: %s", errMsg)
+			// 检查是否为归档错误（跳过的情况）
+			if err == personalnav.ErrArchivedThread {
+				result.Skipped++
+				log.Printf("personal-nav: auto-update skipped (archived thread)")
+			} else {
+				result.Failed++
+				errMsg := err.Error()
+				result.Errors = append(result.Errors, errMsg)
+				log.Printf("personal-nav: auto-update error: %s", errMsg)
+			}
 		} else {
 			result.Success++
 		}
 	}
 
 	result.EndTime = time.Now()
-	log.Printf("personal-nav: auto-update completed - total=%d success=%d failed=%d duration=%s",
-		result.Total, result.Success, result.Failed, result.Duration())
+	log.Printf("personal-nav: auto-update completed - total=%d success=%d failed=%d skipped=%d duration=%s",
+		result.Total, result.Success, result.Failed, result.Skipped, result.Duration())
 
 	b.sendUpdateSummary(result)
 }
@@ -122,6 +129,9 @@ func (b *Bot) sendUpdateSummary(result *UpdateResult) {
 	summary.WriteString("━━━━━━━━━━━━━━━━━━━━\n")
 	summary.WriteString(fmt.Sprintf("✅ **成功**: %d/%d\n", result.Success, result.Total))
 	summary.WriteString(fmt.Sprintf("❌ **失败**: %d/%d\n", result.Failed, result.Total))
+	if result.Skipped > 0 {
+		summary.WriteString(fmt.Sprintf("⏭️ **跳过**: %d/%d (帖子已归档)\n", result.Skipped, result.Total))
+	}
 	summary.WriteString(fmt.Sprintf("⏱️ **耗时**: %s\n", result.Duration()))
 	summary.WriteString("━━━━━━━━━━━━━━━━━━━━\n")
 

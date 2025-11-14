@@ -20,6 +20,8 @@ const (
 var (
 	// ErrStaleNavigation indicates that the navigation message is missing and the record should be deleted.
 	ErrStaleNavigation = errors.New("stale navigation record due to missing message")
+	// ErrArchivedThread indicates that the navigation message is in an archived thread.
+	ErrArchivedThread = errors.New("navigation message is in an archived thread")
 )
 
 // fetchNavigationData 从数据库中为指定用户和分区（表）检索所有必要的帖子数据。
@@ -419,6 +421,21 @@ func UpdateNavigationScheduled(s *discordgo.Session, cfg *model.Config, nav mode
 			nav.NavID, nav.GuildID, nav.UserID)
 	}
 
+	// 检查消息所在的频道/帖子是否已归档
+	archived, err := isChannelArchived(s, fallbackChannelID)
+	if err != nil {
+		log.Printf("personal-nav: failed to check archive status for channel %s (nav %d): %v", fallbackChannelID, nav.NavID, err)
+		// 如果频道不存在或已删除，返回特殊错误以便调用者可以处理
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "deleted") {
+			return ErrStaleNavigation
+		}
+		// 其他错误继续尝试更新
+	} else if archived {
+		log.Printf("personal-nav: skipping nav %d (guild=%s user=%s) - message channel %s is archived",
+			nav.NavID, nav.GuildID, nav.UserID, fallbackChannelID)
+		return ErrArchivedThread
+	}
+
 	// 调用核心更新逻辑
 	return updateNavigation(s, cfg, nav.GuildID, fallbackChannelID, nav.NavID, tableNames, nav.UserID, updateMode)
 }
@@ -524,4 +541,35 @@ func findEndMarkerMessage(s *discordgo.Session, channelID, afterMessageID string
 	}
 
 	return nil
+}
+
+// isChannelArchived checks if the given channel/thread is archived.
+// Returns true if the channel is a thread and is archived, false otherwise.
+// For regular channels, always returns false.
+func isChannelArchived(s *discordgo.Session, channelID string) (bool, error) {
+	if channelID == "" {
+		return false, fmt.Errorf("empty channel ID")
+	}
+
+	channel, err := s.Channel(channelID)
+	if err != nil {
+		// If channel not found (404), it might have been deleted
+		if restErr, ok := err.(*discordgo.RESTError); ok && restErr.Response != nil && restErr.Response.StatusCode == 404 {
+			return false, fmt.Errorf("channel not found (possibly deleted): %w", err)
+		}
+		return false, fmt.Errorf("failed to get channel info: %w", err)
+	}
+
+	// Check if it's a thread
+	if channel.Type == discordgo.ChannelTypeGuildPublicThread ||
+		channel.Type == discordgo.ChannelTypeGuildPrivateThread ||
+		channel.Type == discordgo.ChannelTypeGuildNewsThread {
+		// Check archive status
+		if channel.ThreadMetadata != nil {
+			return channel.ThreadMetadata.Archived, nil
+		}
+	}
+
+	// Regular channels are never archived
+	return false, nil
 }

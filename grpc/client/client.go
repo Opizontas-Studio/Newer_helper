@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -86,14 +88,36 @@ func (c *Client) Connect() error {
 
 // doConnect performs the actual connection logic (must be called with lock held)
 func (c *Client) doConnect() error {
-	// Create connection to the server
-	conn, err := grpc.NewClient(
-		c.serverAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to connect to server: %w", err)
+	// Remove https:// or http:// prefix if present
+	serverAddr := strings.TrimPrefix(c.serverAddr, "https://")
+	serverAddr = strings.TrimPrefix(serverAddr, "http://")
+
+	// Try TLS connection first
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: false, // Set to true if using self-signed certificates
 	}
+
+	conn, err := grpc.NewClient(
+		serverAddr,
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
+	)
+
+	if err != nil {
+		log.Printf("TLS connection failed: %v, trying insecure connection...", err)
+
+		// Fallback to insecure connection
+		conn, err = grpc.NewClient(
+			serverAddr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to connect to server (both TLS and insecure): %w", err)
+		}
+		log.Printf("Connected using insecure connection (no TLS)")
+	} else {
+		log.Printf("Connected using TLS")
+	}
+
 	c.conn = conn
 
 	// Create registry service client
