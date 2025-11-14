@@ -421,19 +421,48 @@ func UpdateNavigationScheduled(s *discordgo.Session, cfg *model.Config, nav mode
 			nav.NavID, nav.GuildID, nav.UserID)
 	}
 
-	// 检查消息所在的频道/帖子是否已归档
-	archived, err := isChannelArchived(s, fallbackChannelID)
+	// 检查消息所在的频道/帖子状态
+	channel, err := s.Channel(fallbackChannelID)
 	if err != nil {
-		log.Printf("personal-nav: failed to check archive status for channel %s (nav %d): %v", fallbackChannelID, nav.NavID, err)
-		// 如果频道不存在或已删除，返回特殊错误以便调用者可以处理
-		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "deleted") {
+		log.Printf("personal-nav: failed to get channel %s for nav %d: %v", fallbackChannelID, nav.NavID, err)
+		if restErr, ok := err.(*discordgo.RESTError); ok && restErr.Response != nil && restErr.Response.StatusCode == 404 {
+			// 频道不存在，标记为过时记录
 			return ErrStaleNavigation
 		}
-		// 其他错误继续尝试更新
-	} else if archived {
-		log.Printf("personal-nav: skipping nav %d (guild=%s user=%s) - message channel %s is archived",
-			nav.NavID, nav.GuildID, nav.UserID, fallbackChannelID)
-		return ErrArchivedThread
+		return err // 其他错误，可能稍后重试
+	}
+
+	// 检查是否是子区
+	isThread := channel.Type == discordgo.ChannelTypeGuildPublicThread ||
+		channel.Type == discordgo.ChannelTypeGuildPrivateThread ||
+		channel.Type == discordgo.ChannelTypeGuildNewsThread
+
+	if isThread {
+		// 检查子区是否已归档
+		if channel.ThreadMetadata != nil && channel.ThreadMetadata.Archived {
+			log.Printf("personal-nav: skipping nav %d (guild=%s user=%s) - message channel %s is archived",
+				nav.NavID, nav.GuildID, nav.UserID, fallbackChannelID)
+			return ErrArchivedThread
+		}
+
+		// 检查子区近期活动
+		messages, err := s.ChannelMessages(fallbackChannelID, 5, "", "", "")
+		if err != nil {
+			// 如果获取消息失败，为保险起见，继续更新
+			log.Printf("personal-nav: failed to fetch messages for thread %s, proceeding with update anyway: %v", fallbackChannelID, err)
+		} else {
+			hasUserActivity := false
+			for _, msg := range messages {
+				if msg.Author != nil && !msg.Author.Bot {
+					hasUserActivity = true
+					break
+				}
+			}
+			if !hasUserActivity {
+				log.Printf("personal-nav: skipping nav %d in thread %s due to no recent user activity", nav.NavID, fallbackChannelID)
+				return nil // 跳过更新，这不是一个错误
+			}
+		}
 	}
 
 	// 调用核心更新逻辑
@@ -541,35 +570,4 @@ func findEndMarkerMessage(s *discordgo.Session, channelID, afterMessageID string
 	}
 
 	return nil
-}
-
-// isChannelArchived checks if the given channel/thread is archived.
-// Returns true if the channel is a thread and is archived, false otherwise.
-// For regular channels, always returns false.
-func isChannelArchived(s *discordgo.Session, channelID string) (bool, error) {
-	if channelID == "" {
-		return false, fmt.Errorf("empty channel ID")
-	}
-
-	channel, err := s.Channel(channelID)
-	if err != nil {
-		// If channel not found (404), it might have been deleted
-		if restErr, ok := err.(*discordgo.RESTError); ok && restErr.Response != nil && restErr.Response.StatusCode == 404 {
-			return false, fmt.Errorf("channel not found (possibly deleted): %w", err)
-		}
-		return false, fmt.Errorf("failed to get channel info: %w", err)
-	}
-
-	// Check if it's a thread
-	if channel.Type == discordgo.ChannelTypeGuildPublicThread ||
-		channel.Type == discordgo.ChannelTypeGuildPrivateThread ||
-		channel.Type == discordgo.ChannelTypeGuildNewsThread {
-		// Check archive status
-		if channel.ThreadMetadata != nil {
-			return channel.ThreadMetadata.Archived, nil
-		}
-	}
-
-	// Regular channels are never archived
-	return false, nil
 }
